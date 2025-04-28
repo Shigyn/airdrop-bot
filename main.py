@@ -17,14 +17,12 @@ import os
 load_dotenv()
 
 # Webhook and Bot settings
-WEBHOOK_HOST = config.host
+WEBHOOK_HOST = config.host  # L'hôte de ton projet sur Railway
 WEBHOOK_PORT = 8443
 WEBHOOK_LISTEN = "0.0.0.0"
 
-WEBHOOK_SSL_CERT = "./webhook_cert.pem"
-WEBHOOK_SSL_PRIV = "./webhook_pkey.pem"
-
-WEBHOOK_URL_BASE = f"https://{WEBHOOK_HOST}:{WEBHOOK_PORT}"
+# Railway provides SSL, so we don't need cert files on local
+WEBHOOK_URL_BASE = f"https://{WEBHOOK_HOST}"
 WEBHOOK_URL_PATH = f"/{config.api_token}/"
 
 bot = telebot.TeleBot(config.api_token)
@@ -172,12 +170,9 @@ bot.enable_save_next_step_handlers(delay=2)
 bot.load_next_step_handlers()
 
 bot.remove_webhook()
-bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH, certificate=open(WEBHOOK_SSL_CERT, "r"))
+bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
 
 # Web server
-context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-context.load_cert_chain(WEBHOOK_SSL_CERT, WEBHOOK_SSL_PRIV)
-
 async def handle(request):
     if request.match_info.get("token") == bot.token:
         request_body_dict = await request.json()
@@ -188,4 +183,4 @@ async def handle(request):
 
 app.router.add_post("/{token}/", handle)
 
-web.run_app(app, host=WEBHOOK_LISTEN, port=WEBHOOK_PORT, ssl_context=context)
+web.run_app(app, host=WEBHOOK_LISTEN, port=WEBHOOK_PORT)
