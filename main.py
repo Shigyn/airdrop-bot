@@ -90,6 +90,21 @@ create_tables()
 bot.remove_webhook()
 bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
 
+# Test du webhook
+def check_webhook():
+    try:
+        webhook_info = bot.get_webhook_info()
+        print("Webhook info:", webhook_info)
+        if webhook_info.url:
+            print("Webhook configuré avec succès à l'URL:", webhook_info.url)
+        else:
+            print("Le webhook n'est pas configuré.")
+    except Exception as e:
+        print(f"Erreur lors de la récupération des informations du webhook : {e}")
+
+# Tester le webhook juste avant de lancer le serveur
+check_webhook()
+
 # Serveur Web pour le webhook
 async def handle(request):
     if request.match_info.get("token") == bot.token:
