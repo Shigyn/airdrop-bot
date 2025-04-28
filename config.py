@@ -26,7 +26,7 @@ wallet_changes = 3  # How many times a user can change their wallet address.
 
 # Google Sheets configuration
 # Set the ID of the Google Sheets file and the range for your data.
-SPREADSHEET_ID = 'TON_ID_FEUILLE_GOOGLE_SHEETS'  # Google Sheets ID
+SPREADSHEET_ID = '1BBGrkXcQuAK2JcNoOCc5Im8SgC7-MGixm7usyAzscHI'  # Google Sheets ID
 RANGE_NAME = 'Sheet1!A:D'  # Range in the sheet, here A:D for user ID, Name, etc.
 
 # Webhook settings (Optional, leave empty if you're not using webhook)
