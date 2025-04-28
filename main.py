@@ -30,7 +30,7 @@ def get_google_sheets_client():
 def add_user_to_sheet(user_id, address=None):
     """Ajouter un utilisateur dans la feuille Google Sheets"""
     client = get_google_sheets_client()
-    sheet = client.worksheet("Sheet1")  # Remplace "Sheet1" par le nom de ta feuille si nécessaire
+    sheet = client.worksheet("Users")  # Remplace "Sheet1" par le nom de ta feuille si nécessaire
     try:
         # Vérifier si l'utilisateur existe déjà
         cell = sheet.find(str(user_id))
@@ -69,7 +69,7 @@ def start_handler(message):
 @bot.message_handler(commands=["webapp"])
 def webapp_handler(message):
     bot.send_message(message.chat.id, "Voici la page web de test", reply_markup=InlineKeyboardMarkup().add(
-        InlineKeyboardButton("Voir la webapp", url="https://harmonious-spontaneity.up.railway.app/")
+        InlineKeyboardButton("Voir la webapp", url="https://tronquest.vercel.app/")
     ))
 
 # Callbacks
@@ -100,7 +100,7 @@ app.router.add_post("/{token}/", handle)
 app.router.add_get("/webhook", webhook)
 
 # Webhook Setup
-WEBHOOK_URL = f"https://{config.WEBHOOK_HOST}/{config.api_token}/"
+WEBHOOK_URL = f"https://tronquest.vercel.app/{config.api_token}/"  # Remplacer <ton-projet> par le nom de ton projet Vercel
 bot.remove_webhook()
 bot.set_webhook(url=WEBHOOK_URL)
 
