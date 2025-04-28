@@ -25,6 +25,10 @@ mysql_user = "root"  # L'utilisateur
 mysql_pw = "wIlRKdNrsyUhxOpdMiIHXigmJllySBJS"  # Le mot de passe
 mysql_db = "railway"  # La base de données
 
+# Webhook Host
+WEBHOOK_HOST = "https://harmonious-spontaneity.up.railway.app"  # L'URL du webhook
+
+
 texts = {
     "start_1": "Hi {} and welcome to our Airdrop!\n\nGet started by clicking the button below.\n\n",
     "start_2": "Hi {},\n\nYour address has been added to the airdrop list!\n\n",

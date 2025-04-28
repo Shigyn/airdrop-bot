@@ -1,41 +1,32 @@
 from dotenv import load_dotenv
-import re
-import ssl
-from io import BytesIO
-from time import gmtime, strftime
-
+import os
 import pymysql
 import telebot
 from aiohttp import web
-from telebot import types
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
-
 import config
-import os
 
-# Load environment variables
+# Charger les variables d'environnement
 load_dotenv()
 
-# Webhook and Bot settings
+# Webhook et paramètres du Bot
 WEBHOOK_HOST = config.host  # L'hôte de ton projet sur Railway
 WEBHOOK_PORT = 8443
 WEBHOOK_LISTEN = "0.0.0.0"
 
-# Railway provides SSL, so we don't need cert files on local
 WEBHOOK_URL_BASE = f"https://{WEBHOOK_HOST}"
 WEBHOOK_URL_PATH = f"/{config.api_token}/"
 
 bot = telebot.TeleBot(config.api_token)
 app = web.Application()
 
-# Database connection
+# Connexion à la base de données
 def get_connection():
-    """ Function to get MySQL connection from Railway's environment variables """
-    # Load MySQL connection details from environment variables
-    mysql_host = os.getenv('MYSQL_HOST', 'maglev.proxy.rlwy.net')  # Default value for Railway MySQL host
+    """Fonction pour obtenir la connexion MySQL depuis les variables d'environnement de Railway"""
+    mysql_host = os.getenv('MYSQL_HOST', 'maglev.proxy.rlwy.net')  # Par défaut pour Railway MySQL host
     mysql_user = os.getenv('MYSQL_USER', 'root')
-    mysql_pw = os.getenv('MYSQL_PASSWORD', 'wIlRKdNrsyUhxOpdMiIHXigmJllySBJS')  # Use actual password from Railway
-    mysql_db = os.getenv('MYSQL_DB', 'railway')  # Default database name
+    mysql_pw = os.getenv('MYSQL_PASSWORD', 'wIlRKdNrsyUhxOpdMiIHXigmJllySBJS')  # Utiliser le mot de passe réel
+    mysql_db = os.getenv('MYSQL_DB', 'railway')  # Nom de la base de données par défaut
 
     return pymysql.connect(
         host=mysql_host,
@@ -47,132 +38,59 @@ def get_connection():
         autocommit=True,
     )
 
-# Create database tables if not exist
+# Créer les tables dans la base de données si elles n'existent pas
 def create_tables():
     connection = get_connection()
     with connection.cursor() as cursor:
-        table_name = "users"
         try:
             cursor.execute(
-                f"CREATE TABLE `{table_name}` ("
-                "`user_id` varchar(15) DEFAULT NULL,"
-                "`address` varchar(42) DEFAULT NULL,"
-                "`address_change_status` tinyint DEFAULT 0,"
-                "`captcha` tinyint DEFAULT NULL)"
+                "CREATE TABLE IF NOT EXISTS `users` ("
+                "`user_id` varchar(15) PRIMARY KEY,"
+                "`address` varchar(42) DEFAULT NULL)"
             )
-            print("Database tables created.")
+            print("Table 'users' vérifiée ou créée.")
         except Exception as e:
-            print(f"Error while creating tables: {e}")
-
-# Load airdrop data
-def get_airdrop_wallets():
-    connection = get_connection()
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT address FROM users WHERE address IS NOT NULL")
-        return [user["address"] for user in cursor.fetchall()]
-
-def get_airdrop_users():
-    connection = get_connection()
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT user_id FROM users WHERE address IS NOT NULL")
-        return [user["user_id"] for user in cursor.fetchall()]
-
-# Keyboards
-default_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-default_keyboard.row(types.KeyboardButton("🚀 Join Airdrop"))
-
-airdrop_keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-airdrop_keyboard.row(types.KeyboardButton("💼 View Wallet Address"))
-
-def cancel_button():
-    markup = InlineKeyboardMarkup()
-    markup.add(InlineKeyboardButton("Cancel Operation", callback_data="cancel_input"))
-    return markup
-
-def update_wallet_address_button(message):
-    connection = get_connection()
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT address_change_status FROM users WHERE user_id = %s", message.chat.id)
-        address_changes = cursor.fetchone()["address_change_status"]
-        markup = InlineKeyboardMarkup()
-        markup.add(
-            InlineKeyboardButton(
-                f"Update Address ({address_changes}/{config.wallet_changes})",
-                callback_data="edit_wallet_address",
-            )
-        )
-        return markup
+            print(f"Erreur lors de la création des tables: {e}")
 
 # Handlers
 @bot.message_handler(func=lambda message: message.chat.type == "private", commands=["start"])
 def start_handler(message):
+    """ Handler pour la commande /start """
     connection = get_connection()
     with connection.cursor() as cursor:
-        bot.send_chat_action(message.chat.id, "typing")
         cursor.execute("SELECT EXISTS(SELECT user_id FROM users WHERE user_id = %s)", message.chat.id)
         if not list(cursor.fetchone().values())[0]:
             cursor.execute("INSERT INTO users(user_id) VALUES (%s)", message.chat.id)
 
-        if message.chat.id in airdrop_users:
-            bot.send_message(
-                message.chat.id,
-                config.texts["start_2"].format(message.from_user.first_name) +
-                "[» Source Code](https://github.com/fabston/Telegram-Airdrop-Bot).",
-                parse_mode="Markdown",
-                disable_web_page_preview=True,
-                reply_markup=airdrop_keyboard,
+        bot.send_message(
+            message.chat.id,
+            f"Bonjour {message.from_user.first_name} ! Bienvenue dans le bot.",
+            reply_markup=InlineKeyboardMarkup().add(
+                InlineKeyboardButton("Voir mes informations", callback_data="view_info")
             )
-        elif not config.airdrop_live:
-            bot.send_message(
-                message.chat.id,
-                config.texts["airdrop_start"] +
-                "[» Source Code](https://github.com/fabston/Telegram-Airdrop-Bot).",
-                parse_mode="Markdown",
-                disable_web_page_preview=True,
-            )
-        elif len(airdrop_users) >= config.airdrop_cap:
-            bot.send_message(
-                message.chat.id,
-                config.texts["airdrop_max_cap"] +
-                "[» Source Code](https://github.com/fabston/Telegram-Airdrop-Bot).",
-                parse_mode="Markdown",
-                disable_web_page_preview=True,
-            )
-        else:
-            bot.send_message(
-                message.chat.id,
-                config.texts["start_1"].format(message.from_user.first_name) +
-                "[» Source Code](https://github.com/fabston/Telegram-Airdrop-Bot).",
-                parse_mode="Markdown",
-                disable_web_page_preview=True,
-                reply_markup=default_keyboard,
-            )
+        )
+
+# Commande pour tester la webapp
+@bot.message_handler(commands=["webapp"])
+def webapp_handler(message):
+    bot.send_message(message.chat.id, "Voici la page web de test", reply_markup=InlineKeyboardMarkup().add(
+        InlineKeyboardButton("Voir la webapp", url="https://harmonious-spontaneity.up.railway.app/")
+    ))
 
 # Callbacks
-@bot.callback_query_handler(func=lambda call: True)
-def callback_query(call):
-    if call.data == "cancel_input":
-        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
-        if len(airdrop_users) >= config.airdrop_cap:
-            bot.send_message(call.message.chat.id, "✅ Operation canceled.\n\nℹ️ The airdrop reached its max cap.")
-        elif call.message.chat.id in airdrop_users:
-            bot.send_message(call.message.chat.id, "✅ Operation canceled.", reply_markup=airdrop_keyboard)
-        else:
-            bot.send_message(call.message.chat.id, "✅ Operation canceled.", reply_markup=default_keyboard)
-        bot.clear_step_handler_by_chat_id(call.message.chat.id)
+@bot.callback_query_handler(func=lambda call: call.data == "view_info")
+def view_info_callback(call):
+    bot.send_message(call.message.chat.id, "Voici vos informations : [ici les infos]")
+    bot.answer_callback_query(call.id)
 
-# Initial setup
+# Initialisation de la base de données et ajout des utilisateurs
 create_tables()
-airdrop_users = get_airdrop_users()
-airdrop_wallets = get_airdrop_wallets()
 
-bot.enable_save_next_step_handlers(delay=2)
-bot.load_next_step_handlers()
-
+# Webhook Setup
 bot.remove_webhook()
 bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
 
-# Web server
+# Serveur Web pour le webhook
 async def handle(request):
     if request.match_info.get("token") == bot.token:
         request_body_dict = await request.json()
@@ -183,4 +101,11 @@ async def handle(request):
 
 app.router.add_post("/{token}/", handle)
 
+# Route pour la webapp de test
+async def webapp(request):
+    return web.Response(text="<h1>Bienvenue sur la webapp de test!</h1><p>Test en cours...</p>", content_type="text/html")
+
+app.router.add_get("/webapp", webapp)
+
+# Lancer le serveur
 web.run_app(app, host=WEBHOOK_LISTEN, port=WEBHOOK_PORT)
