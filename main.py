@@ -56,19 +56,22 @@ def create_tables():
 @bot.message_handler(func=lambda message: message.chat.type == "private", commands=["start"])
 def start_handler(message):
     """ Handler pour la commande /start """
-    connection = get_connection()
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT EXISTS(SELECT user_id FROM users WHERE user_id = %s)", message.chat.id)
-        if not list(cursor.fetchone().values())[0]:
-            cursor.execute("INSERT INTO users(user_id) VALUES (%s)", message.chat.id)
+    if message and message.chat:
+        connection = get_connection()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT EXISTS(SELECT user_id FROM users WHERE user_id = %s)", message.chat.id)
+            if not list(cursor.fetchone().values())[0]:
+                cursor.execute("INSERT INTO users(user_id) VALUES (%s)", message.chat.id)
 
-        bot.send_message(
-            message.chat.id,
-            f"Bonjour {message.from_user.first_name} ! Bienvenue dans le bot.",
-            reply_markup=InlineKeyboardMarkup().add(
-                InlineKeyboardButton("Voir mes informations", callback_data="view_info")
+            bot.send_message(
+                message.chat.id,
+                f"Bonjour {message.from_user.first_name} ! Bienvenue dans le bot.",
+                reply_markup=InlineKeyboardMarkup().add(
+                    InlineKeyboardButton("Voir mes informations", callback_data="view_info")
+                )
             )
-        )
+    else:
+        print("Message ou message.chat est None")
 
 # Commande pour tester la webapp
 @bot.message_handler(commands=["webapp"])
@@ -108,10 +111,14 @@ check_webhook()
 # Serveur Web pour le webhook
 async def handle(request):
     if request.match_info.get("token") == bot.token:
-        request_body_dict = await request.json()
-        update = telebot.types.Update.de_json(request_body_dict)
-        bot.process_new_updates([update])
-        return web.Response()
+        try:
+            request_body_dict = await request.json()
+            update = telebot.types.Update.de_json(request_body_dict)
+            bot.process_new_updates([update])
+            return web.Response()
+        except Exception as e:
+            print(f"Erreur lors du traitement de la mise à jour : {e}")
+            return web.Response(status=500)
     return web.Response(status=403)
 
 app.router.add_post("/{token}/", handle)
