@@ -4,31 +4,35 @@
 # File Name             : config.py             #
 # --------------------------------------------- #
 
-# Enable / disable the airdrop
+# Enable / disable the airdrop (True or False)
 airdrop_live = True
 
-# Telegram
-api_token = (
-    "7719262617:AAFyRYLXOOp16NwqJiq1Rcl_l96c5JHsNKc"  # More: https://core.telegram.org/bots#3-how-do-i-create-a-bot
-)
+# Telegram Bot Token
+# Your Telegram Bot token from BotFather
+api_token = "7719262617:AAFyRYLXOOp16NwqJiq1Rcl_l96c5JHsNKc"
 
-host = ""  # ip/host where the bot is running
+# Host settings (Only required if you're deploying the bot via a specific server)
+host = ""  # The server IP or host, leave empty if not needed.
 
-log_channel = 0  # Channel ID. Example: -1001355597767
-admins = []  # Telegram User ID's. Admins are able to execute command "/airdroplist"
-airdrop_cap = 100  # Max airdrop submissions that are being accepted
-wallet_changes = 3  # How often a user is allowed to change their wallet address
+# Telegram channel for logging (use your channel ID here)
+log_channel = 0  # Example: -1001355597767
 
-# MySQL Database
-mysql_host = "maglev.proxy.rlwy.net"  # L'hôte de la base de données
-mysql_user = "root"  # L'utilisateur
-mysql_pw = "wIlRKdNrsyUhxOpdMiIHXigmJllySBJS"  # Le mot de passe
-mysql_db = "railway"  # La base de données
+# Telegram User ID's for admins (Admins can use "/airdroplist" command)
+admins = []  # List of Telegram User IDs for admin users.
 
-# Webhook Host
-WEBHOOK_HOST = "https://harmonious-spontaneity.up.railway.app"  # L'URL du webhook
+# Airdrop settings
+airdrop_cap = 100  # Maximum number of airdrop submissions allowed.
+wallet_changes = 3  # How many times a user can change their wallet address.
 
+# Google Sheets configuration
+# Set the ID of the Google Sheets file and the range for your data.
+SPREADSHEET_ID = 'TON_ID_FEUILLE_GOOGLE_SHEETS'  # Google Sheets ID
+RANGE_NAME = 'Sheet1!A:D'  # Range in the sheet, here A:D for user ID, Name, etc.
 
+# Webhook settings (Optional, leave empty if you're not using webhook)
+WEBHOOK_HOST = ""  # Webhook URL if needed, leave empty if you're not using a webhook.
+
+# Texts used for Telegram bot messages
 texts = {
     "start_1": "Hi {} and welcome to our Airdrop!\n\nGet started by clicking the button below.\n\n",
     "start_2": "Hi {},\n\nYour address has been added to the airdrop list!\n\n",

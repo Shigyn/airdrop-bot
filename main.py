@@ -1,68 +1,54 @@
 from dotenv import load_dotenv
 import os
-import pymysql
 import telebot
-from aiohttp import web
 from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
 import config
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from aiohttp import web
+import json
 
 # Charger les variables d'environnement
 load_dotenv()
 
-# Webhook et paramètres du Bot
-WEBHOOK_HOST = config.host  # L'hôte de ton projet sur Railway
-WEBHOOK_PORT = 8443
-WEBHOOK_LISTEN = "0.0.0.0"
-
-WEBHOOK_URL_BASE = f"https://{WEBHOOK_HOST}"
-WEBHOOK_URL_PATH = f"/{config.api_token}/"
-
+# Initialiser le bot Telegram
 bot = telebot.TeleBot(config.api_token)
 app = web.Application()
 
-# Connexion à la base de données
-def get_connection():
-    """Fonction pour obtenir la connexion MySQL depuis les variables d'environnement de Railway"""
-    mysql_host = os.getenv('MYSQL_HOST', 'maglev.proxy.rlwy.net')  # Par défaut pour Railway MySQL host
-    mysql_user = os.getenv('MYSQL_USER', 'root')
-    mysql_pw = os.getenv('MYSQL_PASSWORD', 'wIlRKdNrsyUhxOpdMiIHXigmJllySBJS')  # Utiliser le mot de passe réel
-    mysql_db = os.getenv('MYSQL_DB', 'railway')  # Nom de la base de données par défaut
-
-    return pymysql.connect(
-        host=mysql_host,
-        user=mysql_user,
-        password=mysql_pw,
-        db=mysql_db,
-        charset="utf8mb4",
-        cursorclass=pymysql.cursors.DictCursor,
-        autocommit=True,
+# Configurer l'accès à Google Sheets
+def get_google_sheets_client():
+    """Fonction pour se connecter à Google Sheets en utilisant les credentials"""
+    # Utiliser les credentials pour accéder à Google Sheets
+    scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name(
+        "google/credentials.json", scope  # Assurez-vous que le chemin est correct
     )
+    client = gspread.authorize(creds)
+    return client.open_by_key(config.SPREADSHEET_ID)
 
-# Créer les tables dans la base de données si elles n'existent pas
-def create_tables():
-    connection = get_connection()
-    with connection.cursor() as cursor:
-        try:
-            cursor.execute(
-                "CREATE TABLE IF NOT EXISTS `users` ("
-                "`user_id` varchar(15) PRIMARY KEY,"
-                "`address` varchar(42) DEFAULT NULL)"
-            )
-            print("Table 'users' vérifiée ou créée.")
-        except Exception as e:
-            print(f"Erreur lors de la création des tables: {e}")
+# Fonction pour récupérer ou ajouter un utilisateur dans Google Sheets
+def add_user_to_sheet(user_id, address=None):
+    """Ajouter un utilisateur dans la feuille Google Sheets"""
+    client = get_google_sheets_client()
+    sheet = client.worksheet("Sheet1")  # Remplace "Sheet1" par le nom de ta feuille si nécessaire
+    try:
+        # Vérifier si l'utilisateur existe déjà
+        cell = sheet.find(str(user_id))
+        if cell:
+            return False  # L'utilisateur existe déjà
+    except gspread.exceptions.CellNotFound:
+        # Ajouter l'utilisateur si non trouvé
+        sheet.append_row([user_id, address if address else ""])  # Ajouter la ligne de l'utilisateur
+        return True
 
-# Handlers
+# Handlers pour les commandes Telegram
 @bot.message_handler(func=lambda message: message.chat.type == "private", commands=["start"])
 def start_handler(message):
     """ Handler pour la commande /start """
     if message and message.chat:
-        connection = get_connection()
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT EXISTS(SELECT user_id FROM users WHERE user_id = %s)", message.chat.id)
-            if not list(cursor.fetchone().values())[0]:
-                cursor.execute("INSERT INTO users(user_id) VALUES (%s)", message.chat.id)
-
+        # Ajout de l'utilisateur dans Google Sheets si nécessaire
+        user_added = add_user_to_sheet(message.chat.id)
+        if user_added:
             bot.send_message(
                 message.chat.id,
                 f"Bonjour {message.from_user.first_name} ! Bienvenue dans le bot.",
@@ -70,8 +56,14 @@ def start_handler(message):
                     InlineKeyboardButton("Voir mes informations", callback_data="view_info")
                 )
             )
-    else:
-        print("Message ou message.chat est None")
+        else:
+            bot.send_message(
+                message.chat.id,
+                f"Bonjour {message.from_user.first_name} ! Vous êtes déjà inscrit.",
+                reply_markup=InlineKeyboardMarkup().add(
+                    InlineKeyboardButton("Voir mes informations", callback_data="view_info")
+                )
+            )
 
 # Commande pour tester la webapp
 @bot.message_handler(commands=["webapp"])
@@ -86,29 +78,7 @@ def view_info_callback(call):
     bot.send_message(call.message.chat.id, "Voici vos informations : [ici les infos]")
     bot.answer_callback_query(call.id)
 
-# Initialisation de la base de données et ajout des utilisateurs
-create_tables()
-
-# Webhook Setup
-bot.remove_webhook()
-bot.set_webhook(url=WEBHOOK_URL_BASE + WEBHOOK_URL_PATH)
-
-# Test du webhook
-def check_webhook():
-    try:
-        webhook_info = bot.get_webhook_info()
-        print("Webhook info:", webhook_info)
-        if webhook_info.url:
-            print("Webhook configuré avec succès à l'URL:", webhook_info.url)
-        else:
-            print("Le webhook n'est pas configuré.")
-    except Exception as e:
-        print(f"Erreur lors de la récupération des informations du webhook : {e}")
-
-# Tester le webhook juste avant de lancer le serveur
-check_webhook()
-
-# Serveur Web pour le webhook
+# Route pour accepter le webhook (l'URL doit correspondre à ce format dans l'API Telegram)
 async def handle(request):
     if request.match_info.get("token") == bot.token:
         try:
@@ -121,13 +91,20 @@ async def handle(request):
             return web.Response(status=500)
     return web.Response(status=403)
 
+# Route pour vérifier si l'URL du webhook est bien définie
+async def webhook(request):
+    return web.Response(text="Webhook configuré correctement", content_type="text/plain")
+
+# Initialiser les routes
 app.router.add_post("/{token}/", handle)
+app.router.add_get("/webhook", webhook)
 
-# Route pour la webapp de test
-async def webapp(request):
-    return web.Response(text="<h1>Bienvenue sur la webapp de test!</h1><p>Test en cours...</p>", content_type="text/html")
-
-app.router.add_get("/webapp", webapp)
+# Webhook Setup
+WEBHOOK_URL = f"https://{config.WEBHOOK_HOST}/{config.api_token}/"
+bot.remove_webhook()
+bot.set_webhook(url=WEBHOOK_URL)
 
 # Lancer le serveur
-web.run_app(app, host=WEBHOOK_LISTEN, port=WEBHOOK_PORT)
+if __name__ == "__main__":
+    from aiohttp import web
+    web.run_app(app, host="0.0.0.0", port=8443)
