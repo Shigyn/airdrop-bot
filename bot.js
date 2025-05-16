@@ -7,6 +7,12 @@ const {
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
+// Middleware de log pour toutes les updates
+bot.use(async (ctx, next) => {
+  console.log('Update reçue :', ctx.updateType);
+  await next();
+});
+
 // Command /start
 bot.start((ctx) => {
   ctx.reply('Bienvenue à l’airdrop! Choisis une option:', Markup.inlineKeyboard([
@@ -47,10 +53,15 @@ bot.command('claim', async (ctx) => {
 });
 
 bot.action('referral', async (ctx) => {
-  ctx.reply('Ton code de parrainage est : ABC123'); // à modifier selon ta logique
+  const code = `REF-${ctx.from.id}`; // Logique temporaire
+  ctx.reply(`Ton code de parrainage est : ${code}`);
 });
 
-// NE PAS appeler bot.launch() ici, car tu utilises webhook avec Express
+// Gestion d'erreur globale
+bot.catch((err, ctx) => {
+  console.error('Erreur dans le bot', err);
+  ctx.reply('Une erreur est survenue. Réessaie plus tard.');
+});
 
 module.exports = {
   bot,
