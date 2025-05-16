@@ -3,7 +3,7 @@ const {
   readTasks,
   claimTaskForUser,
   getReferralInfo
-} = require('./googleSheets');
+} = require('./googlesheets');
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 

@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 // const bodyParser = require('body-parser'); // plus besoin
 const { bot, webhookCallback } = require('./bot');
-const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googleSheets');
+const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googlesheets');
 const app = express();
 const port = process.env.PORT || 10000; // Render default port
 
