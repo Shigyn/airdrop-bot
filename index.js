@@ -28,10 +28,11 @@ app.use((req, res, next) => {
 initGoogleSheets();
 
 // Route webhook Telegram (une seule déclaration)
-app.post(webhookPath, (req, res, next) => {
-  console.log('Webhook request received:', req.method, req.url);
-  next();
-}, webhookCallback(webhookPath));
+app.post(webhookPath, webhookCallback);
+
+app.get('/test-webhook', (req, res) => {
+  res.send('Webhook endpoint is reachable');
+});
 
 // Routes API
 app.get('/tasks', async (req, res) => {
