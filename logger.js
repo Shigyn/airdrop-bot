@@ -1,4 +1,4 @@
-// src/logger.js
+// src/logger.js - Version simplifiée SANS Winston
 module.exports = {
   info: (...args) => console.log(`[INFO] ${new Date().toISOString()}`, ...args),
   error: (...args) => console.error(`[ERROR] ${new Date().toISOString()}`, ...args),
