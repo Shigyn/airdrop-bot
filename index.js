@@ -28,13 +28,11 @@ app.use((req, res, next) => {
 initGoogleSheets();
 
 // Route webhook Telegram (une seule déclaration)
-const secretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
-app.post(secretPath, webhookCallback);
+const webhookSecret = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+app.post(webhookSecret, webhookCallback);
 
 // Et modifie aussi la webhookUrl :
-const webhookUrl = process.env.PUBLIC_URL ?
-  `${process.env.PUBLIC_URL}${secretPath}` :
-  `http://localhost:${port}${secretPath}`;
+const webhookUrl = `https://airdrop-bot-soy1.onrender.com/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 
 app.get('/test-webhook', (req, res) => {
   res.send('Webhook endpoint is reachable');

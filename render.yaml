@@ -11,7 +11,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: PUBLIC_URL
-        value: https://faucet-app.onrender.com
+        value: https://airdrop-bot-soy1.onrender.com
       - key: TELEGRAM_BOT_TOKEN
         fromService:
           name: telegram-secrets
