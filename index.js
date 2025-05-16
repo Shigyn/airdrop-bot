@@ -54,6 +54,12 @@ app.get('/referral/:code', async (req, res) => {
 });
 
 // Start server
+app.use(bot.webhookCallback('/webhook')); 
+
+// Si tu veux aussi préciser un endpoint webhook (URL publique)
+const webhookUrl = `https://faucet-app.onrender.com/webhook`;
+bot.telegram.setWebhook(webhookUrl);
+
 app.listen(port, () => {
   console.log(`Server started on port ${port}`);
 });
