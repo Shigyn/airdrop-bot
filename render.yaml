@@ -1,13 +1,13 @@
 services:
   - type: web
     name: airdrop-bot
-    env: node  # Force Render à utiliser Node.js
-    plan: free
-    buildCommand: npm install  # Pas besoin de Python
-    startCommand: node index.js
+    env: node             # OK, spécifie Node.js
+    plan: free            # OK, plan gratuit
+    buildCommand: npm install  # OK, installe les dépendances
+    startCommand: node index.js  # OK, lance ton serveur
     envVars:
       - key: PORT
-        value: 10000
+        value: 10000      # OK, fixe le port à 10000 (mais Render fournit aussi une variable PORT automatiquement)
       - key: NODE_ENV
         value: production
       - key: PUBLIC_URL

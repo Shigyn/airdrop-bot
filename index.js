@@ -7,9 +7,6 @@ const { bot, webhookCallback } = require('./bot');
 const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googlesheets');
 const app = express();
 const PORT = process.env.PORT || 10000;  // utilise le port Render sinon 10000 en local
-app.listen(PORT, () => {
-  console.log(`Serveur démarré sur le port ${PORT}`);
-});
 
 // Middlewares globaux (doivent être avant la route webhook)
 app.use(cors());
@@ -29,8 +26,8 @@ initGoogleSheets();
 const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = process.env.PUBLIC_URL ? 
   `${process.env.PUBLIC_URL}${webhookSecretPath}` : 
-  `http://localhost:${port}${webhookSecretPath}`;
-  
+  `http://localhost:${PORT}${webhookSecretPath}`;
+
 app.post(webhookSecretPath, webhookCallback);
 
 // Routes API
@@ -94,8 +91,8 @@ app.use((err, req, res, next) => {
 });
 
 // Démarrage du serveur
-app.listen(port, () => {
-  console.log(`Server started on port ${port}`);
+app.listen(PORT, () => {
+  console.log(`Server started on port ${PORT}`);
   console.log(`Webhook URL: ${webhookUrl}`);
 
   // En production, on utilise le webhook via Express
