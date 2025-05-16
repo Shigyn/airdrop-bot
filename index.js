@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 // const bodyParser = require('body-parser'); // plus besoin
 const { bot, webhookCallback } = require('./bot');
-const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googlesheets');
+const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googleSheets');
 const app = express();
 const PORT = process.env.PORT || 10000;  // utilise le port Render sinon 10000 en local
 
