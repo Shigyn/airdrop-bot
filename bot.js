@@ -1,4 +1,3 @@
-```js
 const { Telegraf, Markup } = require('telegraf');
 const googleSheets = require('./googleSheets');
 const logger = require('./logger');
@@ -28,7 +27,6 @@ bot.action('get_referral', async (ctx) => {
   try {
     const userId = ctx.from.id;
     const referralLink = `https://t.me/CRYPTORATS_bot?start=${userId}`;
-
 
     await ctx.reply(
       `🔗 <b>Voici ton lien de parrainage :</b>\n<a href="${referralLink}">Clique ici</a>`,
