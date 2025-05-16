@@ -14,32 +14,35 @@ const navTasks = document.getElementById('btn-tasks');
 const navReferrals = document.getElementById('btn-referral');
 const content = document.getElementById('content');
 
-// Récupération dynamique du username via Telegram
+// === USER INFO FETCH FROM SHEETS ===
 let currentUsername = "inconnu";
 
-if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && tg.initDataUnsafe.user.username) {
+if (tg?.initDataUnsafe?.user?.username) {
   currentUsername = tg.initDataUnsafe.user.username;
+  console.log("Username détecté via Telegram :", currentUsername);
 } else {
-  console.warn("Username Telegram introuvable dans initDataUnsafe");
+  console.warn("Username Telegram non trouvé.");
 }
 
-// Requête vers Google Sheets Apps Script
 fetch(`https://script.google.com/macros/s/AKfycbyE6Oeh3BEGIiW9dbsnqg0eh4bcwHNoZZfF2QP_O4_VkQLOLt2wc98VqqDbuzZTqaF9PQ/exec?username=${encodeURIComponent(currentUsername)}`)
   .then(res => res.json())
   .then(data => {
     if (data.error) {
-      console.error("Erreur depuis Google Sheets :", data.error);
+      console.error("Erreur Sheets :", data.error);
       return;
     }
 
-    // Mise à jour de l'affichage utilisateur
-    document.getElementById('username').textContent = data.username || "non trouvé";
+    document.getElementById('username').textContent = data.username || "—";
     document.getElementById('balance').textContent = data.balance ?? "--";
-    document.getElementById('lastClaim').textContent = new Date(data.lastClaim).toLocaleString('fr-FR') ?? "--";
+    document.getElementById('lastClaim').textContent = data.lastClaim
+      ? new Date(data.lastClaim).toLocaleString('fr-FR')
+      : "--";
   })
-  .catch(err => console.error("Erreur fetch données depuis Google Sheets :", err));
+  .catch(err => {
+    console.error("Erreur de récupération des données depuis Sheets :", err);
+  });
 
-// Show Tasks
+// === NAVIGATION LOGIC (exemple showTasks) ===
 function showTasks() {
   content.innerHTML = '<h2>Chargement des tâches...</h2>';
   fetch('/tasks')
