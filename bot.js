@@ -16,8 +16,7 @@ bot.start(async (ctx) => {
     await ctx.reply(
       `👋 Bienvenue ${ctx.from.first_name} !\n\nVoici le menu de l'application :`,
       Markup.inlineKeyboard([
-        [Markup.button.webApp('▶️ Start app', 'https://your-webapp-url.com')], // ← à modifier
-        [Markup.button.url('📣 Canal de l’app', 'ton_url_groupe_tg')],
+        [Markup.button.webApp('▶️ Start app', 'https://airdrop-bot-soy1.onrender.com')],
         [Markup.button.callback('🔗 Referral link', 'get_referral')]
       ])
     );
