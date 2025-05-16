@@ -30,9 +30,10 @@ bot.action('get_referral', async (ctx) => {
     const userId = ctx.from.id;
     const referralLink = `https://t.me/${ctx.me}?start=${userId}`;
 
-    await ctx.reply(`🔗 *Voici ton lien de parrainage :*\n${referralLink}`, {
-      parse_mode: 'Markdown'
-    });
+    await ctx.reply(
+  `🔗 <b>Voici ton lien de parrainage :</b>\n<a href="https://t.me/CRYPTORATS_bot?start=${userId}">Clique ici</a>`,
+  { parse_mode: 'HTML' }
+);
   } catch (err) {
     logger.error('Referral link error:', err);
     ctx.reply('❌ Erreur lors de la génération du lien de parrainage.');
