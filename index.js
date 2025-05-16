@@ -56,6 +56,15 @@ app.get('/referral/:code', async (req, res) => {
 // Set webhook URL (à faire une fois, pas à chaque redémarrage)
 // bot.telegram.setWebhook('https://faucet-app.onrender.com/webhook');
 
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`Server started on port ${port}`);
+  // Optionnel: Set webhook automatiquement au démarrage (déconseillé en production)
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/webhook`);
+      console.log('Webhook set successfully');
+    } catch (err) {
+      console.error('Webhook error:', err);
+    }
+  }
 });
