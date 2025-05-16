@@ -28,7 +28,13 @@ app.use((req, res, next) => {
 initGoogleSheets();
 
 // Route webhook Telegram (une seule déclaration)
-app.post(webhookPath, webhookCallback);
+const secretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+app.post(secretPath, webhookCallback);
+
+// Et modifie aussi la webhookUrl :
+const webhookUrl = process.env.PUBLIC_URL ?
+  `${process.env.PUBLIC_URL}${secretPath}` :
+  `http://localhost:${port}${secretPath}`;
 
 app.get('/test-webhook', (req, res) => {
   res.send('Webhook endpoint is reachable');
@@ -95,19 +101,13 @@ app.use((err, req, res, next) => {
 });
 
 // Démarrage du serveur
-app.listen(port, async () => {
+app.listen(port, () => {
   console.log(`Server started on port ${port}`);
   console.log(`Webhook URL: ${webhookUrl}`);
 
+  // En production, on utilise le webhook via Express
   if (process.env.PUBLIC_URL) {
-    try {
-      console.log('Setting up webhook...');
-      await bot.telegram.setWebhook(webhookUrl);
-      const webhookInfo = await bot.telegram.getWebhookInfo();
-      console.log('Webhook configured:', webhookInfo);
-    } catch (err) {
-      console.error('Webhook setup failed:', err);
-    }
+    console.log('Running in production mode with webhook');
   } else {
     console.log('Running in development mode, using polling');
     bot.launch(); // Seulement en dev
