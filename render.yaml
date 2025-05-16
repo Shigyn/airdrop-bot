@@ -3,16 +3,35 @@ services:
     name: airdrop-bot
     env: node
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
+    region: frankfurt  # Choisis la région la plus proche de tes utilisateurs
+    buildCommand: npm install && npm run build --if-present
+    startCommand: node index.js
     envVars:
-      - key: GOOGLE_CREDS
-      - key: GOOGLE_CREDS_B64
-      - key: GOOGLE_SHEET_ID
-      - key: TASKS_RANGE
-      - key: USER_RANGE
-      - key: TRANSACTION_RANGE
-      - key: SECRET_KEY
+      - key: PORT
+        value: 10000  # Render utilise le port 10000 par défaut
+      - key: NODE_ENV
+        value: production
       - key: PUBLIC_URL
+        value: https://faucet-app.onrender.com  # À remplacer par ton URL réelle
       - key: TELEGRAM_BOT_TOKEN
-    healthCheckPath: /
+        fromService:
+          name: telegram-secrets
+          type: secret
+      - key: GOOGLE_CREDS_B64
+        fromService:
+          name: google-creds
+          type: secret
+      - key: GOOGLE_SHEET_ID
+        value: ton-id-de-feuille  # À remplacer
+      - key: TASKS_RANGE
+        value: "Tasks!A2:D"  # Exemple de range
+      - key: USER_RANGE
+        value: "Users!A2:C"  # Exemple de range
+      - key: TRANSACTION_RANGE
+        value: "Transactions!A2:E"  # Exemple de range
+      - key: SECRET_KEY
+        fromService:
+          name: app-secret
+          type: secret
+    healthCheckPath: /health
+    autoDeploy: true  # Déploiement automatique sur push

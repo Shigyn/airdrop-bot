@@ -2,33 +2,44 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const bodyParser = require('body-parser');
-
-const bot = require('./bot');
+// const bodyParser = require('body-parser'); // plus besoin
+const { bot, webhookCallback } = require('./bot');
 const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googleSheets');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000; // Render default port
+const webhookPath = '/webhook';  // déclaration avant usage
+const webhookUrl = process.env.PUBLIC_URL ?
+  `${process.env.PUBLIC_URL}${webhookPath}` :
+  `http://localhost:${port}${webhookPath}`;
 
+// Middlewares globaux (doivent être avant la route webhook)
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());  // remplace bodyParser.json()
+app.use(express.urlencoded({ extended: true }));
 
-// Google Sheets init
+// Middleware de logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - IP: ${req.ip}`);
+  next();
+});
+
+// Initialisation Google Sheets
 initGoogleSheets();
 
-// Webhook Telegram (une seule fois)
-app.use(bot.webhookCallback('/webhook'));
+// Route webhook Telegram (une seule déclaration)
+app.post(webhookPath, (req, res, next) => {
+  console.log('Webhook request received:', req.method, req.url);
+  next();
+}, webhookCallback(webhookPath));
 
-// Static files
-app.use(express.static(path.join(__dirname, 'public')));
-
-// API example routes
+// Routes API
 app.get('/tasks', async (req, res) => {
   try {
     const tasks = await readTasks();
     res.json(tasks);
   } catch (err) {
+    console.error('Tasks error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -39,6 +50,7 @@ app.post('/claim', async (req, res) => {
     const result = await claimTaskForUser(userId, taskId);
     res.json(result);
   } catch (err) {
+    console.error('Claim error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -49,22 +61,54 @@ app.get('/referral/:code', async (req, res) => {
     const referralInfo = await getReferralInfo(code);
     res.json(referralInfo);
   } catch (err) {
+    console.error('Referral error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// Set webhook URL (à faire une fois, pas à chaque redémarrage)
-// bot.telegram.setWebhook('https://faucet-app.onrender.com/webhook');
+// Health check (Render)
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString()
+  });
+});
 
+// Fichiers statiques
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Route racine simple
+app.get('/', (req, res) => {
+  res.send('Airdrop Bot is running!');
+});
+
+// Gestion des erreurs 404
+app.use((req, res) => {
+  res.status(404).json({ error: 'Endpoint not found' });
+});
+
+// Gestion des erreurs globales
+app.use((err, req, res, next) => {
+  console.error('Global error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Démarrage du serveur
 app.listen(port, async () => {
   console.log(`Server started on port ${port}`);
-  // Optionnel: Set webhook automatiquement au démarrage (déconseillé en production)
-  if (process.env.NODE_ENV !== 'production') {
+  console.log(`Webhook URL: ${webhookUrl}`);
+
+  if (process.env.PUBLIC_URL) {
     try {
-      await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/webhook`);
-      console.log('Webhook set successfully');
+      console.log('Setting up webhook...');
+      await bot.telegram.setWebhook(webhookUrl);
+      const webhookInfo = await bot.telegram.getWebhookInfo();
+      console.log('Webhook configured:', webhookInfo);
     } catch (err) {
-      console.error('Webhook error:', err);
+      console.error('Webhook setup failed:', err);
     }
+  } else {
+    console.log('Running in development mode, using polling');
+    bot.launch(); // Seulement en dev
   }
 });

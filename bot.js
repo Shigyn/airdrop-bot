@@ -52,4 +52,7 @@ bot.action('referral', async (ctx) => {
 
 // NE PAS appeler bot.launch() ici, car tu utilises webhook avec Express
 
-module.exports = bot;
+module.exports = {
+  bot,
+  webhookCallback: bot.webhookCallback.bind(bot),
+};
