@@ -101,18 +101,3 @@ app.listen(PORT, () => {
     bot.launch();
   }
 });
-
-const currentUsername = "masia_nico"; // ou récupéré dynamiquement plus tard
-
-fetch(`https://script.google.com/macros/s/AKfycbyE6Oeh3BEGIiW9dbsnqg0eh4bcwHNoZZfF2QP_O4_VkQLOLt2wc98VqqDbuzZTqaF9PQ/exec?username=${encodeURIComponent(currentUsername)}`)
-  .then(res => res.json())
-  .then(data => {
-    if (data.error) {
-      console.error(data.error);
-      return;
-    }
-    document.getElementById('username').textContent = data.username;
-    document.getElementById('balance').textContent = data.balance;
-    document.getElementById('lastClaim').textContent = data.lastClaim;
-  })
-  .catch(err => console.error("Erreur fetch data Google Sheets:", err));
