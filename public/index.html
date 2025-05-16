@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Airdrop Telegram Bot</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Airdrop Telegram</h1>
+    <div class="menu">
+      <button id="btn-tasks">Tasks</button>
+      <button id="btn-claim">Claim</button>
+      <button id="btn-referral">Referral</button>
+    </div>
+    <div id="content"></div>
+  </div>
+
+  <script>
+    const content = document.getElementById('content');
+
+    document.getElementById('btn-tasks').onclick = async () => {
+      const res = await fetch('/tasks');
+      const tasks = await res.json();
+      let html = '<h2>Tasks disponibles</h2><ul>';
+      tasks.forEach(t => {
+        html += `<li>${t.Description} (Reward: ${t.Reward})</li>`;
+      });
+      html += '</ul>';
+      content.innerHTML = html;
+    };
+
+    document.getElementById('btn-claim').onclick = () => {
+      content.innerHTML = `
+        <h2>Claim</h2>
+        <form id="claimForm">
+          <input type="text" name="userId" placeholder="User ID Telegram" required /><br/>
+          <input type="text" name="taskId" placeholder="Task ID" required /><br/>
+          <button type="submit">Réclamer</button>
+        </form>
+        <div id="claimResult"></div>
+      `;
+      document.getElementById('claimForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const data = {
+          userId: form.userId.value,
+          taskId: form.taskId.value,
+        };
+        const res = await fetch('/claim', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(data),
+        });
+        const result = await res.json();
+        document.getElementById('claimResult').innerText = result.message || JSON.stringify(result);
+      };
+    };
+
+    document.getElementById('btn-referral').onclick = async () => {
+      const code = prompt('Entre ton code de parrainage :');
+      if (!code) return;
+      const res = await fetch(`/referral/${code}`);
+      const info = await res.json();
+      content.innerHTML = `
+        <h2>Referral</h2>
+        <p>Code: ${info.code}</p>
+        <p>Reward: ${info.reward}</p>
+        <p>Referred Users: ${info.referredUsers}</p>
+      `;
+    };
+  </script>
+</body>
+</html>

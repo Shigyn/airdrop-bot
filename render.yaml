@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: airdrop-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: GOOGLE_CREDS
+      - key: GOOGLE_CREDS_B64
+      - key: GOOGLE_SHEET_ID
+      - key: TASKS_RANGE
+      - key: USER_RANGE
+      - key: TRANSACTION_RANGE
+      - key: SECRET_KEY
+      - key: PUBLIC_URL
+      - key: TELEGRAM_BOT_TOKEN
+    healthCheckPath: /

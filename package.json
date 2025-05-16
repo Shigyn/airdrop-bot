@@ -1,0 +1,17 @@
+{
+  "name": "airdrop-bot",
+  "version": "1.0.0",
+  "description": "Telegram Airdrop Bot + Webapp prêt à déployer sur Render",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "telegraf": "^4.12.3",
+    "dotenv": "^16.0.3",
+    "googleapis": "^109.0.1",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5"
+  }
+}
