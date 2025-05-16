@@ -66,53 +66,53 @@ button:focus {
 /* Active : bouton "appuie" */
 button:active {
   transform: translateY(0);
-  box-shadow: 0 3px 6px rgb(0 86 179 / 0.4);
+  box-shadow: 0 3px 6px rgb(0 86179 / 0.4);
 }
 
 /* Inputs full width, plus confort */
 input {
-  width: 100%;
-  padding: 10px 12px;
-  margin-bottom: 15px;
-  font-size: 15px;
-  border: 1.8px solid #ddd;
-  border-radius: 6px;
-  transition: border-color 0.25s ease;
+width: 100%;
+padding: 10px 12px;
+margin-bottom: 15px;
+font-size: 15px;
+border: 1.8px solid #ddd;
+border-radius: 6px;
+transition: border-color 0.25s ease;
 }
 
 /* Focus input */
 input:focus {
-  border-color: #007bff;
-  outline: none;
-  box-shadow: 0 0 8px rgb(0 123 255 / 0.3);
+border-color: #007bff;
+outline: none;
+box-shadow: 0 0 8px rgb(0 123 255 / 0.3);
 }
 
 /* Résultat claim plus visible et espacé */
 #claimResult {
-  margin-top: 20px;
-  font-weight: 700;
-  color: #28a745;
-  text-align: center;
-  min-height: 1.3em;
+margin-top: 20px;
+font-weight: 700;
+color: #28a745;
+text-align: center;
+min-height: 1.3em;
 }
 
 /* Pulse animation sur le bouton claim */
 #claimForm button.pulse {
-  animation: pulse-animation 0.6s ease forwards;
+animation: pulse-animation 0.6s ease forwards;
 }
 
 /* Animation pulse plus fluide */
 @keyframes pulse-animation {
-  0% {
-    transform: scale(1);
-    box-shadow: 0 0 0 rgba(40, 167, 69, 0.7);
-  }
-  50% {
-    transform: scale(1.1);
-    box-shadow: 0 0 15px rgba(40, 167, 69, 1);
-  }
-  100% {
-    transform: scale(1);
-    box-shadow: 0 0 0 rgba(40, 167, 69, 0);
-  }
+0% {
+transform: scale(1);
+box-shadow: 0 0 0 rgba(40, 167, 69, 0.7);
+}
+50% {
+transform: scale(1.1);
+box-shadow: 0 0 15px rgba(40, 167, 69, 1);
+}
+100% {
+transform: scale(1);
+box-shadow: 0 0 0 rgba(40, 167, 69, 0);
+}
 }
