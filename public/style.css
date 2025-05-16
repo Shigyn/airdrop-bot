@@ -115,4 +115,16 @@ box-shadow: 0 0 15px rgba(40, 167, 69, 1);
 transform: scale(1);
 box-shadow: 0 0 0 rgba(40, 167, 69, 0);
 }
+.user-info {
+  background: #e9f2ff;
+  padding: 15px 20px;
+  border-radius: 10px;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 10px rgba(0, 123, 255, 0.1);
+  font-size: 16px;
+  line-height: 1.5;
+}
+.user-info p {
+  margin: 8px 0;
+}
 }

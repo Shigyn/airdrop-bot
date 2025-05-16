@@ -116,3 +116,17 @@ navReferrals.addEventListener('click', showReferrals);
 document.addEventListener('DOMContentLoaded', () => {
   showClaim();
 });
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Simule des données reçues depuis un backend ou une API
+  const userData = {
+    username: "JohnDoe",
+    balance: "250.00 USDT",
+    last_claim: "2025-05-14 14:32",
+  };
+
+  // Injecte dans le HTML
+  document.getElementById("username").textContent = userData.username;
+  document.getElementById("balance").textContent = userData.balance;
+  document.getElementById("lastClaim").textContent = userData.last_claim;
+});
