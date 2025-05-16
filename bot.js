@@ -1,91 +1,58 @@
 const { Telegraf, Markup } = require('telegraf');
-const { google } = require('googleapis');
-const logger = require('./logger'); // Fichier logger.js à créer (voir plus bas)
-
-// Initialisation Google Sheets
-const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets']
-});
-const sheets = google.sheets({ version: 'v4', auth });
+const googleSheets = require('./googleSheets');
+const logger = require('./logger');
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
-// ======================
-// FONCTIONS GOOGLE SHEETS
-// ======================
-
-async function readTasks() {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: process.env.TASKS_RANGE || 'Tasks!A2:D'
-  });
-  return res.data.values.map(row => ({
-    Id: row[0],
-    Description: row[1],
-    Reward: row[2],
-    Status: row[3]
-  }));
-}
-
-async function claimTaskForUser(userId, taskId) {
-  // 1. Vérifie si la tâche existe
-  const tasks = await readTasks();
-  const task = tasks.find(t => t.Id === taskId);
-  if (!task) throw new Error('Tâche introuvable');
-
-  // 2. Enregistre dans la feuille "Claims"
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: process.env.CLAIMS_RANGE || 'Claims!A2:C',
-    valueInputOption: 'RAW',
-    resource: {
-      values: [[userId, taskId, new Date().toISOString()]]
-    }
-  });
-
-  return { 
-    success: true,
-    message: `🎉 Tâche #${taskId} validée ! Récompense : ${task.Reward}`
-  };
-}
-
-// ==================
-// COMMANDES DU BOT
-// ==================
-
-bot.start((ctx) => {
-  ctx.reply(
-    `👋 Bienvenue ${ctx.from.first_name} à l'Airdrop !`,
-    Markup.inlineKeyboard([
-      [Markup.button.callback('📋 Voir les tâches', 'tasks')],
-      [Markup.button.callback('🎁 Réclamer une récompense', 'claim')],
-      [Markup.button.callback('👥 Parrainage', 'referral')]
-    ])
-  );
+// Initialize Sheets
+googleSheets.init().catch(err => {
+  logger.error('Sheets initialization failed:', err);
+  process.exit(1);
 });
 
-bot.action('tasks', async (ctx) => {
+// Helper function
+function formatTask(task) {
+  return `🆔 ${task.id}\n📝 ${task.description}\n💰 Reward: ${task.reward}\n`;
+}
+
+// Bot commands
+bot.start(async (ctx) => {
   try {
-    const tasks = await readTasks();
+    await ctx.reply(
+      `👋 Welcome ${ctx.from.first_name}!`,
+      Markup.inlineKeyboard([
+        [Markup.button.callback('📋 View Tasks', 'list_tasks')],
+        [Markup.button.callback('🎁 Claim Reward', 'claim_reward')],
+        [Markup.button.callback('👥 Referral Program', 'referral_info')]
+      ])
+    );
+  } catch (err) {
+    logger.error('Start command error:', err);
+  }
+});
+
+bot.action('list_tasks', async (ctx) => {
+  try {
+    const tasks = await googleSheets.readTasks();
+    
     if (!tasks.length) {
-      return ctx.reply('Aucune tâche disponible pour le moment');
+      return ctx.reply('No available tasks at the moment');
     }
 
-    let message = '📋 Tâches disponibles :\n\n';
+    let message = '📋 *Available Tasks*\n\n';
     tasks.forEach(task => {
-      message += `▶️ #${task.Id}\n${task.Description}\n💸 Récompense : ${task.Reward}\n\n`;
+      message += formatTask(task) + '\n';
     });
 
-    ctx.reply(message, {
+    await ctx.reply(message, {
       parse_mode: 'Markdown',
       ...Markup.inlineKeyboard([
-        Markup.button.callback('🔄 Actualiser', 'tasks')
+        Markup.button.callback('🔄 Refresh', 'list_tasks')
       ])
     });
   } catch (err) {
-    logger.error('Tasks Error:', err);
-    ctx.reply('❌ Erreur lors du chargement des tâches');
+    logger.error('Tasks error:', err);
+    ctx.reply('❌ Error loading tasks');
   }
 });
 
@@ -93,37 +60,33 @@ bot.command('claim', async (ctx) => {
   const taskId = ctx.message.text.split(' ')[1];
   
   if (!taskId) {
-    return ctx.replyWithMarkdown('Utilisation : `/claim [id_tâche]`\nExemple : `/claim 1`');
+    return ctx.replyWithMarkdown('Usage: `/claim <task_id>`\nExample: `/claim TASK_123`');
   }
 
   try {
-    const result = await claimTaskForUser(ctx.from.id, taskId);
+    const result = await googleSheets.claimTask(ctx.from.id, taskId);
     await ctx.reply(result.message);
     
-    // Notification admin
+    // Notify admin if configured
     if (process.env.ADMIN_CHAT_ID) {
       await bot.telegram.sendMessage(
         process.env.ADMIN_CHAT_ID,
-        `Nouvelle réclamation:\n👤 User: ${ctx.from.id}\n📌 Tâche: ${taskId}`
+        `New claim:\n👤 User: ${ctx.from.id}\n📌 Task: ${taskId}`
       );
     }
   } catch (err) {
-    logger.error('Claim Error:', err);
-    ctx.reply(`❌ Erreur : ${err.message}`);
+    logger.error('Claim error:', err);
+    ctx.reply(`❌ Error: ${err.message}`);
   }
 });
 
-// ==================
-// CONFIGURATION FINALE
-// ==================
-
+// Error handling
 bot.catch((err, ctx) => {
-  logger.error(`Bot Error: ${err}`, ctx.update);
-  ctx.reply('⚠️ Une erreur est survenue. Veuillez réessayer.');
+  logger.error(`Bot error: ${err}`, ctx.update);
+  ctx.reply('⚠️ An error occurred. Please try again.');
 });
 
 module.exports = {
   bot,
-  webhookCallback: bot.webhookCallback('/webhook-secret'),
-  sheets // Export pour utilisation dans d'autres fichiers
+  webhookCallback: bot.webhookCallback(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`)
 };
