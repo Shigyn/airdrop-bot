@@ -6,7 +6,10 @@ const path = require('path');
 const { bot, webhookCallback } = require('./bot');
 const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googlesheets');
 const app = express();
-const port = process.env.PORT || 10000; // Render default port
+const PORT = process.env.PORT || 10000;  // utilise le port Render sinon 10000 en local
+app.listen(PORT, () => {
+  console.log(`Serveur démarré sur le port ${PORT}`);
+});
 
 // Middlewares globaux (doivent être avant la route webhook)
 app.use(cors());

@@ -15,6 +15,7 @@ bot.use(async (ctx, next) => {
 
 // Command /start
 bot.start((ctx) => {
+  console.log('Commande /start reçue de', ctx.from.username || ctx.from.id);
   ctx.reply('Bienvenue à l’airdrop! Choisis une option:', Markup.inlineKeyboard([
     Markup.button.callback('Tasks', 'tasks'),
     Markup.button.callback('Claim', 'claim'),
