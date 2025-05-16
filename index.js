@@ -12,7 +12,6 @@ const port = process.env.PORT || 10000; // Render default port
 app.use(cors());
 app.use(express.json());  // remplace bodyParser.json()
 app.use(express.urlencoded({ extended: true }));
-app.post(webhookSecretPath, webhookCallback);
 
 // Middleware de logging
 app.use((req, res, next) => {
@@ -28,6 +27,8 @@ const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = process.env.PUBLIC_URL ? 
   `${process.env.PUBLIC_URL}${webhookSecretPath}` : 
   `http://localhost:${port}${webhookSecretPath}`;
+  
+app.post(webhookSecretPath, webhookCallback);
 
 // Routes API
 app.get('/tasks', async (req, res) => {
