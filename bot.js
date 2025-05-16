@@ -27,7 +27,8 @@ bot.start(async (ctx) => {
 bot.action('get_referral', async (ctx) => {
   try {
     const userId = ctx.from.id;
-    const referralLink = `https://t.me/${ctx.me}?start=${userId}`;
+    const referralLink = `https://t.me/CRYPTORATS_bot?start=${userId}`;
+
 
     await ctx.reply(
       `🔗 <b>Voici ton lien de parrainage :</b>\n<a href="${referralLink}">Clique ici</a>`,
