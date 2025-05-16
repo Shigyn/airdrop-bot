@@ -5,7 +5,7 @@ const path = require('path');
 const bodyParser = require('body-parser');
 
 const bot = require('./bot');
-const { initGoogleSheets } = require('./googleSheets');
+const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googleSheets');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -17,25 +17,16 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Google Sheets init
 initGoogleSheets();
 
-// Middleware JSON spécifique pour /webhook
-app.use('/webhook', express.json());
-
-// Test webhook (tu peux enlever après test)
-app.post('/webhook', (req, res, next) => {
-  console.log('Webhook POST reçu');
-  next();
-});
-
-// **Webhook Telegram - une seule fois ici**
+// Webhook Telegram (une seule fois)
 app.use(bot.webhookCallback('/webhook'));
 
-// Static files après routes
+// Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API example routes
 app.get('/tasks', async (req, res) => {
   try {
-    const tasks = await bot.getTasks();
+    const tasks = await readTasks();
     res.json(tasks);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -45,7 +36,7 @@ app.get('/tasks', async (req, res) => {
 app.post('/claim', async (req, res) => {
   try {
     const { userId, taskId } = req.body;
-    const result = await bot.claimTask(userId, taskId);
+    const result = await claimTaskForUser(userId, taskId);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -55,19 +46,15 @@ app.post('/claim', async (req, res) => {
 app.get('/referral/:code', async (req, res) => {
   try {
     const { code } = req.params;
-    const referralInfo = await bot.getReferral(code);
+    const referralInfo = await getReferralInfo(code);
     res.json(referralInfo);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Start server
-app.use(bot.webhookCallback('/webhook')); 
-
-// Set webhook
-const webhookUrl = `https://faucet-app.onrender.com/webhook`;
-bot.telegram.setWebhook(webhookUrl);
+// Set webhook URL (à faire une fois, pas à chaque redémarrage)
+// bot.telegram.setWebhook('https://faucet-app.onrender.com/webhook');
 
 app.listen(port, () => {
   console.log(`Server started on port ${port}`);

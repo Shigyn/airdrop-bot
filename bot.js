@@ -16,7 +16,7 @@ bot.start((ctx) => {
   ]));
 });
 
-// Actions for buttons
+// Actions pour les boutons
 bot.action('tasks', async (ctx) => {
   const tasks = await readTasks();
   let message = 'Liste des tasks:\n';
@@ -50,9 +50,6 @@ bot.action('referral', async (ctx) => {
   ctx.reply('Ton code de parrainage est : ABC123'); // à modifier selon ta logique
 });
 
-// Lancer le bot
-module.exports = {
-  getTasks: readTasks,
-  claimTask: claimTaskForUser,
-  getReferral: getReferralInfo,
-};
+// NE PAS appeler bot.launch() ici, car tu utilises webhook avec Express
+
+module.exports = bot;
