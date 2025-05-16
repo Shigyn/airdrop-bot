@@ -5,7 +5,7 @@ const logger = require('./logger');
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
 // Initialize Sheets
-googleSheets.init().catch(err => {
+googleSheets.initGoogleSheets().catch(err => {
   logger.error('Sheets initialization failed:', err);
   process.exit(1);
 });
