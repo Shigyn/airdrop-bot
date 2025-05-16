@@ -13,8 +13,7 @@ googleSheets.initGoogleSheets().catch(err => {
 bot.start(async (ctx) => {
   try {
     await ctx.reply(
-      `await ctx.reply(
-  "👋 Bienvenue " + ctx.from.first_name + " !\n\nVoici le menu de l'application :",
+      `👋 Bienvenue ${ctx.from.first_name} !\n\nVoici le menu de l'application :`,
       Markup.inlineKeyboard([
         [Markup.button.webApp('▶️ Start app', 'https://airdrop-bot-soy1.onrender.com')],
         [Markup.button.callback('🔗 Referral link', 'get_referral')]
@@ -24,6 +23,7 @@ bot.start(async (ctx) => {
     logger.error('Start command error:', err);
   }
 });
+
 
 bot.action('get_referral', async (ctx) => {
   try {
