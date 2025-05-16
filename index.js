@@ -5,18 +5,14 @@ const path = require('path');
 // const bodyParser = require('body-parser'); // plus besoin
 const { bot, webhookCallback } = require('./bot');
 const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googleSheets');
-
 const app = express();
 const port = process.env.PORT || 10000; // Render default port
-const webhookPath = '/webhook';  // déclaration avant usage
-const webhookUrl = process.env.PUBLIC_URL ?
-  `${process.env.PUBLIC_URL}${webhookPath}` :
-  `http://localhost:${port}${webhookPath}`;
 
 // Middlewares globaux (doivent être avant la route webhook)
 app.use(cors());
 app.use(express.json());  // remplace bodyParser.json()
 app.use(express.urlencoded({ extended: true }));
+app.post(webhookSecretPath, webhookCallback);
 
 // Middleware de logging
 app.use((req, res, next) => {
@@ -27,16 +23,11 @@ app.use((req, res, next) => {
 // Initialisation Google Sheets
 initGoogleSheets();
 
-// Route webhook Telegram (une seule déclaration)
-const webhookSecret = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
-app.post(webhookSecret, webhookCallback);
-
-// Et modifie aussi la webhookUrl :
-const webhookUrl = `https://airdrop-bot-soy1.onrender.com/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
-
-app.get('/test-webhook', (req, res) => {
-  res.send('Webhook endpoint is reachable');
-});
+// Route webhook Telegram
+const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+const webhookUrl = process.env.PUBLIC_URL ? 
+  `${process.env.PUBLIC_URL}${webhookSecretPath}` : 
+  `http://localhost:${port}${webhookSecretPath}`;
 
 // Routes API
 app.get('/tasks', async (req, res) => {
