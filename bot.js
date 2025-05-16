@@ -51,8 +51,6 @@ bot.action('referral', async (ctx) => {
 });
 
 // Lancer le bot
-bot.launch();
-
 module.exports = {
   getTasks: readTasks,
   claimTask: claimTaskForUser,

@@ -10,7 +10,6 @@ const { initGoogleSheets } = require('./googleSheets');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Middlewares
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -18,12 +17,22 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Google Sheets init
 initGoogleSheets();
 
-// Routes
+// Middleware JSON spécifique pour /webhook
+app.use('/webhook', express.json());
 
+// Test webhook (tu peux enlever après test)
+app.post('/webhook', (req, res, next) => {
+  console.log('Webhook POST reçu');
+  next();
+});
+
+// **Webhook Telegram - une seule fois ici**
+app.use(bot.webhookCallback('/webhook'));
+
+// Static files après routes
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API example routes
-
 app.get('/tasks', async (req, res) => {
   try {
     const tasks = await bot.getTasks();
@@ -56,7 +65,7 @@ app.get('/referral/:code', async (req, res) => {
 // Start server
 app.use(bot.webhookCallback('/webhook')); 
 
-// Si tu veux aussi préciser un endpoint webhook (URL publique)
+// Set webhook
 const webhookUrl = `https://faucet-app.onrender.com/webhook`;
 bot.telegram.setWebhook(webhookUrl);
 
