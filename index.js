@@ -6,14 +6,13 @@ const { bot, webhookCallback } = require('./bot');
 const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googleSheets');
 
 const app = express();
-const PORT = process.env.PORT || 10000; // port Render ou local
+const PORT = process.env.PORT || 10000;
 
-// Middlewares globaux (avant webhook)
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Middleware logging simple
+// Logger simple
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - IP: ${req.ip}`);
   next();
@@ -24,7 +23,6 @@ initGoogleSheets().catch(err => {
   console.error('Google Sheets init error:', err);
 });
 
-// Webhook Telegram
 const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = process.env.PUBLIC_URL ?
   `${process.env.PUBLIC_URL}${webhookSecretPath}` :
@@ -32,7 +30,7 @@ const webhookUrl = process.env.PUBLIC_URL ?
 
 app.post(webhookSecretPath, webhookCallback);
 
-// API routes
+// API Routes
 app.get('/tasks', async (req, res) => {
   try {
     const tasks = await readTasks();
@@ -46,11 +44,13 @@ app.get('/tasks', async (req, res) => {
 app.post('/claim', async (req, res) => {
   try {
     const { userId, taskId } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: 'UserId missing' });
+
     const result = await claimTaskForUser(userId, taskId);
     res.json(result);
   } catch (err) {
     console.error('Claim error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -65,20 +65,17 @@ app.get('/referral/:code', async (req, res) => {
   }
 });
 
-// Health check (ex: Render)
+// Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString()
-  });
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Fichiers statiques public/
+// Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Route racine
+// Serve index.html for root
 app.get('/', (req, res) => {
-  res.send('Airdrop Bot is running!');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // 404 handler
@@ -86,13 +83,13 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// Erreur globale
+// Global error handler
 app.use((err, req, res, next) => {
   console.error('Global error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Démarrage serveur
+// Start server
 app.listen(PORT, () => {
   console.log(`Server started on port ${PORT}`);
   console.log(`Webhook URL: ${webhookUrl}`);

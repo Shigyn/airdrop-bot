@@ -11,14 +11,11 @@ class GoogleSheetsService {
       throw new Error('GOOGLE_CREDS_B64 environment variable is missing');
     }
 
-    // Décodage base64 de la clé JSON Google
-    const credentials = JSON.parse(
-      Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()
-    );
+    const credentials = JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString());
 
     this.authClient = new google.auth.GoogleAuth({
       credentials,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
 
     this.sheets = google.sheets({ version: 'v4', auth: this.authClient });
@@ -29,14 +26,15 @@ class GoogleSheetsService {
     try {
       const res = await this.sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: process.env.TASKS_RANGE || 'Tasks!A2:D'
+        range: process.env.TASKS_RANGE || 'Tasks!A2:D',
       });
 
       return (res.data.values || []).map(row => ({
         id: row[0],
         description: row[1],
         reward: row[2],
-        status: row[3]
+        status: row[3],
+        completed: row[3] === 'COMPLETED' || false,
       }));
     } catch (error) {
       console.error('Error reading tasks:', error);
@@ -47,8 +45,16 @@ class GoogleSheetsService {
   async claimTask(userId, taskId) {
     try {
       const tasks = await this.readTasks();
-      const task = tasks.find(t => t.id === taskId);
-      if (!task) throw new Error('Task not found');
+
+      let task;
+      if (taskId) {
+        task = tasks.find(t => t.id === taskId);
+        if (!task) throw new Error('Task not found');
+      } else {
+        // If no taskId, pick first uncompleted task
+        task = tasks.find(t => !t.completed);
+        if (!task) throw new Error('No available tasks to claim');
+      }
 
       await this.sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -58,25 +64,25 @@ class GoogleSheetsService {
           values: [[
             new Date().toISOString(),
             userId,
-            taskId,
+            task.id,
             task.reward,
             'PENDING'
-          ]]
-        }
+          ]],
+        },
       });
 
       return {
         success: true,
-        message: `Task claimed successfully! Reward: ${task.reward}`
+        message: `Tâche réclamée avec succès ! Récompense : ${task.reward}`
       };
     } catch (error) {
       console.error('Claim error:', error);
-      throw error;
+      return { success: false, message: error.message };
     }
   }
 
   async getReferralInfo(code) {
-    // TODO: Remplace par ta vraie logique de parrainage
+    // Stub for now — replace with real referral logic if needed
     return {
       referralCode: code,
       pointsEarned: 10,
@@ -92,5 +98,5 @@ module.exports = {
   initGoogleSheets: () => googleSheetsService.init(),
   readTasks: () => googleSheetsService.readTasks(),
   claimTaskForUser: (userId, taskId) => googleSheetsService.claimTask(userId, taskId),
-  getReferralInfo: (code) => googleSheetsService.getReferralInfo(code)
+  getReferralInfo: (code) => googleSheetsService.getReferralInfo(code),
 };

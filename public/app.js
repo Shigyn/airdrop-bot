@@ -1,8 +1,7 @@
-// Assure que Telegram WebApp API est chargé
+// Telegram WebApp init
 const tg = window.Telegram.WebApp;
 tg.expand();
 
-// Récupération userId côté client
 const userId = tg.initDataUnsafe?.user?.id || null;
 
 if (!userId) {
@@ -13,15 +12,9 @@ if (!userId) {
 const navClaim = document.getElementById('btn-claim');
 const navTasks = document.getElementById('btn-tasks');
 const navReferrals = document.getElementById('btn-referral');
-
 const content = document.getElementById('content');
 
-// Variables claim
-let lastClaimTime = null;
-const CLAIM_INTERVAL_MS = 60 * 60 * 1000; // 1h
-const CLAIM_HALF_INTERVAL_MS = 30 * 60 * 1000; // 30min
-
-// Navigation
+// Show Tasks
 function showTasks() {
   content.innerHTML = '<h2>Chargement des tâches...</h2>';
   fetch('/tasks')
@@ -31,9 +24,9 @@ function showTasks() {
         content.innerHTML = '<p>Aucune tâche disponible pour le moment.</p>';
         return;
       }
-      let html = '<h2>Tasks disponibles</h2><ul>';
+      let html = '<h2>Tâches disponibles</h2><ul>';
       tasks.forEach(task => {
-        html += `<li><b>${task.name}</b>: ${task.description} - Récompense: ${task.reward} points - Status: ${task.completed ? '✅ Complétée' : '❌ Non complétée'}</li>`;
+        html += `<li><b>${task.id}</b>: ${task.description} - Récompense: ${task.reward} - Statut: ${task.completed ? '✅ Complétée' : '❌ Non complétée'}</li>`;
       });
       html += '</ul>';
       content.innerHTML = html;
@@ -43,6 +36,7 @@ function showTasks() {
     });
 }
 
+// Show Claim
 function showClaim() {
   content.innerHTML = `
     <h2>Claim</h2>
@@ -72,6 +66,7 @@ function showClaim() {
         body: JSON.stringify({ userId, taskId }),
       });
       const data = await res.json();
+
       if (data.success) {
         claimResult.style.color = '#28a745';
         claimResult.textContent = data.message || 'Réclamation réussie !';
@@ -88,13 +83,14 @@ function showClaim() {
   };
 }
 
+// Show Referral
 function showReferrals() {
   content.innerHTML = '<h2>Chargement des infos de parrainage...</h2>';
   fetch(`/referral/${userId}`)
     .then(res => res.json())
     .then(data => {
       content.innerHTML = `
-        <h2>Referral</h2>
+        <h2>Parrainage</h2>
         <p>Code de parrainage : <b>${data.referralCode || 'N/A'}</b></p>
         <p>Nombre de filleuls : <b>${data.referralsCount || 0}</b></p>
         <p>Points gagnés : <b>${data.pointsEarned || 0}</b></p>
@@ -111,12 +107,12 @@ function showReferrals() {
     });
 }
 
-// Events
+// Event listeners
 navTasks.addEventListener('click', showTasks);
 navClaim.addEventListener('click', showClaim);
 navReferrals.addEventListener('click', showReferrals);
 
-// Affiche la section claim par défaut
+// Show claim by default
 document.addEventListener('DOMContentLoaded', () => {
   showClaim();
 });
