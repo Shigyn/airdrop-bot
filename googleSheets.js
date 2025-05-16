@@ -45,12 +45,10 @@ class GoogleSheetsService {
 
   async claimTask(userId, taskId) {
     try {
-      // Verify task exists
       const tasks = await this.readTasks();
       const task = tasks.find(t => t.id === taskId);
       if (!task) throw new Error('Task not found');
 
-      // Record transaction
       await this.sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: process.env.TRANSACTIONS_RANGE || 'Transactions!A2:E',
@@ -77,7 +75,7 @@ class GoogleSheetsService {
   }
 
   async getReferralInfo(code) {
-    // Implement your referral logic here
+    // Implémente ta logique de referral ici
     return {
       code,
       reward: 10,
@@ -86,4 +84,13 @@ class GoogleSheetsService {
   }
 }
 
-module.exports = new GoogleSheetsService();
+// Crée une instance unique de la classe
+const googleSheetsService = new GoogleSheetsService();
+
+// Export des fonctions qui appellent l'instance
+module.exports = {
+  initGoogleSheets: () => googleSheetsService.init(),
+  readTasks: () => googleSheetsService.readTasks(),
+  claimTaskForUser: (userId, taskId) => googleSheetsService.claimTask(userId, taskId),
+  getReferralInfo: (code) => googleSheetsService.getReferralInfo(code)
+};
