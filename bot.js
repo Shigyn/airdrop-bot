@@ -29,21 +29,21 @@ bot.action('get_referral', async (ctx) => {
     const referralLink = `https://t.me/CRYPTORATS_bot?start=${userId}`;
 
     await ctx.reply(
-      `🔗 <b>Voici ton lien de parrainage :</b>\n<a href="${referralLink}">Clique ici</a>`,
+      `🔗 <b>Voici ton lien de parrainage :</b>\n${referralLink}`,
       { parse_mode: 'HTML' }
     );
   } catch (err) {
     logger.error('Referral link error:', err);
-    ctx.reply('❌ Erreur lors de la génération du lien de parrainage.');
   }
 });
 
-bot.catch((err, ctx) => {
-  logger.error(`Bot error: ${err}`, ctx.update);
-  ctx.reply('⚠️ Une erreur est survenue.');
+bot.on('message', async (ctx) => {
+  // Ici tu peux gérer d'autres commandes si besoin
 });
+
+const webhookCallback = bot.webhookCallback(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`);
 
 module.exports = {
   bot,
-  webhookCallback: bot.webhookCallback(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`)
+  webhookCallback,
 };

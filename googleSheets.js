@@ -11,6 +11,7 @@ class GoogleSheetsService {
       throw new Error('GOOGLE_CREDS_B64 environment variable is missing');
     }
 
+    // Décodage base64 de la clé JSON Google
     const credentials = JSON.parse(
       Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()
     );
@@ -75,19 +76,18 @@ class GoogleSheetsService {
   }
 
   async getReferralInfo(code) {
-    // Implémente ta logique de referral ici
+    // TODO: Remplace par ta vraie logique de parrainage
     return {
-      code,
-      reward: 10,
-      referrals: 0
+      referralCode: code,
+      pointsEarned: 10,
+      referralsCount: 0,
+      referrals: []
     };
   }
 }
 
-// Crée une instance unique de la classe
 const googleSheetsService = new GoogleSheetsService();
 
-// Export des fonctions qui appellent l'instance
 module.exports = {
   initGoogleSheets: () => googleSheetsService.init(),
   readTasks: () => googleSheetsService.readTasks(),
