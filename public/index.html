@@ -21,14 +21,18 @@
     const content = document.getElementById('content');
 
     document.getElementById('btn-tasks').onclick = async () => {
-      const res = await fetch('/tasks');
-      const tasks = await res.json();
-      let html = '<h2>Tasks disponibles</h2><ul>';
-      tasks.forEach(t => {
-        html += `<li>${t.Description} (Reward: ${t.Reward})</li>`;
-      });
-      html += '</ul>';
-      content.innerHTML = html;
+      try {
+        const res = await fetch('/tasks');
+        const tasks = await res.json();
+        let html = '<h2>Tasks disponibles</h2><ul>';
+        tasks.forEach(t => {
+          html += `<li>${t.Description} (Reward: ${t.Reward})</li>`;
+        });
+        html += '</ul>';
+        content.innerHTML = html;
+      } catch (err) {
+        content.innerHTML = '<p>Erreur lors du chargement des tâches.</p>';
+      }
     };
 
     document.getElementById('btn-claim').onclick = () => {
@@ -37,38 +41,57 @@
         <form id="claimForm">
           <input type="text" name="userId" placeholder="User ID Telegram" required /><br/>
           <input type="text" name="taskId" placeholder="Task ID" required /><br/>
-          <button type="submit">Réclamer</button>
+          <button id="claim-button" type="submit">Réclamer</button>
         </form>
         <div id="claimResult"></div>
       `;
+
+      const claimButton = document.getElementById('claim-button');
+      const claimResult = document.getElementById('claimResult');
+
       document.getElementById('claimForm').onsubmit = async (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const data = {
-          userId: form.userId.value,
-          taskId: form.taskId.value,
-        };
-        const res = await fetch('/claim', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(data),
-        });
-        const result = await res.json();
-        document.getElementById('claimResult').innerText = result.message || JSON.stringify(result);
-      };
-    };
+  e.preventDefault();
+
+  const form = e.target;
+  const claimBtn = form.querySelector('button[type="submit"]');
+
+  // Ajout de la classe pulse pour démarrer l'animation
+  claimBtn.classList.add('pulse');
+
+  // Retire la classe après 600ms pour permettre la répétition de l'animation
+  setTimeout(() => {
+    claimBtn.classList.remove('pulse');
+  }, 600);
+
+  // Ensuite ton code existant de fetch /claim
+  const data = {
+    userId: form.userId.value,
+    taskId: form.taskId.value,
+  };
+  const res = await fetch('/claim', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(data),
+  });
+  const result = await res.json();
+  document.getElementById('claimResult').innerText = result.message || JSON.stringify(result);
+};
 
     document.getElementById('btn-referral').onclick = async () => {
       const code = prompt('Entre ton code de parrainage :');
       if (!code) return;
-      const res = await fetch(`/referral/${code}`);
-      const info = await res.json();
-      content.innerHTML = `
-        <h2>Referral</h2>
-        <p>Code: ${info.code}</p>
-        <p>Reward: ${info.reward}</p>
-        <p>Referred Users: ${info.referredUsers}</p>
-      `;
+      try {
+        const res = await fetch(`/referral/${code}`);
+        const info = await res.json();
+        content.innerHTML = `
+          <h2>Referral</h2>
+          <p>Code: ${info.code || 'N/A'}</p>
+          <p>Reward: ${info.reward || 'N/A'}</p>
+          <p>Referred Users: ${info.referredUsers || 0}</p>
+        `;
+      } catch (err) {
+        content.innerHTML = '<p>Erreur lors de la récupération des infos de parrainage.</p>';
+      }
     };
   </script>
 </body>

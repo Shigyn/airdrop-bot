@@ -10,20 +10,15 @@ googleSheets.initGoogleSheets().catch(err => {
   process.exit(1);
 });
 
-// Helper function
-function formatTask(task) {
-  return `🆔 ${task.id}\n📝 ${task.description}\n💰 Reward: ${task.reward}\n`;
-}
-
 // Bot commands
 bot.start(async (ctx) => {
   try {
     await ctx.reply(
-      `👋 Welcome ${ctx.from.first_name}!`,
+      `👋 Bienvenue ${ctx.from.first_name} !\n\nVoici le menu de l'application :`,
       Markup.inlineKeyboard([
-        [Markup.button.callback('📋 View Tasks', 'list_tasks')],
-        [Markup.button.callback('🎁 Claim Reward', 'claim_reward')],
-        [Markup.button.callback('👥 Referral Program', 'referral_info')]
+        [Markup.button.webApp('▶️ Start app', 'https://your-webapp-url.com')], // ← à modifier
+        [Markup.button.url('📣 Canal de l’app', 'ton_url_groupe_tg')],
+        [Markup.button.callback('🔗 Referral link', 'get_referral')]
       ])
     );
   } catch (err) {
@@ -31,52 +26,17 @@ bot.start(async (ctx) => {
   }
 });
 
-bot.action('list_tasks', async (ctx) => {
+bot.action('get_referral', async (ctx) => {
   try {
-    const tasks = await googleSheets.readTasks();
-    
-    if (!tasks.length) {
-      return ctx.reply('No available tasks at the moment');
-    }
+    const userId = ctx.from.id;
+    const referralLink = `https://t.me/${ctx.me}?start=${userId}`;
 
-    let message = '📋 *Available Tasks*\n\n';
-    tasks.forEach(task => {
-      message += formatTask(task) + '\n';
-    });
-
-    await ctx.reply(message, {
-      parse_mode: 'Markdown',
-      ...Markup.inlineKeyboard([
-        Markup.button.callback('🔄 Refresh', 'list_tasks')
-      ])
+    await ctx.reply(`🔗 *Voici ton lien de parrainage :*\n${referralLink}`, {
+      parse_mode: 'Markdown'
     });
   } catch (err) {
-    logger.error('Tasks error:', err);
-    ctx.reply('❌ Error loading tasks');
-  }
-});
-
-bot.command('claim', async (ctx) => {
-  const taskId = ctx.message.text.split(' ')[1];
-  
-  if (!taskId) {
-    return ctx.replyWithMarkdown('Usage: `/claim <task_id>`\nExample: `/claim TASK_123`');
-  }
-
-  try {
-    const result = await googleSheets.claimTask(ctx.from.id, taskId);
-    await ctx.reply(result.message);
-    
-    // Notify admin if configured
-    if (process.env.ADMIN_CHAT_ID) {
-      await bot.telegram.sendMessage(
-        process.env.ADMIN_CHAT_ID,
-        `New claim:\n👤 User: ${ctx.from.id}\n📌 Task: ${taskId}`
-      );
-    }
-  } catch (err) {
-    logger.error('Claim error:', err);
-    ctx.reply(`❌ Error: ${err.message}`);
+    logger.error('Referral link error:', err);
+    ctx.reply('❌ Erreur lors de la génération du lien de parrainage.');
   }
 });
 

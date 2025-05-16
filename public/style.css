@@ -1,45 +1,118 @@
+/* Amélioration police, plus moderne et douce */
 body {
-  font-family: Arial, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   background: #f5f7fa;
   color: #333;
   margin: 0;
   padding: 20px;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
 }
+
+/* Container plus aéré et centré verticalement */
 .container {
   max-width: 600px;
-  margin: 0 auto;
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  margin: 40px auto;
+  background: #ffffff;
+  padding: 30px 25px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
+
+/* Titres plus marqués */
 h1, h2 {
   text-align: center;
-}
-.menu {
-  display: flex;
-  justify-content: space-around;
+  color: #0056b3;
+  font-weight: 700;
   margin-bottom: 20px;
 }
+
+/* Menu boutons centrés avec gap et légère ombre */
+.menu {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+/* Boutons avec dégradé, ombre légère, transition et hover */
 button {
-  background: #007bff;
+  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
   color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 6px;
+  padding: 12px 28px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
+  font-weight: 600;
+  box-shadow: 0 4px 8px rgb(0 123 255 / 0.3);
+  transition: background-color 0.3s ease, transform 0.15s ease, box-shadow 0.3s ease;
+  user-select: none;
+  min-width: 100px;
+  text-align: center;
 }
-button:hover {
-  background: #0056b3;
+
+/* Hover & focus : élévation + couleur plus foncée */
+button:hover,
+button:focus {
+  background: linear-gradient(135deg, #0056b3 0%, #003f7f 100%);
+  box-shadow: 0 6px 14px rgb(0 86 179 / 0.5);
+  outline: none;
+  transform: translateY(-2px);
 }
+
+/* Active : bouton "appuie" */
+button:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 6px rgb(0 86 179 / 0.4);
+}
+
+/* Inputs full width, plus confort */
 input {
   width: 100%;
-  padding: 8px;
-  margin-bottom: 10px;
-  font-size: 14px;
+  padding: 10px 12px;
+  margin-bottom: 15px;
+  font-size: 15px;
+  border: 1.8px solid #ddd;
+  border-radius: 6px;
+  transition: border-color 0.25s ease;
 }
+
+/* Focus input */
+input:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 8px rgb(0 123 255 / 0.3);
+}
+
+/* Résultat claim plus visible et espacé */
 #claimResult {
-  margin-top: 15px;
-  font-weight: bold;
+  margin-top: 20px;
+  font-weight: 700;
+  color: #28a745;
+  text-align: center;
+  min-height: 1.3em;
+}
+
+/* Pulse animation sur le bouton claim */
+#claimForm button.pulse {
+  animation: pulse-animation 0.6s ease forwards;
+}
+
+/* Animation pulse plus fluide */
+@keyframes pulse-animation {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(40, 167, 69, 0.7);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(40, 167, 69, 1);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(40, 167, 69, 0);
+  }
 }
