@@ -94,6 +94,28 @@ function showTasks() {
     });
 }
 
+async function claimSpecificTask(userId, taskId) {
+  const res = await fetch('/claim', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, taskId })
+  });
+  const data = await res.json();
+  console.log(data);
+  return data; // tu peux gérer ça ailleurs
+}
+
+async function claimRandomTask(userId) {
+  const res = await fetch('/claim/random', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId })
+  });
+  const data = await res.json();
+  console.log(data);
+  return data;
+}
+
 function showClaim() {
   const content = document.getElementById('content');
   content.innerHTML = `
@@ -183,42 +205,6 @@ function showClaim() {
       claimButton.disabled = false;
     }
   });
-}
-
-  document.getElementById('claimForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const form = e.target;
-    const button = form.querySelector('button');
-    const resultDiv = document.getElementById('claimResult');
-    
-    button.disabled = true;
-    button.classList.add('loading');
-
-    try {
-      const res = await fetch('/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId, 
-          taskId: form.taskId.value || null 
-        }),
-      });
-      
-      const data = await res.json();
-      resultDiv.textContent = data.message || "Succès!";
-      resultDiv.style.color = data.success ? 'green' : 'red';
-      
-      if (data.success) {
-        loadUserData(); // Rafraîchir les données
-      }
-    } catch (err) {
-      resultDiv.textContent = "Erreur réseau";
-      resultDiv.style.color = 'red';
-    } finally {
-      button.disabled = false;
-      button.classList.remove('loading');
-    }
-  };
 }
 
 function showReferrals() {

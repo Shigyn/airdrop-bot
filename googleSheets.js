@@ -42,27 +42,13 @@ class GoogleSheetsService {
     }
   }
 
-  async claimSpecificTask(userId, taskId) {
-    // Implémente la logique pour claim une tâche spécifique
-    // Vérifie que la tâche existe et est disponible
-  }
-
-  async claimRandomTask(userId) {
-    const tasks = await this.getAvailableTasks();
-    
-    if (!tasks.length) {
-      return { error: "No available tasks" };
-    }
-    
-    // Sélectionne une tâche aléatoire
-    const randomTask = tasks[Math.floor(Math.random() * tasks.length)];
-    return this.claimTask(userId, randomTask.id);
+  async getAllTasks() {
+    return this.readTasks();
   }
 
   async getAvailableTasks() {
-    // Retourne seulement les tâches disponibles
     const allTasks = await this.getAllTasks();
-    return allTasks.filter(task => !task.completed && !task.claimedBy);
+    return allTasks.filter(task => !task.completed);
   }
 
   async claimTask(userId, taskId) {
@@ -74,7 +60,6 @@ class GoogleSheetsService {
         task = tasks.find(t => t.id === taskId);
         if (!task) throw new Error('Task not found');
       } else {
-        // If no taskId, pick first uncompleted task
         task = tasks.find(t => !t.completed);
         if (!task) throw new Error('No available tasks to claim');
       }
@@ -96,12 +81,33 @@ class GoogleSheetsService {
 
       return {
         success: true,
-        message: `Tâche réclamée avec succès ! Récompense : ${task.reward}`
+        message: `Tâche réclamée avec succès ! Récompense : ${task.reward}`,
+        taskId: task.id,
+        reward: task.reward
       };
     } catch (error) {
       console.error('Claim error:', error);
       return { success: false, message: error.message };
     }
+  }
+
+  async claimSpecificTask(userId, taskId) {
+    return this.claimTask(userId, taskId);
+  }
+
+  async claimRandomTask(userId) {
+    const availableTasks = await this.getAvailableTasks();
+    
+    if (!availableTasks.length) {
+      return { 
+        success: false,
+        error: "No available tasks",
+        message: "Aucune tâche disponible actuellement"
+      };
+    }
+    
+    const randomTask = availableTasks[Math.floor(Math.random() * availableTasks.length)];
+    return this.claimTask(userId, randomTask.id);
   }
 
   async getReferralInfo(code) {
@@ -121,5 +127,7 @@ module.exports = {
   initGoogleSheets: () => googleSheetsService.init(),
   readTasks: () => googleSheetsService.readTasks(),
   claimTaskForUser: (userId, taskId) => googleSheetsService.claimTask(userId, taskId),
+  claimRandomTaskForUser: (userId) => googleSheetsService.claimRandomTask(userId),
   getReferralInfo: (code) => googleSheetsService.getReferralInfo(code),
+  getAvailableTasks: () => googleSheetsService.getAvailableTasks(),
 };
