@@ -44,13 +44,30 @@ app.get('/tasks', async (req, res) => {
 app.post('/claim', async (req, res) => {
   try {
     const { userId, taskId } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: 'UserId missing' });
-
-    const result = await claimTaskForUser(userId, taskId);
+    
+    // Option 1: Si taskId est fourni, tenter de claim cette tâche spécifique
+    if (taskId) {
+      const result = await sheetsService.claimSpecificTask(userId, taskId);
+      return res.json(result);
+    }
+    
+    // Option 2: Sinon, claim une tâche aléatoire disponible
+    const result = await sheetsService.claimRandomTask(userId);
+    
+    if (result.error === "No available tasks") {
+      return res.status(400).json({
+        success: false,
+        message: "Aucune tâche disponible actuellement. Revenez plus tard!"
+      });
+    }
+    
     res.json(result);
-  } catch (err) {
-    console.error('Claim error:', err);
-    res.status(500).json({ success: false, message: err.message });
+  } catch (error) {
+    console.error("Claim error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || "Erreur serveur" 
+    });
   }
 });
 

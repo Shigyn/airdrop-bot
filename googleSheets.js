@@ -92,6 +92,30 @@ class GoogleSheetsService {
   }
 }
 
+async claimSpecificTask(userId, taskId) {
+    // Implémente la logique pour claim une tâche spécifique
+    // Vérifie que la tâche existe et est disponible
+  }
+
+  async claimRandomTask(userId) {
+    const tasks = await this.getAvailableTasks();
+    
+    if (!tasks.length) {
+      return { error: "No available tasks" };
+    }
+    
+    // Sélectionne une tâche aléatoire
+    const randomTask = tasks[Math.floor(Math.random() * tasks.length)];
+    return this.claimTask(userId, randomTask.id);
+  }
+
+  async getAvailableTasks() {
+    // Retourne seulement les tâches disponibles
+    const allTasks = await this.getAllTasks();
+    return allTasks.filter(task => !task.completed && !task.claimedBy);
+  }
+}
+
 const googleSheetsService = new GoogleSheetsService();
 
 module.exports = {

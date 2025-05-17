@@ -127,3 +127,90 @@ box-shadow: 0 0 0 rgba(40, 167, 69, 0);
 .user-info p {
   margin: 8px 0;
 }
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 15px;
+  border-radius: 5px;
+  color: white;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.notification.success { background: #28a745; }
+.notification.error { background: #dc3545; }
+.notification.warning { background: #ffc107; color: #212529; }
+
+.hidden { display: none; }
+
+.claim-container {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.claim-form {
+  margin-top: 20px;
+}
+
+.input-group {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.claim-form input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.claim-button {
+  padding: 10px 20px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.claim-button:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.claim-button .spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.hidden {
+  display: none;
+}
+
+.claim-result {
+  margin-top: 15px;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.task-details {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  font-size: 0.9em;
+}

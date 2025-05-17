@@ -97,13 +97,93 @@ function showTasks() {
 function showClaim() {
   const content = document.getElementById('content');
   content.innerHTML = `
-    <h2>Claim</h2>
-    <form id="claimForm">
-      <input type="text" name="taskId" placeholder="ID tâche (optionnel)" />
-      <button type="submit">Réclamer</button>
-    </form>
-    <div id="claimResult"></div>
+    <div class="claim-container">
+      <h2>Claim</h2>
+      <form id="claimForm" class="claim-form">
+        <div class="input-group">
+          <input 
+            type="text" 
+            name="taskId" 
+            placeholder="ID tâche (optionnel)" 
+            aria-label="ID de la tâche"
+          />
+          <button type="submit" class="claim-button" id="claim-submit">
+            <span class="button-text">Réclamer</span>
+            <span class="spinner hidden"></span>
+          </button>
+        </div>
+      </form>
+      <div id="claimResult" class="claim-result"></div>
+    </div>
   `;
+
+  const claimForm = document.getElementById('claimForm');
+  const claimButton = document.getElementById('claim-submit');
+  const buttonText = claimButton.querySelector('.button-text');
+  const spinner = claimButton.querySelector('.spinner');
+  const resultDiv = document.getElementById('claimResult');
+
+  claimForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // Reset et état de chargement
+    resultDiv.textContent = '';
+    resultDiv.className = 'claim-result';
+    buttonText.textContent = 'Traitement...';
+    spinner.classList.remove('hidden');
+    claimButton.disabled = true;
+
+    try {
+      const formData = new FormData(claimForm);
+      const taskId = formData.get('taskId')?.trim() || null;
+
+      const response = await fetch('/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, taskId })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Erreur lors de la requête');
+      }
+
+      // Succès
+      resultDiv.style.color = '#28a745';
+      resultDiv.innerHTML = `
+        ✅ <strong>${data.message || 'Réclamation enregistrée!'}</strong>
+        ${data.taskDetails ? `
+          <div class="task-details">
+            <p>Tâche: ${data.taskDetails.id}</p>
+            <p>Récompense: ${data.taskDetails.reward}</p>
+          </div>
+        ` : ''}
+      `;
+
+      // Réinitialisation du formulaire si succès
+      claimForm.reset();
+      
+      // Actualisation des données utilisateur
+      loadUserData();
+
+    } catch (error) {
+      // Gestion des erreurs
+      resultDiv.style.color = '#dc3545';
+      resultDiv.innerHTML = `
+        ❌ <strong>Erreur</strong><br>
+        ${error.message || 'Une erreur est survenue'}
+      `;
+      
+      console.error('Claim Error:', error);
+    } finally {
+      // Reset du bouton
+      buttonText.textContent = 'Réclamer';
+      spinner.classList.add('hidden');
+      claimButton.disabled = false;
+    }
+  });
+}
 
   document.getElementById('claimForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -165,6 +245,20 @@ function showReferrals() {
       content.innerHTML = '<p>Erreur de chargement</p>';
     });
 }
+
+function showNotification(message, type = 'success') {
+  const notif = document.getElementById('notification');
+  notif.textContent = message;
+  notif.className = `notification ${type}`;
+  
+  setTimeout(() => {
+    notif.classList.add('hidden');
+  }, 5000);
+}
+
+// Utilisation :
+// showNotification("Tâche réclamée avec succès!", "success");
+// showNotification("Aucune tâche disponible", "warning");
 
 // Point d'entrée principal
 document.addEventListener('DOMContentLoaded', () => {
