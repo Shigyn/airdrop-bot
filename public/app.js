@@ -97,15 +97,18 @@ function showClaim() {
         <span class="token-unit">tokens</span>
       </div>
       <button id="main-claim-btn" class="claim-button" disabled>
-        <span id="claim-text">MINING IN PROGRESS (01:00:00)</span>
+        <span id="claim-text">MINING IN PROGRESS (00:10:00)</span>
+      </button>
+      <button id="restart-btn" class="claim-button" style="display:none; margin-top:10px;">
+        <span id="restart-text">RESTART MINING SESSION</span>
       </button>
       <div id="main-claim-result" class="claim-result"></div>
     </div>
   `;
 
   // Constantes
-  const MIN_CLAIM_TIME = 600;    // 10min = 600 secondes (temps minimum avant claim)
-  const MAX_SESSION_TIME = 3600; // 1h = 3600 secondes (session max)
+  const MIN_CLAIM_TIME = 600;    // 10min en secondes
+  const MAX_SESSION_TIME = 3600; // 1h en secondes
   const TOKENS_PER_SECOND = 1 / 3600; // 1 token par heure
 
   // Variables d'état
@@ -113,6 +116,7 @@ function showClaim() {
   let sessionStartTime = Date.now();
   let miningInterval;
   const btn = document.getElementById('main-claim-btn');
+  const restartBtn = document.getElementById('restart-btn');
   const tokensDisplay = document.getElementById('tokens');
 
   // ===== FONCTIONS PRINCIPALES =====
@@ -129,6 +133,7 @@ function showClaim() {
     sessionStartTime = Date.now();
     saveState();
     updateDisplay();
+    startMiningSession();
   }
 
   function loadState() {
@@ -138,12 +143,13 @@ function showClaim() {
     try {
       const state = JSON.parse(saved);
       const now = Date.now();
-      const elapsedSinceLastUpdate = (now - state.lastUpdate) / 1000;
-      const sessionElapsed = (now - state.sessionStartTime) / 1000;
+      const elapsed = (now - state.sessionStartTime) / 1000;
 
-      // Calcul des tokens accumulés
+      // Si session expirée, on ne charge pas l'état
+      if (elapsed > MAX_SESSION_TIME) return false;
+
       tokens = Math.min(
-        parseFloat(state.tokens || 0) + (elapsedSinceLastUpdate * TOKENS_PER_SECOND),
+        parseFloat(state.tokens || 0) + (elapsed * TOKENS_PER_SECOND),
         MAX_SESSION_TIME * TOKENS_PER_SECOND
       );
 
@@ -156,32 +162,33 @@ function showClaim() {
   }
 
   function updateDisplay() {
-    // Formatage des tokens
-    const displayTokens = isNaN(tokens) ? 0 : tokens;
-    tokensDisplay.textContent = displayTokens.toFixed(4);
-
-    // Calcul du temps écoulé
     const now = Date.now();
-    const sessionElapsed = (now - sessionStartTime) / 1000;
-    let displayTime, displayText;
+    const elapsed = (now - sessionStartTime) / 1000;
+    const remainingTime = Math.max(0, MAX_SESSION_TIME - elapsed);
+    const canClaim = elapsed >= MIN_CLAIM_TIME && elapsed <= MAX_SESSION_TIME;
 
-    if (sessionElapsed < MIN_CLAIM_TIME) {
-      // Temps minimum non atteint
-      displayTime = MIN_CLAIM_TIME - sessionElapsed;
-      displayText = `MINING IN PROGRESS (${formatTime(displayTime)})`;
+    // Mise à jour des tokens
+    tokensDisplay.textContent = tokens.toFixed(4);
+
+    // Gestion des boutons
+    if (elapsed > MAX_SESSION_TIME) {
+      // Session expirée
+      document.getElementById('claim-text').textContent = "SESSION EXPIRED";
       btn.disabled = true;
-    } else if (sessionElapsed < MAX_SESSION_TIME) {
-      // Peut claimer mais session toujours active
-      displayTime = MAX_SESSION_TIME - sessionElapsed;
-      displayText = `CLAIM NOW (${formatTime(displayTime)} remaining)`;
+      restartBtn.style.display = 'block';
+    } else if (canClaim) {
+      // Peut claimer
+      document.getElementById('claim-text').textContent = `CLAIM ${tokens.toFixed(4)} TOKENS`;
       btn.disabled = false;
+      restartBtn.style.display = 'none';
     } else {
-      // Session terminée
-      displayText = "SESSION EXPIRED - RESTART MINING";
+      // En cours de minage
+      const remainingClaimTime = MIN_CLAIM_TIME - Math.min(elapsed, MIN_CLAIM_TIME);
+      document.getElementById('claim-text').textContent = 
+        `MINING IN PROGRESS (${formatTime(remainingClaimTime)})`;
       btn.disabled = true;
+      restartBtn.style.display = 'none';
     }
-
-    document.getElementById('claim-text').textContent = displayText;
   }
 
   function formatTime(seconds) {
@@ -194,6 +201,7 @@ function showClaim() {
     // Initialisation
     if (!loadState()) {
       resetMiningSession();
+      return;
     }
 
     // Nettoyage de l'ancien intervalle
@@ -202,29 +210,26 @@ function showClaim() {
     // Nouvel intervalle
     miningInterval = setInterval(() => {
       const now = Date.now();
-      const sessionElapsed = (now - sessionStartTime) / 1000;
+      const elapsed = (now - sessionStartTime) / 1000;
 
       // Calcul des tokens
       tokens = Math.min(
-        sessionElapsed * TOKENS_PER_SECOND,
+        elapsed * TOKENS_PER_SECOND,
         MAX_SESSION_TIME * TOKENS_PER_SECOND
       );
 
       updateDisplay();
       saveState();
 
-      // Si session terminée, stopper le minage
-      if (sessionElapsed >= MAX_SESSION_TIME) {
+      // Arrêt si session expirée
+      if (elapsed >= MAX_SESSION_TIME) {
         clearInterval(miningInterval);
       }
     }, 1000);
   }
 
-  // ===== GESTION DU CLAIM =====
+  // ===== GESTION DES BOUTONS =====
   btn.addEventListener('click', async () => {
-    const sessionElapsed = (Date.now() - sessionStartTime) / 1000;
-    if (sessionElapsed < MIN_CLAIM_TIME) return;
-
     btn.disabled = true;
     const claimAmount = tokens.toFixed(4);
 
@@ -249,6 +254,10 @@ function showClaim() {
       console.error('Claim failed:', error);
       btn.disabled = false;
     }
+  });
+
+  restartBtn.addEventListener('click', () => {
+    resetMiningSession();
   });
 
   // ===== LANCEMENT =====
