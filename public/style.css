@@ -21,9 +21,10 @@ body {
   color: white;
   min-height: 100vh;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
 }
 
-/* Effet de particules cosmiques */
+/* Effets cosmiques */
 body::before {
   content: "";
   position: fixed;
@@ -38,330 +39,6 @@ body::before {
   animation: cosmicDrift 60s infinite alternate;
 }
 
-/* Header futuriste */
-.app-header {
-  text-align: center;
-  padding: 2rem 0;
-  position: relative;
-}
-
-.app-title {
-  font-size: 2.5rem;
-  font-weight: 800;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  position: relative;
-  display: inline-block;
-}
-
-.app-title::after {
-  content: "";
-  position: absolute;
-  bottom: -10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 50%;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  filter: drop-shadow(var(--neon-glow));
-}
-
-/* Carte utilisateur holographique */
-.user-info-card {
-  background: var(--glass);
-  backdrop-filter: blur(12px);
-  border-radius: 20px;
-  padding: 1.5rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  max-width: 400px;
-  margin: 2rem auto;
-  box-shadow: 
-    0 10px 30px rgba(0, 0, 0, 0.3),
-    inset 0 0 15px rgba(255, 255, 255, 0.05);
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.4s;
-}
-
-.user-info-card:hover {
-  transform: translateY(-5px);
-}
-
-.user-info-card::before {
-  content: "";
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(
-    to bottom right,
-    transparent 45%,
-    rgba(255, 126, 95, 0.1) 50%,
-    transparent 55%
-  );
-  animation: holographicEffect 6s infinite linear;
-  z-index: -1;
-}
-
-/* Interface de Mining */
-.claim-container {
-  background: var(--glass);
-  backdrop-filter: blur(15px);
-  border-radius: 20px;
-  padding: 2rem;
-  max-width: 450px;
-  margin: 2rem auto;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 
-    0 15px 35px rgba(0, 0, 0, 0.4),
-    inset 0 0 20px rgba(255, 255, 255, 0.05);
-  position: relative;
-  overflow: hidden;
-}
-
-.token-display {
-  font-size: 2.5rem; /* Réduit de 2.8rem */
-  font-weight: 700;
-  margin: 0.5rem 0;
-  text-align: center;
-  background: linear-gradient(135deg, #fff, #88d3ce);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  line-height: 1.2; /* Ajouté pour éviter le saut de ligne */
-  word-break: keep-all; /* Empêche la césure */
-  padding: 0 1rem; /* Marge de sécurité */
-}
-
-.token-display::after {
-  content: "tokens";
-  position: absolute;
-  bottom: -1.2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 1rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.7);
-  text-shadow: none;
-}
-
-/* Bouton Cyberpunk */
-.claim-button {
-  position: relative;
-  padding: 1.3rem 3rem;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: white;
-  background: linear-gradient(135deg, var(--primary), var(--accent));
-  border: none;
-  border-radius: 50px;
-  cursor: pointer;
-  overflow: hidden;
-  box-shadow: 
-    0 5px 15px rgba(0, 0, 0, 0.3),
-    0 0 30px rgba(110, 69, 226, 0.2);
-  transition: all 0.4s;
-  z-index: 1;
-  margin: 1.5rem 0;
-  width: 100%;
-  max-width: 300px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.claim-button::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(
-    45deg,
-    transparent 25%,
-    rgba(255, 255, 255, 0.1) 50%,
-    transparent 75%
-  );
-  background-size: 400% 400%;
-  animation: shine 3s infinite linear;
-  z-index: -1;
-}
-
-.claim-button:hover {
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 
-    0 8px 25px rgba(0, 0, 0, 0.4),
-    0 0 40px rgba(110, 69, 226, 0.3);
-}
-
-.claim-button:active {
-  transform: translateY(1px);
-}
-
-.claim-button:disabled {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-  color: rgba(255, 255, 255, 0.4);
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-/* Animation de claim réussie */
-@keyframes claimSuccess {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.1); opacity: 0.8; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-.claim-success {
-  animation: claimSuccess 0.6s ease;
-}
-
-/* Effet de particules */
-.particles {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  top: 0;
-  left: 0;
-  z-index: -1;
-  overflow: hidden;
-}
-
-.particle {
-  position: absolute;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 50%;
-  filter: blur(1px);
-  animation: float linear infinite;
-}
-
-/* Animations */
-@keyframes cosmicDrift {
-  0% { transform: translate(0, 0); }
-  50% { transform: translate(-5%, 5%); }
-  100% { transform: translate(5%, -5%); }
-}
-
-@keyframes holographicEffect {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-@keyframes pulseText {
-  0% { text-shadow: 0 0 20px rgba(136, 211, 206, 0.3); }
-  100% { text-shadow: 0 0 30px rgba(136, 211, 206, 0.6); }
-}
-
-@keyframes shine {
-  0% { background-position: 0% 50%; }
-  100% { background-position: 100% 50%; }
-}
-
-@keyframes float {
-  0% { transform: translateY(0) translateX(0); opacity: 0; }
-  50% { opacity: 1; }
-  100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .app-title {
-    font-size: 2rem;
-  }
-  
-  .token-display {
-    font-size: 2.8rem;
-  }
-  
-  .claim-button {
-    padding: 1.1rem 2rem;
-    font-size: 1rem;
-  }
-}
-
-/* 1. Espacement réduit */
-.main-content {
-  padding: 0.5rem 1rem 2rem;
-}
-
-.claim-container {
-  margin: 0.5rem auto 1rem;
-}
-
-/* 2. Menu du bas amélioré */
-.bottom-nav {
-  background: rgba(15, 12, 41, 0.98);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  padding: 0.5rem 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.nav-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 0.5rem;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.6);
-  transition: all 0.3s ease;
-}
-
-.nav-btn.active {
-  color: #6e45e2;
-  transform: translateY(-3px);
-}
-
-.nav-icon {
-  font-size: 1.4rem;
-  margin-bottom: 0.25rem;
-}
-
-.nav-label {
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
-/* 3. Compteur de tokens */
-.token-display {
-  font-size: 2.8rem;
-  font-weight: 700;
-  margin: 0.5rem 0;
-  text-align: center;
-  background: linear-gradient(135deg, #fff, #88d3ce);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* 4. Bouton de claim */
-.claim-button {
-  width: 100%;
-  padding: 1rem;
-  border-radius: 12px;
-  border: none;
-  background: linear-gradient(135deg, #6e45e2, #88d3ce);
-  color: white;
-  font-weight: 600;
-  margin: 0.5rem 0;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.claim-button:disabled {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.5);
-  cursor: not-allowed;
-}
-
-/* 5. Particules cosmiques */
 .particles {
   position: fixed;
   top: 0;
@@ -377,19 +54,222 @@ body::before {
   background: rgba(255, 255, 255, 0.5);
   border-radius: 50%;
   filter: blur(0.5px);
+  animation: float linear infinite;
+}
+
+/* Structure principale */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  text-align: center;
+  padding: 1.5rem 0 0.5rem;
+}
+
+.app-title {
+  font-size: 2.3rem;
+  font-weight: 800;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 1px;
+  margin-bottom: 0.5rem;
+}
+
+.app-title::after {
+  content: "";
+  display: block;
+  width: 50%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  margin: 0.5rem auto 0;
+  filter: drop-shadow(var(--neon-glow));
+}
+
+/* Carte utilisateur */
+.user-info-card {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 400px;
+  margin: 0.5rem auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.user-info-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.user-info-icon {
+  font-size: 1.1rem;
+  margin-right: 10px;
+  width: 24px;
+}
+
+.user-info-value {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+/* Interface de Mining */
+.main-content {
+  flex: 1;
+  padding: 0.3rem 1rem 1rem;
+}
+
+.claim-container {
+  background: var(--glass);
+  backdrop-filter: blur(15px);
+  border-radius: 16px;
+  padding: 1.2rem;
+  max-width: 450px;
+  margin: 0.3rem auto 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.token-display {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.4rem;
+  font-size: 2.3rem;
+  font-weight: 700;
+  margin: 0.3rem 0;
+  line-height: 1;
+}
+
+.token-unit {
+  font-size: 1rem;
+  opacity: 0.8;
+  align-self: flex-end;
+  margin-bottom: 0.3rem;
+}
+
+.claim-button {
+  width: 100%;
+  padding: 1rem;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: white;
+  font-weight: 600;
+  margin: 0.4rem 0;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.claim-button::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(45deg, transparent 25%, rgba(255,255,255,0.1) 50%, transparent 75%);
+  background-size: 400% 400%;
+  animation: shine 3s infinite linear;
+}
+
+.claim-button:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+}
+
+#main-claim-result {
+  margin-top: 0.8rem;
+  min-height: 24px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* Menu du bas */
+.bottom-nav {
+  background: rgba(15, 12, 41, 0.98);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 0.5rem 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.4rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.3s;
+}
+
+.nav-btn.active {
+  color: var(--primary);
+  transform: translateY(-3px);
+}
+
+.nav-icon {
+  font-size: 1.3rem;
+  margin-bottom: 0.2rem;
+}
+
+.nav-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* Animations */
+@keyframes cosmicDrift {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(-5%, 5%); }
+  100% { transform: translate(5%, -5%); }
 }
 
 @keyframes float {
   0% { transform: translateY(100vh) translateX(0); }
   100% { transform: translateY(-20vh) translateX(20px); }
 }
-.claim-container {
-  max-width: 95%;
-  margin: 0 auto;
-  padding: 0 0.5rem;
+
+@keyframes shine {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
 }
 
-#tokens {
-  display: inline-block;
-  white-space: nowrap;
+@keyframes claimSuccess {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .app-title {
+    font-size: 2rem;
+  }
+  
+  .token-display {
+    font-size: 2rem;
+  }
+  
+  .claim-button {
+    padding: 0.9rem;
+    font-size: 1rem;
+  }
+  
+  .user-info-card {
+    padding: 1rem;
+    max-width: 90%;
+  }
 }

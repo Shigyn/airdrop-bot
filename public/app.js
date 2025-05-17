@@ -93,12 +93,13 @@ function showClaim() {
   content.innerHTML = `
     <div class="claim-container">
       <div class="token-display">
-        <span id="tokens">0.00 tokens</span>
+        <span id="tokens">0.00</span>
+        <span class="token-unit">tokens</span>
       </div>
       <button id="main-claim-btn" class="claim-button" disabled>
         <span id="claim-text">MINING LOCKED (00:10:00)</span>
       </button>
-      <div id="main-claim-result"></div>
+      <div id="main-claim-result" class="claim-result"></div>
     </div>
   `;
 
@@ -128,19 +129,13 @@ function showClaim() {
     const state = JSON.parse(saved);
     const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
     
-    // Ne pas bloquer si <10min déjà passées
-    if (elapsed >= maxSessionTime) {
-      localStorage.removeItem('miningState');
-      return false;
-    }
-    
-    tokens = state.tokens + (elapsed * 0.0167);
+    // Calcul précis
+    tokens = Math.min(elapsed * 0.0167, maxSessionTime * 0.0167); // 1 token/minute max
     remainingTime = Math.max(0, maxSessionTime - elapsed);
     
-    // Débloquer immédiatement si temps déjà écoulé
-    if (remainingTime <= 0) {
-      btn.disabled = false;
-    }
+    // Mise à jour immédiate de l'UI
+    updateDisplay();
+    btn.disabled = (remainingTime > 0);
     
     return true;
   }
