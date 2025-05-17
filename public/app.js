@@ -103,50 +103,53 @@ function showClaim() {
     </div>
   `;
 
-  // Configuration (1 token/minute)
-  const MIN_CLAIM_TIME = 600;     // 10 minutes
-  const MAX_SESSION_TIME = 3600;  // 1 heure
-  const TOKENS_PER_SECOND = 1/60; // 1 token/minute
+  // Configuration
+  const MIN_CLAIM_TIME = 600;
+  const MAX_SESSION_TIME = 3600;
+  const TOKENS_PER_SECOND = 1/60;
 
-  // État initial
+  // État
   let tokens = 0;
   let sessionStartTime = Date.now();
   let miningInterval;
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
 
-  // Sauvegarde l'état actuel
-  function saveState() {
-    localStorage.setItem('miningState', JSON.stringify({
-      tokens,
-      sessionStartTime,
-      lastUpdate: Date.now()
-    }));
-  }
-
-  // Charge l'état sauvegardé
-  function loadState() {
-    const saved = localStorage.getItem('miningState');
-    if (!saved) return false;
-
+  // Vérifie l'état côté serveur
+  async function checkServerSession() {
     try {
-      const state = JSON.parse(saved);
-      const now = Date.now();
-      const elapsed = (now - state.sessionStartTime) / 1000;
-
-      // Si session expirée, on ignore
-      if (elapsed > MAX_SESSION_TIME) return false;
-
-      tokens = Math.min(elapsed * TOKENS_PER_SECOND, MAX_SESSION_TIME * TOKENS_PER_SECOND);
-      sessionStartTime = state.sessionStartTime;
-      return true;
+      const response = await fetch(`/check-session/${userId}`);
+      const data = await response.json();
+      
+      if (data.activeSession) {
+        sessionStartTime = new Date(data.sessionStart).getTime();
+        return true;
+      }
     } catch (e) {
-      console.error("Erreur de chargement:", e);
-      return false;
+      console.error("Check session error:", e);
     }
+    return false;
   }
 
-  function updateDisplay() {
+  async function startMining() {
+    // Vérifie d'abord si une session existe déjà
+    const hasActiveSession = await checkServerSession();
+    
+    if (!hasActiveSession) {
+      sessionStartTime = Date.now();
+      // Notifie le serveur du démarrage
+      await fetch('/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, startTime: new Date().toISOString() })
+      });
+    }
+
+    updateDisplay();
+    miningInterval = setInterval(updateDisplay, 1000);
+  }
+
+  async function updateDisplay() {
     const now = Date.now();
     const elapsed = (now - sessionStartTime) / 1000;
     const remainingTime = Math.max(0, MIN_CLAIM_TIME - elapsed);
@@ -155,6 +158,7 @@ function showClaim() {
     tokensDisplay.textContent = tokens.toFixed(2);
 
     if (elapsed >= MAX_SESSION_TIME) {
+      clearInterval(miningInterval);
       document.getElementById('claim-text').textContent = "SESSION EXPIRED";
       btn.disabled = true;
     } 
@@ -171,25 +175,6 @@ function showClaim() {
     }
   }
 
-  function startMining() {
-    // Charge l'état existant ou initialise
-    if (!loadState()) {
-      sessionStartTime = Date.now();
-      tokens = 0;
-    }
-
-    clearInterval(miningInterval);
-    
-    miningInterval = setInterval(() => {
-      updateDisplay();
-      saveState();
-      
-      if ((Date.now() - sessionStartTime) / 1000 >= MAX_SESSION_TIME) {
-        clearInterval(miningInterval);
-      }
-    }, 1000);
-  }
-
   btn.addEventListener('click', async () => {
     btn.disabled = true;
     try {
@@ -199,18 +184,22 @@ function showClaim() {
         body: JSON.stringify({ 
           userId,
           tokens: tokens.toFixed(2),
+          startTime: new Date(sessionStartTime).toISOString(),
           username: tg.initDataUnsafe.user?.username || 'Anonyme'
         })
       });
       
       if (!response.ok) throw new Error('Claim failed');
       
-      // Nouvelle session après claim
-      sessionStartTime = Date.now();
-      tokens = 0;
-      saveState();
-      updateDisplay();
+      // Reset après claim
+      await fetch('/end-session', {
+        method: 'POST',
+        body: JSON.stringify({ userId })
+      });
+      
+      startMining(); // Nouvelle session
       await loadUserData();
+      
     } catch (error) {
       console.error(error);
       btn.disabled = false;
