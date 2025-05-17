@@ -68,9 +68,16 @@ app.get('/user/:userId', async (req, res) => {
       range: "Users!A2:F"
     });
 
-    const user = (usersResponse.data.values || []).find(row => row[2] === req.params.userId);
+    console.log("Tous les users:", usersResponse.data.values); // Log pour débogage
+
+    // Conversion en string pour la comparaison
+    const userIdToFind = req.params.userId.toString();
+    const user = (usersResponse.data.values || []).find(row => 
+      row[2].toString() === userIdToFind
+    );
 
     if (!user) {
+      console.log("User non trouvé. ID recherché:", userIdToFind);
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -82,7 +89,10 @@ app.get('/user/:userId', async (req, res) => {
 
   } catch (error) {
     console.error('User data error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      details: "Vérifiez le format des données dans Google Sheets" 
+    });
   }
 });
 

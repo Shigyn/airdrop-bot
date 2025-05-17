@@ -4,26 +4,75 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Airdrop Telegram Bot</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="style.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="container">
-    <h1>Airdrop Telegram</h1>
-    <div id="user-info" class="user-info">
-      <p><strong>👤 User:</strong> <span id="username">Chargement...</span></p>
-      <p><strong>💰 Balance:</strong> <span id="balance">--</span></p>
-      <p><strong>📅 Last Claim:</strong> <span id="lastClaim">--</span></p>
-    </div>
+  <div class="app-container">
+    <!-- Header Section -->
+    <header class="app-header">
+      <h1 class="app-title">Airdrop Telegram</h1>
+      <div id="user-info" class="user-info-card">
+        <div class="user-info-row">
+          <span class="user-info-icon">👤</span>
+          <span id="username" class="user-info-value">Chargement...</span>
+        </div>
+        <div class="user-info-row">
+          <span class="user-info-icon">💰</span>
+          <span id="balance" class="user-info-value">--</span>
+        </div>
+        <div class="user-info-row">
+          <span class="user-info-icon">📅</span>
+          <span id="lastClaim" class="user-info-value">--</span>
+        </div>
+      </div>
+    </header>
 
-    <div class="menu">
-      <button id="btn-tasks">Tasks</button>
-      <button id="btn-claim">Claim</button>
-      <button id="btn-referral">Referral</button>
-    </div>
-    <div id="content"></div>
-	<div id="notification" class="notification hidden"></div>
+    <!-- Main Claim Button -->
+    <main class="main-content">
+      <div class="claim-section">
+        <div class="timer-display">
+          <div class="timer-circle">
+            <svg class="timer-svg" viewBox="0 0 100 100">
+              <circle class="timer-bg" cx="50" cy="50" r="45"></circle>
+              <circle class="timer-progress" cx="50" cy="50" r="45"></circle>
+            </svg>
+            <span id="minutes" class="timer-text">0</span>
+          </div>
+          <span class="timer-label">minutes</span>
+        </div>
+        
+        <button id="main-claim-btn" class="neumorphic-btn claim-btn">
+          <span id="main-claim-text" class="btn-text">START CLAIM</span>
+          <div class="btn-liquid"></div>
+        </button>
+        
+        <div id="main-claim-result" class="claim-result"></div>
+      </div>
+      
+      <div id="content" class="dynamic-content"></div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+      <button id="btn-tasks" class="nav-btn">
+        <span class="nav-icon">📋</span>
+        <span class="nav-label">Tasks</span>
+      </button>
+      <button id="btn-claim" class="nav-btn active">
+        <span class="nav-icon">⚡</span>
+        <span class="nav-label">Claim</span>
+      </button>
+      <button id="btn-referral" class="nav-btn">
+        <span class="nav-icon">👥</span>
+        <span class="nav-label">Referral</span>
+      </button>
+    </nav>
+    
+    <!-- Notification System -->
+    <div id="notification" class="notification hidden"></div>
   </div>
 </body>
 </html>

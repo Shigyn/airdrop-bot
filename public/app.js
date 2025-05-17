@@ -26,8 +26,7 @@ function initTelegramWebApp() {
   if (!userId) {
     throw new Error("Utilisateur non identifié via Telegram");
   }
-
-  console.log("WebApp initialisée. UserID:", userId);
+  console.log("ID utilisateur Telegram:", userId, "Type:", typeof userId);
 }
 
 function initUI() {
@@ -91,28 +90,6 @@ function showTasks() {
     });
 }
 
-async function claimSpecificTask(userId, taskId) {
-  const res = await fetch('/claim', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, taskId })
-  });
-  const data = await res.json();
-  console.log(data);
-  return data; // tu peux gérer ça ailleurs
-}
-
-async function claimRandomTask(userId) {
-  const res = await fetch('/claim/random', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId })
-  });
-  const data = await res.json();
-  console.log(data);
-  return data;
-}
-
 function showClaim() {
   const content = document.getElementById('content');
   content.innerHTML = `
@@ -121,20 +98,21 @@ function showClaim() {
       <div class="timer-display">
         <span id="minutes">0</span> minutes (min. 10)
       </div>
-      <button id="claim-btn" class="claim-button">
+      <button id="main-claim-btn" class="claim-button">
         <div class="progress-bar" id="progress-bar"></div>
         <span>START CLAIM</span>
       </button>
-      <div id="claim-result"></div>
+      <div id="main-claim-result"></div>
     </div>
   `;
 
   let timer;
   let minutes = 0;
   const maxMinutes = 60;
-  const btn = document.getElementById('claim-btn');
+  const btn = document.getElementById('main-claim-btn');
   const progressBar = document.getElementById('progress-bar');
   const minutesDisplay = document.getElementById('minutes');
+  const resultDisplay = document.getElementById('main-claim-result');
   const tg = window.Telegram.WebApp;
 
   btn.addEventListener('click', async function() {
@@ -143,7 +121,7 @@ function showClaim() {
       clearInterval(timer);
       
       if (minutes < 10) {
-        document.getElementById('claim-result').innerHTML = `
+        resultDisplay.innerHTML = `
           <div class="result-message error">
             ❌ Minimum 10 minutes requis
           </div>
@@ -172,7 +150,7 @@ function showClaim() {
         
         if (!res.ok) throw new Error(data.message);
         
-        document.getElementById('claim-result').innerHTML = `
+        resultDisplay.innerHTML = `
           <div class="result-message success">
             ✅ ${data.message}<br>
             <small>Balance mise à jour</small>
@@ -183,7 +161,7 @@ function showClaim() {
         loadUserData();
         
       } catch (error) {
-        document.getElementById('claim-result').innerHTML = `
+        resultDisplay.innerHTML = `
           <div class="result-message error">
             ❌ ${error.message}
           </div>
@@ -222,52 +200,6 @@ function showClaim() {
   }
 }
 
-  function updateProgress() {
-    minutesDisplay.textContent = minutes;
-    const percentage = Math.min(100, (minutes / maxMinutes) * 100);
-    progressBar.style.width = `${percentage}%`;
-    progressBar.style.backgroundColor = `hsl(${percentage * 1.2}, 100%, 50%)`;
-    
-    if (minutes >= 10) {
-      btn.querySelector('span').textContent = `CLAIM ${minutes} POINTS`;
-    }
-  }
-}
-
-  async function processClaim(taskId) {
-    const resultDiv = document.getElementById('claimResult');
-    resultDiv.innerHTML = '<div class="loading-spinner"></div>';
-    resultDiv.className = 'claim-result loading';
-
-    try {
-      const response = await fetch('/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, taskId })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) throw new Error(data.message || 'Erreur inconnue');
-
-      resultDiv.className = 'claim-result success';
-      resultDiv.innerHTML = `
-        ✅ <strong>${data.message || 'Succès!'}</strong>
-        ${data.taskId ? `<p>ID Tâche: ${data.taskId}</p>` : ''}
-        ${data.reward ? `<p>Récompense: ${data.reward}</p>` : ''}
-      `;
-
-      // Rafraîchir les données utilisateur
-      loadUserData();
-
-    } catch (error) {
-      resultDiv.className = 'claim-result error';
-      resultDiv.innerHTML = `❌ <strong>Erreur:</strong> ${error.message}`;
-      console.error('Claim Error:', error);
-    }
-  }
-}
-
 function showReferrals() {
   const content = document.getElementById('content');
   content.innerHTML = '<h2>Chargement...</h2>';
@@ -292,20 +224,6 @@ function showReferrals() {
       content.innerHTML = '<p>Erreur de chargement</p>';
     });
 }
-
-function showNotification(message, type = 'success') {
-  const notif = document.getElementById('notification');
-  notif.textContent = message;
-  notif.className = `notification ${type}`;
-  
-  setTimeout(() => {
-    notif.classList.add('hidden');
-  }, 5000);
-}
-
-// Utilisation :
-// showNotification("Tâche réclamée avec succès!", "success");
-// showNotification("Aucune tâche disponible", "warning");
 
 // Point d'entrée principal
 document.addEventListener('DOMContentLoaded', () => {

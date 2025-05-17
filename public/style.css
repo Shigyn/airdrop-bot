@@ -1,358 +1,381 @@
-/* Amélioration police, plus moderne et douce */
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: #f5f7fa;
-  color: #333;
+:root {
+  --primary: #4361ee;
+  --secondary: #3a0ca3;
+  --accent: #f72585;
+  --light: #f8f9fa;
+  --dark: #212529;
+  --success: #4cc9f0;
+  --warning: #f8961e;
+  --danger: #ef233c;
+  --glass: rgba(255, 255, 255, 0.15);
+}
+
+* {
   margin: 0;
-  padding: 20px;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  color: var(--light);
   min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.app-container {
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 100%;
+  padding: 20px;
+  position: relative;
 }
 
-/* Container plus aéré et centré verticalement */
-.container {
-  max-width: 600px;
-  margin: 40px auto;
-  background: #ffffff;
-  padding: 30px 25px;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-}
-
-/* Titres plus marqués */
-h1, h2 {
+/* Header Styles */
+.app-header {
   text-align: center;
-  color: #0056b3;
+  margin-bottom: 2rem;
+  animation: fadeInDown 0.8s ease;
+}
+
+.app-title {
+  font-size: 2.2rem;
   font-weight: 700;
-  margin-bottom: 20px;
+  background: linear-gradient(to right, #4361ee, #3a0ca3);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 1.5rem;
+  text-shadow: 0 2px 10px rgba(67, 97, 238, 0.3);
 }
 
-/* Menu boutons centrés avec gap et légère ombre */
-.menu {
+.user-info-card {
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 1.2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 400px;
+  margin: 0 auto;
+  animation: slideUp 0.6s ease;
+}
+
+.user-info-row {
   display: flex;
-  justify-content: center;
-  gap: 15px;
-  margin-bottom: 25px;
+  align-items: center;
+  margin-bottom: 0.8rem;
 }
 
-/* Boutons avec dégradé, ombre légère, transition et hover */
-button {
-  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-  color: white;
-  border: none;
-  padding: 12px 28px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 600;
-  box-shadow: 0 4px 8px rgb(0 123 255 / 0.3);
-  transition: background-color 0.3s ease, transform 0.15s ease, box-shadow 0.3s ease;
-  user-select: none;
-  min-width: 100px;
+.user-info-icon {
+  font-size: 1.2rem;
+  margin-right: 12px;
+  width: 24px;
   text-align: center;
 }
 
-/* Hover & focus : élévation + couleur plus foncée */
-button:hover,
-button:focus {
-  background: linear-gradient(135deg, #0056b3 0%, #003f7f 100%);
-  box-shadow: 0 6px 14px rgb(0 86 179 / 0.5);
-  outline: none;
-  transform: translateY(-2px);
+.user-info-value {
+  font-weight: 500;
+  font-size: 1rem;
 }
 
-/* Active : bouton "appuie" */
-button:active {
+/* Main Content */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 80px;
+}
+
+.claim-section {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto 2rem;
+  text-align: center;
+}
+
+/* Timer Circle */
+.timer-display {
+  position: relative;
+  margin: 2rem auto;
+  width: 180px;
+  height: 180px;
+}
+
+.timer-circle {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.timer-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.timer-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 8;
+}
+
+.timer-progress {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: 283;
+  stroke-dashoffset: 283;
+  transition: stroke-dashoffset 0.5s ease;
+  animation: pulse 2s infinite alternate;
+}
+
+.timer-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: white;
+}
+
+.timer-label {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Claim Button */
+.neumorphic-btn {
+  position: relative;
+  padding: 1.2rem 2.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(145deg, #4361ee, #3a0ca3);
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.2),
+              -8px -8px 16px rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+  z-index: 1;
+  margin: 1rem 0;
+}
+
+.claim-btn {
+  width: 100%;
+  max-width: 300px;
+}
+
+.btn-liquid {
+  position: absolute;
+  top: -80px;
+  left: 0;
+  width: 100%;
+  height: 200px;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 50px rgba(255, 255, 255, 0.1);
+  transition: 0.5s;
+  z-index: -1;
   transform: translateY(0);
-  box-shadow: 0 3px 6px rgb(0 86179 / 0.4);
 }
 
-/* Inputs full width, plus confort */
-input {
-width: 100%;
-padding: 10px 12px;
-margin-bottom: 15px;
-font-size: 15px;
-border: 1.8px solid #ddd;
-border-radius: 6px;
-transition: border-color 0.25s ease;
+.neumorphic-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 12px 12px 24px rgba(0, 0, 0, 0.3),
+              -12px -12px 24px rgba(255, 255, 255, 0.1);
 }
 
-/* Focus input */
-input:focus {
-border-color: #007bff;
-outline: none;
-box-shadow: 0 0 8px rgb(0 123 255 / 0.3);
+.neumorphic-btn:hover .btn-liquid {
+  transform: translateY(-120px);
 }
 
-/* Résultat claim plus visible et espacé */
-#claimResult {
-margin-top: 20px;
-font-weight: 700;
-color: #28a745;
-text-align: center;
-min-height: 1.3em;
+.neumorphic-btn:active {
+  transform: translateY(1px);
 }
 
-/* Pulse animation sur le bouton claim */
-#claimForm button.pulse {
-animation: pulse-animation 0.6s ease forwards;
+.neumorphic-btn.active {
+  background: linear-gradient(145deg, #f72585, #b5179e);
 }
 
-/* Animation pulse plus fluide */
-@keyframes pulse-animation {
-0% {
-transform: scale(1);
-box-shadow: 0 0 0 rgba(40, 167, 69, 0.7);
-}
-50% {
-transform: scale(1.1);
-box-shadow: 0 0 15px rgba(40, 167, 69, 1);
-}
-100% {
-transform: scale(1);
-box-shadow: 0 0 0 rgba(40, 167, 69, 0);
+.btn-text {
+  position: relative;
+  z-index: 1;
 }
 
-.user-info {
-  background: #e9f2ff;
-  padding: 15px 20px;
-  border-radius: 10px;
-  margin-bottom: 25px;
-  box-shadow: 0 2px 10px rgba(0, 123, 255, 0.1);
-  font-size: 16px;
-  line-height: 1.5;
+/* Bottom Navigation */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  background: rgba(26, 26, 46, 0.9);
+  backdrop-filter: blur(10px);
+  padding: 12px 0;
+  box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.2);
+  z-index: 100;
 }
 
-.user-info p {
-  margin: 8px 0;
+.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
 }
 
+.nav-icon {
+  font-size: 1.4rem;
+  margin-bottom: 4px;
+  transition: all 0.3s ease;
+}
+
+.nav-btn.active {
+  color: white;
+  transform: translateY(-5px);
+}
+
+.nav-btn.active .nav-icon {
+  color: var(--primary);
+  text-shadow: 0 0 15px rgba(67, 97, 238, 0.5);
+}
+
+/* Dynamic Content */
+.dynamic-content {
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 1rem;
+  animation: fadeIn 0.5s ease;
+}
+
+/* Claim Result */
+.claim-result {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border-radius: 12px;
+  font-weight: 500;
+  animation: fadeIn 0.5s ease;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+}
+
+/* Notifications */
 .notification {
   position: fixed;
   top: 20px;
   right: 20px;
-  padding: 15px;
-  border-radius: 5px;
+  padding: 15px 20px;
+  border-radius: 12px;
   color: white;
   z-index: 1000;
-  transition: all 0.3s ease;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  transform: translateX(200%);
+  transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  max-width: 300px;
 }
 
-.notification.success { background: #28a745; }
-.notification.error { background: #dc3545; }
-.notification.warning { background: #ffc107; color: #212529; }
-
-.hidden { display: none; }
-
-.claim-container {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 20px;
+.notification.success {
+  background: linear-gradient(135deg, #4cc9f0 0%, #4361ee 100%);
 }
 
-.claim-form {
-  margin-top: 20px;
+.notification.error {
+  background: linear-gradient(135deg, #ef233c 0%, #b5179e 100%);
 }
 
-.input-group {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 15px;
+.notification.warning {
+  background: linear-gradient(135deg, #f8961e 0%, #f3722c 100%);
 }
 
-.claim-form input {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
-.claim-button {
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.claim-button:disabled {
-  background-color: #6c757d;
-  cursor: not-allowed;
-}
-
-.claim-button .spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.notification.show {
+  transform: translateX(0);
 }
 
 .hidden {
   display: none;
 }
 
-.claim-result {
-  margin-top: 15px;
-  padding: 10px;
-  border-radius: 4px;
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.task-details {
-  margin-top: 10px;
-  padding: 10px;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-  font-size: 0.9em;
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.claim-container {
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 20px;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.claim-options {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+@keyframes pulse {
+  0% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.7;
+  }
 }
 
-.claim-button {
-  padding: 12px 20px;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 16px;
-  transition: background-color 0.3s;
+@keyframes liquid {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  100% {
+    transform: translateY(-100px) rotate(360deg);
+  }
 }
 
-.claim-button:hover {
-  background-color: #45a049;
-}
-
-.specific-claim {
-  display: flex;
-  gap: 10px;
-}
-
-.specific-claim input {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
-.or-separator {
-  text-align: center;
-  margin: 10px 0;
-  font-weight: bold;
-}
-
-.claim-result {
-  margin-top: 20px;
-  padding: 15px;
-  border-radius: 4px;
-}
-
-.claim-result.loading {
-  background-color: #f8f9fa;
-}
-
-.claim-result.success {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.claim-result.error {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-.loading-spinner {
-  border: 3px solid #f3f3f3;
-  border-top: 3px solid #3498db;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  animation: spin 1s linear infinite;
-  margin: 0 auto;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.claim-container {
-  max-width: 400px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.timer-display {
-  font-size: 2rem;
-  margin: 20px 0;
-}
-
-.claim-button {
-  position: relative;
-  padding: 15px 30px;
-  background: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1.2rem;
-  overflow: hidden;
-  cursor: pointer;
-  width: 100%;
-}
-
-.claim-button.active {
-  background: #2196F3;
-}
-
-.progress-bar {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  width: 0%;
-  background: #ff9800;
-  transition: width 0.3s;
-}
-
-.claim-button span {
-  position: relative;
-  z-index: 1;
-}
-
-.result-message {
-  margin-top: 20px;
-  padding: 10px;
-  border-radius: 5px;
-}
-
-.success {
-  background: #d4edda;
-  color: #155724;
-}
-
-.error {
-  background: #f8d7da;
-  color: #721c24;
+/* Responsive */
+@media (max-width: 480px) {
+  .app-title {
+    font-size: 1.8rem;
+  }
+  
+  .timer-display {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .timer-text {
+    font-size: 2rem;
+  }
+  
+  .neumorphic-btn {
+    padding: 1rem 2rem;
+    font-size: 1rem;
+  }
 }
