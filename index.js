@@ -3,7 +3,13 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { bot, webhookCallback } = require('./bot');
-const { initGoogleSheets, readTasks, claimTaskForUser, getReferralInfo } = require('./googleSheets');
+const { 
+  initGoogleSheets, 
+  readTasks, 
+  claimTaskForUser, 
+  getReferralInfo,
+  claimRandomTaskForUser 
+} = require('./googleSheets');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -19,20 +25,29 @@ app.use((req, res, next) => {
 });
 
 // Init Google Sheets
-initGoogleSheets().catch(err => {
-  console.error('Google Sheets init error:', err);
-});
+let sheetsInitialized = false;
+initGoogleSheets()
+  .then(() => {
+    sheetsInitialized = true;
+    console.log('Google Sheets initialized successfully');
+  })
+  .catch(err => {
+    console.error('Google Sheets init error:', err);
+    process.exit(1); // Quit if sheets can't initialize
+  });
 
 const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = process.env.PUBLIC_URL ?
   `${process.env.PUBLIC_URL}${webhookSecretPath}` :
   `http://localhost:${PORT}${webhookSecretPath}`;
 
+// Telegram Webhook
 app.post(webhookSecretPath, webhookCallback);
 
 // API Routes
 app.get('/tasks', async (req, res) => {
   try {
+    if (!sheetsInitialized) throw new Error('Service not initialized');
     const tasks = await readTasks();
     res.json(tasks);
   } catch (err) {
@@ -43,36 +58,41 @@ app.get('/tasks', async (req, res) => {
 
 app.post('/claim', async (req, res) => {
   try {
+    if (!sheetsInitialized) throw new Error('Service not initialized');
+    
     const { userId, taskId } = req.body;
     
-    // Option 1: Si taskId est fourni, tenter de claim cette tâche spécifique
-    if (taskId) {
-      const result = await sheetsService.claimSpecificTask(userId, taskId);
-      return res.json(result);
-    }
-    
-    // Option 2: Sinon, claim une tâche aléatoire disponible
-    const result = await sheetsService.claimRandomTask(userId);
-    
-    if (result.error === "No available tasks") {
-      return res.status(400).json({
-        success: false,
-        message: "Aucune tâche disponible actuellement. Revenez plus tard!"
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "User ID is required" 
       });
     }
-    
+
+    let result;
+    if (taskId) {
+      result = await claimTaskForUser(userId, taskId);
+    } else {
+      result = await claimRandomTaskForUser(userId);
+    }
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
     res.json(result);
   } catch (error) {
     console.error("Claim error:", error);
     res.status(500).json({ 
       success: false, 
-      message: error.message || "Erreur serveur" 
+      message: error.message || "Server error" 
     });
   }
 });
 
 app.get('/referral/:code', async (req, res) => {
   try {
+    if (!sheetsInitialized) throw new Error('Service not initialized');
     const { code } = req.params;
     const referralInfo = await getReferralInfo(code);
     res.json(referralInfo);
@@ -82,9 +102,17 @@ app.get('/referral/:code', async (req, res) => {
   }
 });
 
-// Health check
+// Health check endpoint with service status
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  const status = {
+    status: sheetsInitialized ? 'OK' : 'INITIALIZING',
+    timestamp: new Date().toISOString(),
+    services: {
+      googleSheets: sheetsInitialized,
+      telegram: !!process.env.TELEGRAM_BOT_TOKEN
+    }
+  };
+  res.status(sheetsInitialized ? 200 : 503).json(status);
 });
 
 // Static files
@@ -115,6 +143,18 @@ app.listen(PORT, () => {
     console.log('Production mode with webhook');
   } else {
     console.log('Development mode, starting polling');
-    bot.launch();
+    bot.launch().catch(err => {
+      console.error('Bot launch error:', err);
+      process.exit(1);
+    });
   }
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  process.exit(1);
 });

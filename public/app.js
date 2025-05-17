@@ -121,44 +121,50 @@ function showClaim() {
   content.innerHTML = `
     <div class="claim-container">
       <h2>Claim</h2>
-      <form id="claimForm" class="claim-form">
-        <div class="input-group">
+      
+      <div class="claim-options">
+        <!-- Option 1: Claim rapide (tâche aléatoire) -->
+        <button id="quick-claim" class="claim-button">
+          Claim Rapide (Tâche Aléatoire)
+        </button>
+        
+        <div class="or-separator">OU</div>
+        
+        <!-- Option 2: Claim avec ID spécifique -->
+        <div class="specific-claim">
           <input 
             type="text" 
-            name="taskId" 
+            id="specific-task-id" 
             placeholder="ID tâche (optionnel)" 
             aria-label="ID de la tâche"
           />
-          <button type="submit" class="claim-button" id="claim-submit">
-            <span class="button-text">Réclamer</span>
-            <span class="spinner hidden"></span>
+          <button id="specific-claim" class="claim-button">
+            Claim Spécifique
           </button>
         </div>
-      </form>
+      </div>
+      
       <div id="claimResult" class="claim-result"></div>
     </div>
   `;
 
-  const claimForm = document.getElementById('claimForm');
-  const claimButton = document.getElementById('claim-submit');
-  const buttonText = claimButton.querySelector('.button-text');
-  const spinner = claimButton.querySelector('.spinner');
-  const resultDiv = document.getElementById('claimResult');
+  // Gestion du claim rapide
+  document.getElementById('quick-claim').addEventListener('click', async () => {
+    await processClaim(null);
+  });
 
-  claimForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    // Reset et état de chargement
-    resultDiv.textContent = '';
-    resultDiv.className = 'claim-result';
-    buttonText.textContent = 'Traitement...';
-    spinner.classList.remove('hidden');
-    claimButton.disabled = true;
+  // Gestion du claim spécifique
+  document.getElementById('specific-claim').addEventListener('click', async () => {
+    const taskId = document.getElementById('specific-task-id').value.trim() || null;
+    await processClaim(taskId);
+  });
+
+  async function processClaim(taskId) {
+    const resultDiv = document.getElementById('claimResult');
+    resultDiv.innerHTML = '<div class="loading-spinner"></div>';
+    resultDiv.className = 'claim-result loading';
 
     try {
-      const formData = new FormData(claimForm);
-      const taskId = formData.get('taskId')?.trim() || null;
-
       const response = await fetch('/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -167,44 +173,24 @@ function showClaim() {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Erreur lors de la requête');
-      }
+      if (!response.ok) throw new Error(data.message || 'Erreur inconnue');
 
-      // Succès
-      resultDiv.style.color = '#28a745';
+      resultDiv.className = 'claim-result success';
       resultDiv.innerHTML = `
-        ✅ <strong>${data.message || 'Réclamation enregistrée!'}</strong>
-        ${data.taskDetails ? `
-          <div class="task-details">
-            <p>Tâche: ${data.taskDetails.id}</p>
-            <p>Récompense: ${data.taskDetails.reward}</p>
-          </div>
-        ` : ''}
+        ✅ <strong>${data.message || 'Succès!'}</strong>
+        ${data.taskId ? `<p>ID Tâche: ${data.taskId}</p>` : ''}
+        ${data.reward ? `<p>Récompense: ${data.reward}</p>` : ''}
       `;
 
-      // Réinitialisation du formulaire si succès
-      claimForm.reset();
-      
-      // Actualisation des données utilisateur
+      // Rafraîchir les données utilisateur
       loadUserData();
 
     } catch (error) {
-      // Gestion des erreurs
-      resultDiv.style.color = '#dc3545';
-      resultDiv.innerHTML = `
-        ❌ <strong>Erreur</strong><br>
-        ${error.message || 'Une erreur est survenue'}
-      `;
-      
+      resultDiv.className = 'claim-result error';
+      resultDiv.innerHTML = `❌ <strong>Erreur:</strong> ${error.message}`;
       console.error('Claim Error:', error);
-    } finally {
-      // Reset du bouton
-      buttonText.textContent = 'Réclamer';
-      spinner.classList.add('hidden');
-      claimButton.disabled = false;
     }
-  });
+  }
 }
 
 function showReferrals() {
