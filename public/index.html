@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="style.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <script src="app.js" defer></script>
-  <script src="app.js" type="module"></script>
 </head>
 <body>
   <div class="app-container">
@@ -31,28 +30,8 @@
       </div>
     </header>
 
-    <!-- Main Claim Button -->
+    <!-- Main Content - Conteneur dynamique uniquement -->
     <main class="main-content">
-      <div class="claim-section">
-        <div class="timer-display">
-          <div class="timer-circle">
-            <svg class="timer-svg" viewBox="0 0 100 100">
-              <circle class="timer-bg" cx="50" cy="50" r="45"></circle>
-              <circle class="timer-progress" cx="50" cy="50" r="45"></circle>
-            </svg>
-            <span id="minutes" class="timer-text">0</span>
-          </div>
-          <span class="timer-label">minutes</span>
-        </div>
-        
-        <button id="main-claim-btn" class="neumorphic-btn claim-btn">
-          <span id="main-claim-text" class="btn-text">START CLAIM</span>
-          <div class="btn-liquid"></div>
-        </button>
-        
-        <div id="main-claim-result" class="claim-result"></div>
-      </div>
-      
       <div id="content" class="dynamic-content"></div>
     </main>
 
