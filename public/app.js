@@ -1,7 +1,5 @@
 // Variables globales
 let tg, userId;
-let miningSessionActive = false;
-let miningInterval;
 let balance = 0;
 
 function initTelegramWebApp() {
@@ -21,6 +19,17 @@ function initTelegramWebApp() {
   console.log(`Connecté en tant que userID: ${userId}`);
 }
 
+function showNotification(message, type = 'info') {
+  const notif = document.createElement('div');
+  notif.className = `notification ${type}`;
+  notif.textContent = message;
+  document.body.appendChild(notif);
+  
+  setTimeout(() => {
+    notif.remove();
+  }, 5000);
+}
+
 async function loadUserData() {
   try {
     const response = await fetch(`/user/${userId}`);
@@ -34,18 +43,12 @@ async function loadUserData() {
     document.getElementById('lastClaim').textContent = 
       data.lastClaim ? new Date(data.lastClaim).toLocaleString('fr-FR') : "Jamais";
 
-    // Stocke le solde réel
     balance = parseFloat(data.balance) || 0;
-    
-    console.log('Données Sheets chargées:', {
-      balance: data.balance,
-      lastClaim: data.lastClaim
-    });
     
     return data;
   } catch (error) {
     console.error("Erreur Sheets:", error);
-    showNotification(`❌ Erreur: ${error.message}`, 'error');
+    showNotification(`❌ Erreur: ${error.message}`);
     throw error;
   }
 }
@@ -71,32 +74,32 @@ function showClaim() {
   const minClaimMinutes = 10;
   const btn = document.getElementById('main-claim-btn');
   const resultDisplay = document.getElementById('main-claim-result');
-  let miningStartTime = null;
+  let miningInterval;
+
+  function showResult(message, type) {
+    resultDisplay.innerHTML = `<div class="result-${type}">${message}</div>`;
+  }
 
   function startMiningSession() {
-    miningStartTime = Date.now();
-    minutes = 0;
+    const startTime = Date.now();
     btn.disabled = true;
     btn.innerHTML = '<span>MINING IN PROGRESS...</span>';
     showResult('Session démarrée - 10min minimum', 'info');
 
     miningInterval = setInterval(() => {
-      const elapsedMs = Date.now() - miningStartTime;
+      const elapsedMs = Date.now() - startTime;
       minutes = Math.min(maxMinutes, (elapsedMs / (1000 * 60)).toFixed(2));
       
       updateMiningUI();
 
-      // Active le bouton après 10 min
       if (minutes >= minClaimMinutes && btn.disabled) {
         btn.disabled = false;
         btn.innerHTML = `<span>CLAIM ${minutes} POINTS</span>`;
       }
 
-      // Bloque à 60 min max
       if (minutes >= maxMinutes) {
         clearInterval(miningInterval);
         minutes = maxMinutes;
-        updateMiningUI();
         btn.innerHTML = `<span>CLAIM ${maxMinutes} POINTS (MAX)</span>`;
       }
     }, 1000);
@@ -132,18 +135,14 @@ function showClaim() {
       if (!response.ok) throw new Error(data.message || 'Erreur');
       
       showResult(`✅ ${claimedPoints} points claimés!`, 'success');
-      await loadUserData(); // Met à jour la balance réelle
-      
-      // Relance automatique après 5s
+      await loadUserData();
       setTimeout(startMiningSession, 5000);
-      
     } catch (error) {
       showResult(`❌ Échec: ${error.message}`, 'error');
       btn.disabled = false;
     }
   });
 
-  // Démarrer automatiquement au chargement
   startMiningSession();
 }
 
@@ -152,14 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     initTelegramWebApp();
     showClaim();
-    
-    // Test de connexion Sheets au démarrage
-    const userData = await loadUserData();
-    console.log('Test Sheets OK:', {
-      balance: userData.balance,
-      lastClaim: userData.lastClaim
-    });
-    
+    await loadUserData();
   } catch (error) {
     document.body.innerHTML = `
       <div class="error-container">
