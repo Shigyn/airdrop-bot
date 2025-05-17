@@ -8,7 +8,8 @@ const {
   readTasks, 
   claimTaskForUser, 
   getReferralInfo,
-  claimRandomTaskForUser 
+  claimRandomTaskForUser,
+  getSheetInstance
 } = require('./googleSheets');
 
 const app = express();
@@ -33,7 +34,7 @@ initGoogleSheets()
   })
   .catch(err => {
     console.error('Google Sheets init error:', err);
-    process.exit(1); // Quit if sheets can't initialize
+    process.exit(1);
   });
 
 const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
@@ -58,12 +59,15 @@ app.get('/tasks', async (req, res) => {
 
 app.post('/claim', async (req, res) => {
   try {
+    if (!sheetsInitialized) throw new Error('Service not initialized');
+    
     const { userId, minutes } = req.body;
     const username = req.body.username || "inconnu";
+    const sheets = getSheetInstance();
 
     // Validation
     if (!userId) throw new Error("User ID requis");
-    if (minutes < 10 || minutes > 60) {
+    if (!minutes || minutes < 10 || minutes > 60) {
       throw new Error("Durée invalide (10-60 minutes)");
     }
 
@@ -87,25 +91,27 @@ app.post('/claim', async (req, res) => {
     });
 
     // 2. Mise à jour dans Users
-    const usersSheet = await sheets.spreadsheets.values.get({
+    const usersResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SHEET_ID,
       range: "Users!A2:F"
     });
 
-    const users = usersSheet.data.values || [];
-    let userRow = users.find(row => row[2] === userId);
+    const users = usersResponse.data.values || [];
+    const userIndex = users.findIndex(row => row[2] === userId);
 
-    if (userRow) {
-      // Mise à jour de l'utilisateur existant
-      const rowIndex = users.indexOf(userRow) + 2; // +2 car ligne 1 = header
+    if (userIndex >= 0) {
+      // Mise à jour utilisateur existant
+      const rowNumber = userIndex + 2;
+      const currentBalance = parseInt(users[userIndex][3]) || 0;
+      
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.SHEET_ID,
-        range: `Users!D${rowIndex}:E${rowIndex}`,
+        range: `Users!D${rowNumber}:E${rowNumber}`,
         valueInputOption: "USER_ENTERED",
         resource: {
           values: [[
-            (parseInt(userRow[3]) + points, // Balance
-            timestamp                      // Last_Claim_Time
+            currentBalance + points,
+            timestamp
           ]]
         }
       });
@@ -117,12 +123,12 @@ app.post('/claim', async (req, res) => {
         valueInputOption: "USER_ENTERED",
         resource: {
           values: [[
-            timestamp,                      // Date_Inscription
-            username,                       // Username
-            userId,                         // user_id
-            points,                         // Balance
-            timestamp,                      // Last_Claim_Time
-            `REF-${Math.random().toString(36).substr(2, 8)}` // Referral_Code
+            timestamp,
+            username,
+            userId,
+            points,
+            timestamp,
+            `REF-${Math.random().toString(36).substr(2, 8)}`
           ]]
         }
       });
@@ -155,7 +161,7 @@ app.get('/referral/:code', async (req, res) => {
   }
 });
 
-// Health check endpoint with service status
+// Health check
 app.get('/health', (req, res) => {
   const status = {
     status: sheetsInitialized ? 'OK' : 'INITIALIZING',
