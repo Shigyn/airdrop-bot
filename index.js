@@ -96,24 +96,32 @@ app.get('/user/:userId', async (req, res) => {
   }
 });
 
+const { getUserData } = require('./googleSheets');
+const { google } = require('googleapis');
+
 app.post('/claim', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not initialized');
-    
-    const { userId, minutes } = req.body;
-    const username = req.body.username || "inconnu";
-    const sheets = getSheetInstance();
+
+    const { userId, minutes, username = "inconnu" } = req.body;
 
     // Validation
-    if (!userId) throw new Error("User ID requis");
+    if (!userId) return res.status(400).json({ success: false, message: "User ID requis" });
     if (!minutes || minutes < 10 || minutes > 60) {
-      throw new Error("Durée invalide (10-60 minutes)");
+      return res.status(400).json({ success: false, message: "Durée invalide (10-60 minutes)" });
     }
 
     const timestamp = new Date().toISOString();
     const points = minutes;
 
-    // 1. Enregistrement dans Transactions
+    // Récupérer Google Sheets API instance
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // 1. Enregistrer la transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
@@ -129,7 +137,7 @@ app.post('/claim', async (req, res) => {
       }
     });
 
-    // 2. Mise à jour dans Users
+    // 2. Lire les utilisateurs existants
     const usersResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:F"
@@ -142,7 +150,7 @@ app.post('/claim', async (req, res) => {
       // Mise à jour utilisateur existant
       const rowNumber = userIndex + 2;
       const currentBalance = parseInt(users[userIndex][3]) || 0;
-      
+
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${rowNumber}:E${rowNumber}`,
@@ -155,7 +163,7 @@ app.post('/claim', async (req, res) => {
         }
       });
     } else {
-      // Nouvel utilisateur
+      // Ajouter un nouvel utilisateur
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: "Users!A2:F",
@@ -175,7 +183,7 @@ app.post('/claim', async (req, res) => {
 
     res.json({ 
       success: true,
-      points: points,
+      points,
       message: `${points} points réclamés avec succès!`
     });
 
