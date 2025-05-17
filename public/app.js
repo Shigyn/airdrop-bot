@@ -1,4 +1,8 @@
-/// Telegram WebApp init
+// Affiche ce qu'il y a dans window.Telegram pour debug
+alert("window.Telegram = " + JSON.stringify(window.Telegram));
+alert("window.Telegram.WebApp = " + JSON.stringify(window.Telegram?.WebApp));
+
+// Telegram WebApp init
 if (!window.Telegram || !window.Telegram.WebApp) {
   alert("❌ Cette application doit être ouverte depuis Telegram.");
   throw new Error("Telegram WebApp non détectée");
