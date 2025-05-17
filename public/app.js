@@ -50,10 +50,7 @@ function initUI() {
 }
 
 function loadUserData() {
-  let currentUsername = tg?.initDataUnsafe?.user?.username || "inconnu";
-  console.log("Username détecté via Telegram :", currentUsername);
-
-  fetch(`https://script.google.com/macros/s/AKfycbyE6Oeh3BEGIiW9dbsnqg0eh4bcwHNoZZfF2QP_O4_VkQLOLt2wc98VqqDbuzZTqaF9PQ/exec?username=${encodeURIComponent(currentUsername)}`)
+  fetch(`/user/${userId}`)
     .then(res => res.json())
     .then(data => {
       if (data.error) throw new Error(data.error);
@@ -65,7 +62,7 @@ function loadUserData() {
         : "--";
     })
     .catch(err => {
-      console.error("Erreur Sheets:", err);
+      console.error("Erreur:", err);
       document.getElementById('username').textContent = "Erreur";
     });
 }

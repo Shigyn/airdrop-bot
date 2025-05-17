@@ -110,6 +110,20 @@ class GoogleSheetsService {
     return this.claimTask(userId, randomTask.id);
   }
 
+  async getUserData(userId) {
+    try {
+      const res = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "Users!A2:F"
+      });
+      return (res.data.values || []).find(row => row[2] === userId);
+    } catch (error) {
+      console.error('Error getting user data:', error);
+      throw error;
+    }
+  }
+}
+  
   async getReferralInfo(code) {
     // Stub for now — replace with real referral logic if needed
     return {
@@ -130,4 +144,5 @@ module.exports = {
   claimRandomTaskForUser: (userId) => googleSheetsService.claimRandomTask(userId),
   getReferralInfo: (code) => googleSheetsService.getReferralInfo(code),
   getAvailableTasks: () => googleSheetsService.getAvailableTasks(),
+  getUserData: (userId) => googleSheetsService.getUserData(userId),
 };

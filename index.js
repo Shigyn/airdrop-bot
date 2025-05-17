@@ -57,6 +57,35 @@ app.get('/tasks', async (req, res) => {
   }
 });
 
+app.get('/user/:userId', async (req, res) => {
+  try {
+    if (!sheetsInitialized) throw new Error('Service not initialized');
+    const sheets = getSheetInstance();
+    
+    // Récupération des données utilisateur
+    const usersResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:F"
+    });
+
+    const user = (usersResponse.data.values || []).find(row => row[2] === req.params.userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      username: user[1],  // Colonne B (Username)
+      balance: user[3],   // Colonne D (Balance)
+      lastClaim: user[4]  // Colonne E (Last_Claim_Time)
+    });
+
+  } catch (error) {
+    console.error('User data error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/claim', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not initialized');
@@ -76,7 +105,7 @@ app.post('/claim', async (req, res) => {
 
     // 1. Enregistrement dans Transactions
     await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.SHEET_ID,
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
       valueInputOption: "USER_ENTERED",
       resource: {
@@ -92,7 +121,7 @@ app.post('/claim', async (req, res) => {
 
     // 2. Mise à jour dans Users
     const usersResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.SHEET_ID,
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:F"
     });
 
@@ -105,7 +134,7 @@ app.post('/claim', async (req, res) => {
       const currentBalance = parseInt(users[userIndex][3]) || 0;
       
       await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.SHEET_ID,
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${rowNumber}:E${rowNumber}`,
         valueInputOption: "USER_ENTERED",
         resource: {
@@ -118,7 +147,7 @@ app.post('/claim', async (req, res) => {
     } else {
       // Nouvel utilisateur
       await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.SHEET_ID,
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: "Users!A2:F",
         valueInputOption: "USER_ENTERED",
         resource: {
