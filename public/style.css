@@ -125,17 +125,17 @@ body::before {
 }
 
 .token-display {
-  font-size: 3.5rem;
-  font-weight: 800;
-  margin: 1.5rem 0;
-  background: linear-gradient(135deg, #fff, var(--secondary));
+  font-size: 2.5rem; /* Réduit de 2.8rem */
+  font-weight: 700;
+  margin: 0.5rem 0;
+  text-align: center;
+  background: linear-gradient(135deg, #fff, #88d3ce);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 20px rgba(136, 211, 206, 0.3);
-  position: relative;
-  display: inline-block;
-  animation: pulseText 1.5s infinite alternate;
+  line-height: 1.2; /* Ajouté pour éviter le saut de ligne */
+  word-break: keep-all; /* Empêche la césure */
+  padding: 0 1rem; /* Marge de sécurité */
 }
 
 .token-display::after {
@@ -382,4 +382,14 @@ body::before {
 @keyframes float {
   0% { transform: translateY(100vh) translateX(0); }
   100% { transform: translateY(-20vh) translateX(20px); }
+}
+.claim-container {
+  max-width: 95%;
+  margin: 0 auto;
+  padding: 0 0.5rem;
+}
+
+#tokens {
+  display: inline-block;
+  white-space: nowrap;
 }

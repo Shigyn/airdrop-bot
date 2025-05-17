@@ -123,16 +123,29 @@ function showClaim() {
   }
 
   function loadState() {
-    const saved = localStorage.getItem('miningState');
-    if (saved) {
-      const state = JSON.parse(saved);
-      const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
-      tokens = state.tokens + (elapsed * 0.0167);
-      remainingTime = Math.max(0, maxSessionTime - elapsed);
-      return true;
+  const saved = localStorage.getItem('miningState');
+  if (saved) {
+    const state = JSON.parse(saved);
+    const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+    
+    // Ne pas bloquer si <10min déjà passées
+    if (elapsed >= maxSessionTime) {
+      localStorage.removeItem('miningState');
+      return false;
     }
-    return false;
+    
+    tokens = state.tokens + (elapsed * 0.0167);
+    remainingTime = Math.max(0, maxSessionTime - elapsed);
+    
+    // Débloquer immédiatement si temps déjà écoulé
+    if (remainingTime <= 0) {
+      btn.disabled = false;
+    }
+    
+    return true;
   }
+  return false;
+}
 
   function updateDisplay() {
     tokensDisplay.textContent = `${tokens.toFixed(2)} tokens`;
