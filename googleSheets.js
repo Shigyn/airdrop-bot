@@ -122,8 +122,7 @@ class GoogleSheetsService {
       throw error;
     }
   }
-}
-  
+
   async getReferralInfo(code) {
     // Stub for now — replace with real referral logic if needed
     return {
