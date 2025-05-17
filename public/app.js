@@ -103,7 +103,7 @@ function showClaim() {
   `;
 
   let tokens = 0;
-  const maxSessionTime = 600; // 10min en secondes
+  const maxSessionTime = 600;
   let remainingTime = maxSessionTime;
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
@@ -115,16 +115,21 @@ function showClaim() {
     }));
   }
 
+  function resetMiningSession() {
+    localStorage.removeItem('miningState');
+    tokens = 0;
+    remainingTime = maxSessionTime;
+    updateDisplay();
+  }
+
   function loadState() {
     const saved = localStorage.getItem('miningState');
     if (saved) {
       const state = JSON.parse(saved);
       const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
-      if (elapsed < maxSessionTime) {
-        tokens = state.tokens + (elapsed * 0.0167);
-        remainingTime = maxSessionTime - elapsed;
-        return true;
-      }
+      tokens = state.tokens + (elapsed * 0.0167);
+      remainingTime = Math.max(0, maxSessionTime - elapsed);
+      return true;
     }
     return false;
   }
@@ -155,7 +160,7 @@ function showClaim() {
     
     miningInterval = setInterval(() => {
       remainingTime = Math.max(0, remainingTime - 1);
-      tokens += 0.0167; // 1 token par minute
+      tokens += 0.0167;
       
       if (remainingTime <= 0) {
         btn.disabled = false;
@@ -186,9 +191,7 @@ function showClaim() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Erreur');
       
-      localStorage.removeItem('miningState');
-      tokens = 0;
-      remainingTime = maxSessionTime;
+      resetMiningSession();
       startMiningSession();
       await loadUserData();
       
