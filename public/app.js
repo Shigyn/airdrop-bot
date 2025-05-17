@@ -106,10 +106,10 @@ function showClaim() {
     </div>
   `;
 
-  // Constantes
+  // Constantes (MODIFIÉ pour 1 token/minute)
   const MIN_CLAIM_TIME = 600;    // 10min en secondes
-  const MAX_SESSION_TIME = 3600; // 1h en secondes
-  const TOKENS_PER_SECOND = 1 / 3600; // 1 token par heure
+  const MAX_SESSION_TIME = 3600;  // 1h en secondes
+  const TOKENS_PER_SECOND = 1 / 60; // 1 token par minute (MODIFIÉ)
 
   // Variables d'état
   let tokens = 0;
@@ -122,7 +122,7 @@ function showClaim() {
   // ===== FONCTIONS PRINCIPALES =====
   function saveState() {
     localStorage.setItem('miningState', JSON.stringify({
-      tokens,
+      tokens: tokens || 0, // Protection contre NaN
       sessionStartTime,
       lastUpdate: Date.now()
     }));
@@ -148,8 +148,9 @@ function showClaim() {
       // Si session expirée, on ne charge pas l'état
       if (elapsed > MAX_SESSION_TIME) return false;
 
+      // Calcul des tokens avec protection NaN
       tokens = Math.min(
-        parseFloat(state.tokens || 0) + (elapsed * TOKENS_PER_SECOND),
+        (parseFloat(state.tokens) || 0) + (elapsed * TOKENS_PER_SECOND),
         MAX_SESSION_TIME * TOKENS_PER_SECOND
       );
 
@@ -167,8 +168,9 @@ function showClaim() {
     const remainingTime = Math.max(0, MAX_SESSION_TIME - elapsed);
     const canClaim = elapsed >= MIN_CLAIM_TIME && elapsed <= MAX_SESSION_TIME;
 
-    // Mise à jour des tokens
-    tokensDisplay.textContent = tokens.toFixed(4);
+    // Protection contre NaN et formatage à 2 décimales
+    const displayTokens = isNaN(tokens) ? 0 : tokens.toFixed(2);
+    tokensDisplay.textContent = displayTokens;
 
     // Gestion des boutons
     if (elapsed > MAX_SESSION_TIME) {
@@ -178,7 +180,7 @@ function showClaim() {
       restartBtn.style.display = 'block';
     } else if (canClaim) {
       // Peut claimer
-      document.getElementById('claim-text').textContent = `CLAIM ${tokens.toFixed(4)} TOKENS`;
+      document.getElementById('claim-text').textContent = `CLAIM ${displayTokens} TOKENS`;
       btn.disabled = false;
       restartBtn.style.display = 'none';
     } else {
@@ -198,7 +200,7 @@ function showClaim() {
   }
 
   function startMiningSession() {
-    // Initialisation
+    // Initialisation avec protection
     if (!loadState()) {
       resetMiningSession();
       return;
@@ -212,7 +214,7 @@ function showClaim() {
       const now = Date.now();
       const elapsed = (now - sessionStartTime) / 1000;
 
-      // Calcul des tokens
+      // Calcul des tokens avec protection
       tokens = Math.min(
         elapsed * TOKENS_PER_SECOND,
         MAX_SESSION_TIME * TOKENS_PER_SECOND
@@ -231,7 +233,7 @@ function showClaim() {
   // ===== GESTION DES BOUTONS =====
   btn.addEventListener('click', async () => {
     btn.disabled = true;
-    const claimAmount = tokens.toFixed(4);
+    const claimAmount = isNaN(tokens) ? 0 : tokens.toFixed(2);
 
     try {
       const response = await fetch('/claim', {
