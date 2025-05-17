@@ -103,31 +103,57 @@ function showClaim() {
     </div>
   `;
 
-  // NOUVELLE CONFIG (1 token/minute)
-  const MIN_CLAIM_TIME = 600;     // 10 minutes avant claim
-  const MAX_SESSION_TIME = 3600;  // 1 heure max
-  const TOKENS_PER_SECOND = 1/60; // 1 token par minute
+  // Configuration (1 token/minute)
+  const MIN_CLAIM_TIME = 600;     // 10 minutes
+  const MAX_SESSION_TIME = 3600;  // 1 heure
+  const TOKENS_PER_SECOND = 1/60; // 1 token/minute
 
-  // Reset complet des anciennes données
-  localStorage.removeItem('miningState');
-
-  // Variables avec initialisation forcée
+  // État initial
   let tokens = 0;
   let sessionStartTime = Date.now();
   let miningInterval;
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
 
+  // Sauvegarde l'état actuel
+  function saveState() {
+    localStorage.setItem('miningState', JSON.stringify({
+      tokens,
+      sessionStartTime,
+      lastUpdate: Date.now()
+    }));
+  }
+
+  // Charge l'état sauvegardé
+  function loadState() {
+    const saved = localStorage.getItem('miningState');
+    if (!saved) return false;
+
+    try {
+      const state = JSON.parse(saved);
+      const now = Date.now();
+      const elapsed = (now - state.sessionStartTime) / 1000;
+
+      // Si session expirée, on ignore
+      if (elapsed > MAX_SESSION_TIME) return false;
+
+      tokens = Math.min(elapsed * TOKENS_PER_SECOND, MAX_SESSION_TIME * TOKENS_PER_SECOND);
+      sessionStartTime = state.sessionStartTime;
+      return true;
+    } catch (e) {
+      console.error("Erreur de chargement:", e);
+      return false;
+    }
+  }
+
   function updateDisplay() {
     const now = Date.now();
     const elapsed = (now - sessionStartTime) / 1000;
     const remainingTime = Math.max(0, MIN_CLAIM_TIME - elapsed);
 
-    // Mise à jour des tokens (garanti sans NaN)
     tokens = Math.min(elapsed * TOKENS_PER_SECOND, MAX_SESSION_TIME * TOKENS_PER_SECOND);
     tokensDisplay.textContent = tokens.toFixed(2);
 
-    // Mise à jour du bouton
     if (elapsed >= MAX_SESSION_TIME) {
       document.getElementById('claim-text').textContent = "SESSION EXPIRED";
       btn.disabled = true;
@@ -146,13 +172,18 @@ function showClaim() {
   }
 
   function startMining() {
+    // Charge l'état existant ou initialise
+    if (!loadState()) {
+      sessionStartTime = Date.now();
+      tokens = 0;
+    }
+
     clearInterval(miningInterval);
-    sessionStartTime = Date.now();
     
     miningInterval = setInterval(() => {
       updateDisplay();
+      saveState();
       
-      // Arrêt après 1h
       if ((Date.now() - sessionStartTime) / 1000 >= MAX_SESSION_TIME) {
         clearInterval(miningInterval);
       }
@@ -174,8 +205,11 @@ function showClaim() {
       
       if (!response.ok) throw new Error('Claim failed');
       
-      // Reset après claim réussi
-      startMining();
+      // Nouvelle session après claim
+      sessionStartTime = Date.now();
+      tokens = 0;
+      saveState();
+      updateDisplay();
       await loadUserData();
     } catch (error) {
       console.error(error);
@@ -183,7 +217,7 @@ function showClaim() {
     }
   });
 
-  // DÉMARRAGE IMMÉDIAT
+  // DÉMARRAGE
   startMining();
 }
 
