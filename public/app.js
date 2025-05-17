@@ -1,4 +1,4 @@
-// Telegram WebApp init
+/// Telegram WebApp init
 if (!window.Telegram || !window.Telegram.WebApp) {
   alert("❌ Cette application doit être ouverte depuis Telegram.");
   throw new Error("Telegram WebApp non détectée");
@@ -10,7 +10,8 @@ tg.expand();
 const userId = tg.initDataUnsafe?.user?.id || null;
 
 if (!userId) {
-  alert('Erreur : utilisateur non identifié via Telegram.');
+  alert('❌ Erreur : utilisateur non identifié via Telegram.');
+  throw new Error("Utilisateur non identifié via Telegram.");
 }
 
 // DOM Elements
