@@ -1,4 +1,9 @@
 // Telegram WebApp init
+if (!window.Telegram || !window.Telegram.WebApp) {
+  alert("❌ Cette application doit être ouverte depuis Telegram.");
+  throw new Error("Telegram WebApp non détectée");
+}
+
 const tg = window.Telegram.WebApp;
 tg.expand();
 
