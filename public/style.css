@@ -1,15 +1,14 @@
 :root {
-  --primary: #4361ee;
-  --secondary: #3a0ca3;
-  --accent: #f72585;
-  --light: #f8f9fa;
-  --dark: #212529;
-  --success: #4cc9f0;
-  --warning: #f8961e;
-  --danger: #ef233c;
-  --glass: rgba(255, 255, 255, 0.15);
+  --primary: #6e45e2;
+  --secondary: #88d3ce;
+  --accent: #ff7e5f;
+  --dark: #0f0c29;
+  --darker: #0a081f;
+  --glass: rgba(255, 255, 255, 0.08);
+  --neon-glow: 0 0 15px rgba(110, 69, 226, 0.7);
 }
 
+/* Reset et Base */
 * {
   margin: 0;
   padding: 0;
@@ -18,406 +17,269 @@
 
 body {
   font-family: 'Poppins', sans-serif;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  color: var(--light);
+  background: radial-gradient(circle at center, var(--darker), var(--dark));
+  color: white;
   min-height: 100vh;
   overflow-x: hidden;
 }
 
-.app-container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  max-width: 100%;
-  padding: 20px;
-  position: relative;
+/* Effet de particules cosmiques */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(110, 69, 226, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(136, 211, 206, 0.15) 0%, transparent 50%);
+  z-index: -1;
+  animation: cosmicDrift 60s infinite alternate;
 }
 
-/* Header Styles */
+/* Header futuriste */
 .app-header {
   text-align: center;
-  margin-bottom: 2rem;
-  animation: fadeInDown 0.8s ease;
+  padding: 2rem 0;
+  position: relative;
 }
 
 .app-title {
-  font-size: 2.2rem;
-  font-weight: 700;
-  background: linear-gradient(to right, #4361ee, #3a0ca3);
+  font-size: 2.5rem;
+  font-weight: 800;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  margin-bottom: 1.5rem;
-  text-shadow: 0 2px 10px rgba(67, 97, 238, 0.3);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  position: relative;
+  display: inline-block;
 }
 
+.app-title::after {
+  content: "";
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 50%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  filter: drop-shadow(var(--neon-glow));
+}
+
+/* Carte utilisateur holographique */
 .user-info-card {
   background: var(--glass);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  padding: 1.2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 1.5rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   max-width: 400px;
-  margin: 0 auto;
-  animation: slideUp 0.6s ease;
-}
-
-.user-info-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.8rem;
-}
-
-.user-info-icon {
-  font-size: 1.2rem;
-  margin-right: 12px;
-  width: 24px;
-  text-align: center;
-}
-
-.user-info-value {
-  font-weight: 500;
-  font-size: 1rem;
-}
-
-/* Main Content */
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-bottom: 80px;
-}
-
-.claim-section {
-  width: 100%;
-  max-width: 400px;
-  margin: 0 auto 2rem;
-  text-align: center;
-}
-
-/* Timer Circle */
-.timer-display {
-  position: relative;
   margin: 2rem auto;
-  width: 180px;
-  height: 180px;
-}
-
-.timer-circle {
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.3),
+    inset 0 0 15px rgba(255, 255, 255, 0.05);
   position: relative;
-  width: 100%;
-  height: 100%;
+  overflow: hidden;
+  transition: transform 0.4s;
 }
 
-.timer-svg {
-  width: 100%;
-  height: 100%;
-  transform: rotate(-90deg);
+.user-info-card:hover {
+  transform: translateY(-5px);
 }
 
-.timer-bg {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.1);
-  stroke-width: 8;
-}
-
-.timer-progress {
-  fill: none;
-  stroke: var(--primary);
-  stroke-width: 8;
-  stroke-linecap: round;
-  stroke-dasharray: 283;
-  stroke-dashoffset: 283;
-  transition: stroke-dashoffset 0.5s ease;
-  animation: pulse 2s infinite alternate;
-}
-
-.timer-text {
+.user-info-card::before {
+  content: "";
   position: absolute;
-  top: 50%;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    to bottom right,
+    transparent 45%,
+    rgba(255, 126, 95, 0.1) 50%,
+    transparent 55%
+  );
+  animation: holographicEffect 6s infinite linear;
+  z-index: -1;
+}
+
+/* Interface de Mining */
+.claim-container {
+  background: var(--glass);
+  backdrop-filter: blur(15px);
+  border-radius: 20px;
+  padding: 2rem;
+  max-width: 450px;
+  margin: 2rem auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 15px 35px rgba(0, 0, 0, 0.4),
+    inset 0 0 20px rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.token-display {
+  font-size: 3.5rem;
+  font-weight: 800;
+  margin: 1.5rem 0;
+  background: linear-gradient(135deg, #fff, var(--secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 20px rgba(136, 211, 206, 0.3);
+  position: relative;
+  display: inline-block;
+  animation: pulseText 1.5s infinite alternate;
+}
+
+.token-display::after {
+  content: "tokens";
+  position: absolute;
+  bottom: -1.2rem;
   left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 2.5rem;
+  transform: translateX(-50%);
+  font-size: 1rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: none;
+}
+
+/* Bouton Cyberpunk */
+.claim-button {
+  position: relative;
+  padding: 1.3rem 3rem;
+  font-size: 1.2rem;
   font-weight: 700;
   color: white;
-}
-
-.timer-label {
-  display: block;
-  margin-top: 0.5rem;
-  font-size: 1rem;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* Claim Button */
-.neumorphic-btn {
-  position: relative;
-  padding: 1.2rem 2.5rem;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: white;
-  background: linear-gradient(145deg, #4361ee, #3a0ca3);
+  background: linear-gradient(135deg, var(--primary), var(--accent));
   border: none;
   border-radius: 50px;
   cursor: pointer;
   overflow: hidden;
-  box-shadow: 8px 8px 16px rgba(0, 0, 0, 0.2),
-              -8px -8px 16px rgba(255, 255, 255, 0.05);
-  transition: all 0.3s ease;
+  box-shadow: 
+    0 5px 15px rgba(0, 0, 0, 0.3),
+    0 0 30px rgba(110, 69, 226, 0.2);
+  transition: all 0.4s;
   z-index: 1;
-  margin: 1rem 0;
-}
-
-.claim-btn {
+  margin: 1.5rem 0;
   width: 100%;
   max-width: 300px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
-.btn-liquid {
+.claim-button::before {
+  content: "";
   position: absolute;
-  top: -80px;
+  top: 0;
   left: 0;
   width: 100%;
-  height: 200px;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 50px rgba(255, 255, 255, 0.1);
-  transition: 0.5s;
+  height: 100%;
+  background: linear-gradient(
+    45deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 75%
+  );
+  background-size: 400% 400%;
+  animation: shine 3s infinite linear;
   z-index: -1;
-  transform: translateY(0);
 }
 
-.neumorphic-btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 12px 12px 24px rgba(0, 0, 0, 0.3),
-              -12px -12px 24px rgba(255, 255, 255, 0.1);
+.claim-button:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 
+    0 8px 25px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(110, 69, 226, 0.3);
 }
 
-.neumorphic-btn:hover .btn-liquid {
-  transform: translateY(-120px);
-}
-
-.neumorphic-btn:active {
+.claim-button:active {
   transform: translateY(1px);
 }
 
-.neumorphic-btn.active {
-  background: linear-gradient(145deg, #f72585, #b5179e);
+.claim-button:disabled {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  color: rgba(255, 255, 255, 0.4);
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
-.btn-text {
-  position: relative;
-  z-index: 1;
+/* Animation de claim réussie */
+@keyframes claimSuccess {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
-/* Bottom Navigation */
-.bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-around;
-  background: rgba(26, 26, 46, 0.9);
-  backdrop-filter: blur(10px);
-  padding: 12px 0;
-  box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.2);
-  z-index: 100;
+.claim-success {
+  animation: claimSuccess 0.6s ease;
 }
 
-.nav-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.9rem;
-  padding: 8px 12px;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-}
-
-.nav-icon {
-  font-size: 1.4rem;
-  margin-bottom: 4px;
-  transition: all 0.3s ease;
-}
-
-.nav-btn.active {
-  color: white;
-  transform: translateY(-5px);
-}
-
-.nav-btn.active .nav-icon {
-  color: var(--primary);
-  text-shadow: 0 0 15px rgba(67, 97, 238, 0.5);
-}
-
-/* Dynamic Content */
-.dynamic-content {
+/* Effet de particules */
+.particles {
+  position: absolute;
   width: 100%;
-  max-width: 500px;
-  margin: 0 auto;
-  padding: 1rem;
-  animation: fadeIn 0.5s ease;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  overflow: hidden;
 }
 
-/* Claim Result */
-.claim-result {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  border-radius: 12px;
-  font-weight: 500;
-  animation: fadeIn 0.5s ease;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(5px);
-}
-
-/* Notifications */
-.notification {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 15px 20px;
-  border-radius: 12px;
-  color: white;
-  z-index: 1000;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-  transform: translateX(200%);
-  transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  max-width: 300px;
-}
-
-.notification.success {
-  background: linear-gradient(135deg, #4cc9f0 0%, #4361ee 100%);
-}
-
-.notification.error {
-  background: linear-gradient(135deg, #ef233c 0%, #b5179e 100%);
-}
-
-.notification.warning {
-  background: linear-gradient(135deg, #f8961e 0%, #f3722c 100%);
-}
-
-.notification.show {
-  transform: translateX(0);
-}
-
-.hidden {
-  display: none;
+.particle {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  filter: blur(1px);
+  animation: float linear infinite;
 }
 
 /* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+@keyframes cosmicDrift {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(-5%, 5%); }
+  100% { transform: translate(5%, -5%); }
 }
 
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes holographicEffect {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+@keyframes pulseText {
+  0% { text-shadow: 0 0 20px rgba(136, 211, 206, 0.3); }
+  100% { text-shadow: 0 0 30px rgba(136, 211, 206, 0.6); }
 }
 
-@keyframes pulse {
-  0% {
-    opacity: 0.7;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.7;
-  }
+@keyframes shine {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 100% 50%; }
 }
 
-@keyframes liquid {
-  0% {
-    transform: translateY(0) rotate(0deg);
-  }
-  100% {
-    transform: translateY(-100px) rotate(360deg);
-  }
+@keyframes float {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
 }
 
 /* Responsive */
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .app-title {
-    font-size: 1.8rem;
-  }
-  
-  .timer-display {
-    width: 150px;
-    height: 150px;
-  }
-  
-  .timer-text {
     font-size: 2rem;
   }
   
-  .neumorphic-btn {
-    padding: 1rem 2rem;
+  .token-display {
+    font-size: 2.8rem;
+  }
+  
+  .claim-button {
+    padding: 1.1rem 2rem;
     font-size: 1rem;
   }
-}
-.claim-container {
-  text-align: center;
-  padding: 20px;
-}
-
-.mining-display {
-  margin: 30px 0;
-}
-
-.token-counter {
-  font-size: 2.5rem;
-  font-weight: bold;
-  margin-bottom: 20px;
-}
-
-.token-counter .token-label {
-  font-size: 1rem;
-  opacity: 0.8;
-}
-
-.claim-button {
-  background: #4CAF50;
-  color: white;
-  border: none;
-  padding: 15px 30px;
-  border-radius: 8px;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: all 0.3s;
-  width: 100%;
-  max-width: 300px;
-}
-
-.claim-button:disabled {
-  background: #cccccc;
-  cursor: not-allowed;
-}
-
-#main-claim-result {
-  margin-top: 20px;
-  min-height: 24px;
 }

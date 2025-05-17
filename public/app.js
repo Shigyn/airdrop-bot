@@ -1,6 +1,56 @@
 // Variables globales
 let tg, userId;
 let balance = 0;
+let miningInterval;
+
+// ==============================================
+// SYSTEME DE PARTICULES COSMIQUES
+// ==============================================
+
+function createParticles() {
+  let container = document.getElementById('particles');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'particles';
+    container.className = 'particles';
+    document.body.appendChild(container);
+  }
+
+  const particleCount = window.innerWidth < 768 ? 25 : 40;
+  container.innerHTML = '';
+
+  for (let i = 0; i < particleCount; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    
+    Object.assign(particle.style, {
+      width: `${Math.random() * 3 + 1}px`,
+      height: '100%',
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      opacity: Math.random() * 0.7 + 0.3,
+      animation: `float ${Math.random() * 25 + 15}s linear ${Math.random() * 10}s infinite`
+    });
+
+    container.appendChild(particle);
+  }
+}
+
+function initParticles() {
+  createParticles();
+  
+  window.addEventListener('resize', () => {
+    if (window.innerWidth < 768 && document.querySelectorAll('.particle').length > 25) {
+      createParticles();
+    } else if (window.innerWidth >= 768 && document.querySelectorAll('.particle').length <= 25) {
+      createParticles();
+    }
+  });
+}
+
+// ==============================================
+// FONCTIONS PRINCIPALES
+// ==============================================
 
 function initTelegramWebApp() {
   console.log('Initialisation de Telegram WebApp...');
@@ -25,7 +75,6 @@ async function loadUserData() {
     
     if (!response.ok) throw new Error(data.error || 'Erreur serveur');
     
-    // Mise à jour de l'UI
     document.getElementById('username').textContent = data.username || "Anonyme";
     document.getElementById('balance').textContent = data.balance ?? "0";
     document.getElementById('lastClaim').textContent = 
@@ -43,69 +92,82 @@ function showClaim() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="claim-container">
-      <div class="mining-display">
-        <div class="token-counter">
-          <span id="tokens">0.00</span>
-          <span class="token-label">tokens</span>
-        </div>
-        <button id="main-claim-btn" class="claim-button" disabled>
-          <span id="claim-text">MINING LOCKED (00:10:00)</span>
-        </button>
+      <div class="token-display">
+        <span id="tokens">0.00 tokens</span>
       </div>
+      <button id="main-claim-btn" class="claim-button" disabled>
+        <span id="claim-text">MINING LOCKED (00:10:00)</span>
+      </button>
       <div id="main-claim-result"></div>
     </div>
   `;
 
   let tokens = 0;
-  const maxTime = 3600; // 1h en secondes
-  const minClaimTime = 600; // 10min en secondes
-  let remainingTime = maxTime;
+  const maxSessionTime = 600; // 10min en secondes
+  let remainingTime = maxSessionTime;
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
-  let miningInterval;
+
+  function saveState() {
+    localStorage.setItem('miningState', JSON.stringify({
+      tokens,
+      startTime: Date.now()
+    }));
+  }
+
+  function loadState() {
+    const saved = localStorage.getItem('miningState');
+    if (saved) {
+      const state = JSON.parse(saved);
+      const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
+      if (elapsed < maxSessionTime) {
+        tokens = state.tokens + (elapsed * 0.0167);
+        remainingTime = maxSessionTime - elapsed;
+        return true;
+      }
+    }
+    return false;
+  }
 
   function updateDisplay() {
-    tokensDisplay.textContent = tokens.toFixed(2);
+    tokensDisplay.textContent = `${tokens.toFixed(2)} tokens`;
     
-    // Formatage du temps restant HH:MM:SS
-    const hours = Math.floor(remainingTime / 3600);
-    const minutes = Math.floor((remainingTime % 3600) / 60);
+    const minutes = Math.floor(remainingTime / 60);
     const seconds = remainingTime % 60;
-    const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     
     document.getElementById('claim-text').textContent = 
-      remainingTime > (maxTime - minClaimTime) 
-        ? `MINING LOCKED (${timeStr})` 
-        : `CLAIM NOW (${timeStr})`;
+      remainingTime > 0 
+        ? `MINING LOCKED (00:${timeStr})` 
+        : `CLAIM ${tokens.toFixed(2)} TOKENS`;
   }
 
   function startMiningSession() {
-    const startTime = Date.now();
+    const hasSavedState = loadState();
+    
+    if (!hasSavedState) {
+      tokens = 0;
+      remainingTime = maxSessionTime;
+      saveState();
+    }
+
+    clearInterval(miningInterval);
     
     miningInterval = setInterval(() => {
-      const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
-      remainingTime = Math.max(0, maxTime - elapsedSeconds);
+      remainingTime = Math.max(0, remainingTime - 1);
+      tokens += 0.0167; // 1 token par minute
       
-      // 1 token par seconde (à ajuster selon ton taux)
-      tokens = Math.min(elapsedSeconds * 1, maxTime * 1); 
-      
-      // Active le bouton après 10 min
-      if (elapsedSeconds >= minClaimTime) {
+      if (remainingTime <= 0) {
         btn.disabled = false;
       }
 
       updateDisplay();
-
-      if (remainingTime <= 0) {
-        clearInterval(miningInterval);
-        btn.disabled = false;
-        document.getElementById('claim-text').textContent = 'CLAIM MAX TOKENS';
-      }
+      saveState();
     }, 1000);
   }
 
   btn.addEventListener('click', async () => {
-    if (remainingTime > (maxTime - minClaimTime)) return;
+    if (remainingTime > 0) return;
     
     btn.disabled = true;
     const claimAmount = tokens.toFixed(2);
@@ -124,9 +186,9 @@ function showClaim() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Erreur');
       
-      // Réinitialisation après claim
+      localStorage.removeItem('miningState');
       tokens = 0;
-      remainingTime = maxTime;
+      remainingTime = maxSessionTime;
       startMiningSession();
       await loadUserData();
       
@@ -139,12 +201,16 @@ function showClaim() {
   startMiningSession();
 }
 
-// Initialisation
+// ==============================================
+// INITIALISATION
+// ==============================================
+
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     initTelegramWebApp();
-    showClaim();
+    initParticles();
     await loadUserData();
+    showClaim();
   } catch (error) {
     document.body.innerHTML = `
       <div class="error-container">
