@@ -120,44 +120,122 @@ function showClaim() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="claim-container">
-      <h2>Claim</h2>
-      
-      <div class="claim-options">
-        <!-- Option 1: Claim rapide (tâche aléatoire) -->
-        <button id="quick-claim" class="claim-button">
-          Claim Rapide (Tâche Aléatoire)
-        </button>
-        
-        <div class="or-separator">OU</div>
-        
-        <!-- Option 2: Claim avec ID spécifique -->
-        <div class="specific-claim">
-          <input 
-            type="text" 
-            id="specific-task-id" 
-            placeholder="ID tâche (optionnel)" 
-            aria-label="ID de la tâche"
-          />
-          <button id="specific-claim" class="claim-button">
-            Claim Spécifique
-          </button>
-        </div>
+      <h2>Claim Airdrop</h2>
+      <div class="timer-display">
+        <span id="minutes">0</span> minutes (min. 10)
       </div>
-      
-      <div id="claimResult" class="claim-result"></div>
+      <button id="claim-btn" class="claim-button">
+        <div class="progress-bar" id="progress-bar"></div>
+        <span>START CLAIM</span>
+      </button>
+      <div id="claim-result"></div>
     </div>
   `;
 
-  // Gestion du claim rapide
-  document.getElementById('quick-claim').addEventListener('click', async () => {
-    await processClaim(null);
+  let timer;
+  let minutes = 0;
+  const maxMinutes = 60;
+  const btn = document.getElementById('claim-btn');
+  const progressBar = document.getElementById('progress-bar');
+  const minutesDisplay = document.getElementById('minutes');
+  const tg = window.Telegram.WebApp;
+
+  btn.addEventListener('click', async function() {
+    if (btn.classList.contains('active')) {
+      // Envoi du claim
+      clearInterval(timer);
+      
+      if (minutes < 10) {
+        document.getElementById('claim-result').innerHTML = `
+          <div class="result-message error">
+            ❌ Minimum 10 minutes requis
+          </div>
+        `;
+        btn.classList.remove('active');
+        minutes = 0;
+        updateProgress();
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<span>Processing...</span>';
+
+      try {
+        const res = await fetch('/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            userId: tg.initDataUnsafe.user.id,
+            username: tg.initDataUnsafe.user.username,
+            minutes 
+          })
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.message);
+        
+        document.getElementById('claim-result').innerHTML = `
+          <div class="result-message success">
+            ✅ ${data.message}<br>
+            <small>Balance mise à jour</small>
+          </div>
+        `;
+        
+        // Rafraîchir les données utilisateur
+        loadUserData();
+        
+      } catch (error) {
+        document.getElementById('claim-result').innerHTML = `
+          <div class="result-message error">
+            ❌ ${error.message}
+          </div>
+        `;
+      } finally {
+        btn.classList.remove('active');
+        btn.disabled = false;
+        btn.innerHTML = '<span>START CLAIM</span>';
+        minutes = 0;
+        updateProgress();
+      }
+    } else {
+      // Démarrage du timer
+      btn.classList.add('active');
+      minutes = 0;
+      updateProgress();
+      
+      timer = setInterval(() => {
+        if (minutes < maxMinutes) {
+          minutes++;
+          updateProgress();
+        }
+      }, 60000); // 1 minute
+    }
   });
 
-  // Gestion du claim spécifique
-  document.getElementById('specific-claim').addEventListener('click', async () => {
-    const taskId = document.getElementById('specific-task-id').value.trim() || null;
-    await processClaim(taskId);
-  });
+  function updateProgress() {
+    minutesDisplay.textContent = minutes;
+    const percentage = Math.min(100, (minutes / maxMinutes) * 100);
+    progressBar.style.width = `${percentage}%`;
+    progressBar.style.backgroundColor = `hsl(${percentage * 1.2}, 100%, 50%)`;
+    
+    if (minutes >= 10) {
+      btn.querySelector('span').textContent = `CLAIM ${minutes} POINTS`;
+    }
+  }
+}
+
+  function updateProgress() {
+    minutesDisplay.textContent = minutes;
+    const percentage = Math.min(100, (minutes / maxMinutes) * 100);
+    progressBar.style.width = `${percentage}%`;
+    progressBar.style.backgroundColor = `hsl(${percentage * 1.2}, 100%, 50%)`;
+    
+    if (minutes >= 10) {
+      btn.querySelector('span').textContent = `CLAIM ${minutes} POINTS`;
+    }
+  }
+}
 
   async function processClaim(taskId) {
     const resultDiv = document.getElementById('claimResult');

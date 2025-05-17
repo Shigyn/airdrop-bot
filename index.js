@@ -58,34 +58,87 @@ app.get('/tasks', async (req, res) => {
 
 app.post('/claim', async (req, res) => {
   try {
-    if (!sheetsInitialized) throw new Error('Service not initialized');
-    
-    const { userId, taskId } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "User ID is required" 
+    const { userId, minutes } = req.body;
+    const username = req.body.username || "inconnu";
+
+    // Validation
+    if (!userId) throw new Error("User ID requis");
+    if (minutes < 10 || minutes > 60) {
+      throw new Error("Durée invalide (10-60 minutes)");
+    }
+
+    const timestamp = new Date().toISOString();
+    const points = minutes;
+
+    // 1. Enregistrement dans Transactions
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.SHEET_ID,
+      range: "Transactions!A2:E",
+      valueInputOption: "USER_ENTERED",
+      resource: {
+        values: [[
+          userId,
+          points,
+          "AIRDROP",
+          timestamp,
+          `${minutes} minutes`
+        ]]
+      }
+    });
+
+    // 2. Mise à jour dans Users
+    const usersSheet = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.SHEET_ID,
+      range: "Users!A2:F"
+    });
+
+    const users = usersSheet.data.values || [];
+    let userRow = users.find(row => row[2] === userId);
+
+    if (userRow) {
+      // Mise à jour de l'utilisateur existant
+      const rowIndex = users.indexOf(userRow) + 2; // +2 car ligne 1 = header
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.SHEET_ID,
+        range: `Users!D${rowIndex}:E${rowIndex}`,
+        valueInputOption: "USER_ENTERED",
+        resource: {
+          values: [[
+            (parseInt(userRow[3]) + points, // Balance
+            timestamp                      // Last_Claim_Time
+          ]]
+        }
+      });
+    } else {
+      // Nouvel utilisateur
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.SHEET_ID,
+        range: "Users!A2:F",
+        valueInputOption: "USER_ENTERED",
+        resource: {
+          values: [[
+            timestamp,                      // Date_Inscription
+            username,                       // Username
+            userId,                         // user_id
+            points,                         // Balance
+            timestamp,                      // Last_Claim_Time
+            `REF-${Math.random().toString(36).substr(2, 8)}` // Referral_Code
+          ]]
+        }
       });
     }
 
-    let result;
-    if (taskId) {
-      result = await claimTaskForUser(userId, taskId);
-    } else {
-      result = await claimRandomTaskForUser(userId);
-    }
+    res.json({ 
+      success: true,
+      points: points,
+      message: `${points} points réclamés avec succès!`
+    });
 
-    if (!result.success) {
-      return res.status(400).json(result);
-    }
-
-    res.json(result);
   } catch (error) {
     console.error("Claim error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || "Server error" 
+    res.status(400).json({
+      success: false,
+      message: error.message
     });
   }
 });
