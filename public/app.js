@@ -34,7 +34,7 @@ async function loadUserData() {
     document.getElementById('lastClaim').textContent = 
       data.lastClaim ? new Date(data.lastClaim).toLocaleString('fr-FR') : "Jamais";
 
-    // Stocke localement le solde pour incrémentation visuelle
+    // Stocke le solde réel
     balance = parseFloat(data.balance) || 0;
     
     console.log('Données Sheets chargées:', {
@@ -56,11 +56,11 @@ function showClaim() {
     <div class="claim-container">
       <h2>Mining Session</h2>
       <div class="timer-display">
-        <span id="minutes">0.00</span> minutes (min. 10)
+        <span id="minutes">0.00</span>/60 minutes (min. 10)
       </div>
-      <button id="main-claim-btn" class="claim-button">
+      <button id="main-claim-btn" class="claim-button" disabled>
         <div class="progress-bar" id="progress-bar"></div>
-        <span>START MINING</span>
+        <span>MINING LOCKED (10min)</span>
       </button>
       <div id="main-claim-result"></div>
     </div>
@@ -68,122 +68,83 @@ function showClaim() {
 
   let minutes = 0;
   const maxMinutes = 60;
+  const minClaimMinutes = 10;
   const btn = document.getElementById('main-claim-btn');
   const resultDisplay = document.getElementById('main-claim-result');
-
-  btn.addEventListener('click', async () => {
-    if (miningSessionActive) {
-      // Arrêt et claim
-      stopMiningSession();
-      
-      if (minutes < 10) {
-        showResult('❌ Minimum 10 minutes requis', 'error');
-        resetMiningUI();
-        return;
-      }
-
-      await processClaim(minutes);
-      resetMiningUI();
-      
-      // Relance automatique après 3 secondes
-      setTimeout(startMiningSession, 3000);
-      
-    } else {
-      // Démarrage
-      startMiningSession();
-    }
-  });
+  let miningStartTime = null;
 
   function startMiningSession() {
-    miningSessionActive = true;
+    miningStartTime = Date.now();
     minutes = 0;
-    btn.classList.add('active');
+    btn.disabled = true;
     btn.innerHTML = '<span>MINING IN PROGRESS...</span>';
-    showResult('Session démarrée', 'info');
+    showResult('Session démarrée - 10min minimum', 'info');
 
     miningInterval = setInterval(() => {
-      minutes += 1 / 60; // équivalent à 0.0167 minutes = 1 seconde
-      updateMiningUI();
+      const elapsedMs = Date.now() - miningStartTime;
+      minutes = Math.min(maxMinutes, (elapsedMs / (1000 * 60)).toFixed(2));
       
-      if (minutes >= 10) {
-        btn.querySelector('span').textContent = `CLAIM ${minutes.toFixed(2)} POINTS`;
+      updateMiningUI();
+
+      // Active le bouton après 10 min
+      if (minutes >= minClaimMinutes && btn.disabled) {
+        btn.disabled = false;
+        btn.innerHTML = `<span>CLAIM ${minutes} POINTS</span>`;
       }
 
+      // Bloque à 60 min max
       if (minutes >= maxMinutes) {
-        stopMiningSession();
-        processClaim(minutes).then(() => {
-          setTimeout(startMiningSession, 3000);
-        });
+        clearInterval(miningInterval);
+        minutes = maxMinutes;
+        updateMiningUI();
+        btn.innerHTML = `<span>CLAIM ${maxMinutes} POINTS (MAX)</span>`;
       }
-    }, 1000); // chaque seconde
-
-    console.log('Mining démarré');
-    updateMiningUI();
-  }
-
-  function stopMiningSession() {
-    clearInterval(miningInterval);
-    miningSessionActive = false;
-    console.log(`Mining arrêté après ${minutes.toFixed(2)} minutes`);
+    }, 1000);
   }
 
   function updateMiningUI() {
-    document.getElementById('minutes').textContent = minutes.toFixed(2);
+    document.getElementById('minutes').textContent = minutes;
     const percentage = Math.min(100, (minutes / maxMinutes) * 100);
     const progressBar = document.getElementById('progress-bar');
     progressBar.style.width = `${percentage}%`;
     progressBar.style.backgroundColor = `hsl(${percentage * 1.2}, 100%, 50%)`;
-
-    // Met à jour le solde visuellement
-    const simulatedBalance = balance + minutes;
-    document.getElementById('balance').textContent = simulatedBalance.toFixed(2);
   }
 
-  function resetMiningUI() {
-    minutes = 0;
-    updateMiningUI();
-    btn.classList.remove('active');
-    btn.innerHTML = '<span>START MINING</span>';
-  }
-
-  async function processClaim(minutes) {
-    btn.disabled = true;
-    showResult('Envoi vers Sheets...', 'info');
+  btn.addEventListener('click', async () => {
+    if (minutes < minClaimMinutes) return;
     
+    btn.disabled = true;
+    const claimedPoints = minutes >= maxMinutes ? maxMinutes : minutes;
+    showResult(`Envoi de ${claimedPoints} points...`, 'info');
+
     try {
       const response = await fetch('/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           userId,
-          minutes,
+          minutes: claimedPoints,
           username: tg.initDataUnsafe.user?.username || 'Anonyme'
         })
       });
       
       const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Erreur');
       
-      if (!response.ok) throw new Error(data.message || 'Erreur Sheets');
+      showResult(`✅ ${claimedPoints} points claimés!`, 'success');
+      await loadUserData(); // Met à jour la balance réelle
       
-      showResult(`✅ ${data.message || `${minutes.toFixed(2)} points claimés!`}`, 'success');
-      console.log('Claim réussi:', data);
+      // Relance automatique après 5s
+      setTimeout(startMiningSession, 5000);
       
-      // Actualise les données
-      await loadUserData();
-      
-      return true;
     } catch (error) {
-      console.error('Erreur claim:', error);
       showResult(`❌ Échec: ${error.message}`, 'error');
-      return false;
-    } finally {
       btn.disabled = false;
     }
-  }
+  });
 
-  function showResult(message, type) {
-    resultDisplay.innerHTML = `<div class="result-${type}">${message}</div>`;
-  }
+  // Démarrer automatiquement au chargement
+  startMiningSession();
 }
 
 // Initialisation
