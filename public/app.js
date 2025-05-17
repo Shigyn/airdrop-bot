@@ -16,117 +16,86 @@ function initTelegramWebApp() {
   if (!userId) {
     throw new Error("User ID non trouvé");
   }
-  console.log(`Connecté en tant que userID: ${userId}`);
-}
-
-function showNotification(message, type = 'info') {
-  const notif = document.createElement('div');
-  notif.className = `notification ${type}`;
-  notif.textContent = message;
-  document.body.appendChild(notif);
-  
-  setTimeout(() => {
-    notif.remove();
-  }, 5000);
-}
-
-async function loadUserData() {
-  try {
-    const response = await fetch(`/user/${userId}`);
-    const data = await response.json();
-    
-    if (!response.ok) throw new Error(data.error || 'Erreur serveur');
-    
-    // Mise à jour de l'UI
-    document.getElementById('username').textContent = data.username || "Anonyme";
-    document.getElementById('balance').textContent = data.balance ?? "0";
-    document.getElementById('lastClaim').textContent = 
-      data.lastClaim ? new Date(data.lastClaim).toLocaleString('fr-FR') : "Jamais";
-
-    balance = parseFloat(data.balance) || 0;
-    
-    return data;
-  } catch (error) {
-    console.error("Erreur Sheets:", error);
-    showNotification(`❌ Erreur: ${error.message}`);
-    throw error;
-  }
 }
 
 function showClaim() {
   const content = document.getElementById('content');
   content.innerHTML = `
     <div class="claim-container">
-      <h2>Mining Session</h2>
-      <div class="timer-display">
-        <span id="minutes">0.00</span>/60 minutes (min. 10)
+      <div class="mining-display">
+        <div class="token-counter">
+          <span id="tokens">0.00</span>
+          <span class="token-label">tokens</span>
+        </div>
+        <button id="main-claim-btn" class="claim-button" disabled>
+          <span id="claim-text">MINING LOCKED (00:10:00)</span>
+        </button>
       </div>
-      <button id="main-claim-btn" class="claim-button" disabled>
-        <div class="progress-bar" id="progress-bar"></div>
-        <span>MINING LOCKED (10min)</span>
-      </button>
       <div id="main-claim-result"></div>
     </div>
   `;
 
-  let minutes = 0;
-  const maxMinutes = 60;
-  const minClaimMinutes = 10;
+  let tokens = 0;
+  const maxTime = 3600; // 1h en secondes
+  const minClaimTime = 600; // 10min en secondes
+  let remainingTime = maxTime;
   const btn = document.getElementById('main-claim-btn');
-  const resultDisplay = document.getElementById('main-claim-result');
+  const tokensDisplay = document.getElementById('tokens');
   let miningInterval;
 
-  function showResult(message, type) {
-    resultDisplay.innerHTML = `<div class="result-${type}">${message}</div>`;
+  function updateDisplay() {
+    tokensDisplay.textContent = tokens.toFixed(2);
+    
+    // Formatage du temps restant HH:MM:SS
+    const hours = Math.floor(remainingTime / 3600);
+    const minutes = Math.floor((remainingTime % 3600) / 60);
+    const seconds = remainingTime % 60;
+    const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    document.getElementById('claim-text').textContent = 
+      remainingTime > (maxTime - minClaimTime) 
+        ? `MINING LOCKED (${timeStr})` 
+        : `CLAIM NOW (${timeStr})`;
   }
 
   function startMiningSession() {
     const startTime = Date.now();
-    btn.disabled = true;
-    btn.innerHTML = '<span>MINING IN PROGRESS...</span>';
-    showResult('Session démarrée - 10min minimum', 'info');
-
+    
     miningInterval = setInterval(() => {
-      const elapsedMs = Date.now() - startTime;
-      minutes = Math.min(maxMinutes, (elapsedMs / (1000 * 60)).toFixed(2));
+      const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+      remainingTime = Math.max(0, maxTime - elapsedSeconds);
       
-      updateMiningUI();
-
-      if (minutes >= minClaimMinutes && btn.disabled) {
+      // 1 token par seconde (à ajuster selon ton taux)
+      tokens = Math.min(elapsedSeconds * 1, maxTime * 1); 
+      
+      // Active le bouton après 10 min
+      if (elapsedSeconds >= minClaimTime) {
         btn.disabled = false;
-        btn.innerHTML = `<span>CLAIM ${minutes} POINTS</span>`;
       }
 
-      if (minutes >= maxMinutes) {
+      updateDisplay();
+
+      if (remainingTime <= 0) {
         clearInterval(miningInterval);
-        minutes = maxMinutes;
-        btn.innerHTML = `<span>CLAIM ${maxMinutes} POINTS (MAX)</span>`;
+        btn.disabled = false;
+        document.getElementById('claim-text').textContent = 'CLAIM MAX TOKENS';
       }
     }, 1000);
   }
 
-  function updateMiningUI() {
-    document.getElementById('minutes').textContent = minutes;
-    const percentage = Math.min(100, (minutes / maxMinutes) * 100);
-    const progressBar = document.getElementById('progress-bar');
-    progressBar.style.width = `${percentage}%`;
-    progressBar.style.backgroundColor = `hsl(${percentage * 1.2}, 100%, 50%)`;
-  }
-
   btn.addEventListener('click', async () => {
-    if (minutes < minClaimMinutes) return;
+    if (remainingTime > (maxTime - minClaimTime)) return;
     
     btn.disabled = true;
-    const claimedPoints = minutes >= maxMinutes ? maxMinutes : minutes;
-    showResult(`Envoi de ${claimedPoints} points...`, 'info');
-
+    const claimAmount = tokens.toFixed(2);
+    
     try {
       const response = await fetch('/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           userId,
-          minutes: claimedPoints,
+          tokens: claimAmount,
           username: tg.initDataUnsafe.user?.username || 'Anonyme'
         })
       });
@@ -134,11 +103,14 @@ function showClaim() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Erreur');
       
-      showResult(`✅ ${claimedPoints} points claimés!`, 'success');
+      // Réinitialisation après claim
+      tokens = 0;
+      remainingTime = maxTime;
+      startMiningSession();
       await loadUserData();
-      setTimeout(startMiningSession, 5000);
+      
     } catch (error) {
-      showResult(`❌ Échec: ${error.message}`, 'error');
+      console.error('Claim error:', error);
       btn.disabled = false;
     }
   });
@@ -155,9 +127,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (error) {
     document.body.innerHTML = `
       <div class="error-container">
-        <h2>Erreur critique</h2>
+        <h2>Erreur</h2>
         <p>${error.message}</p>
-        <p>Veuillez recharger</p>
       </div>
     `;
   }
