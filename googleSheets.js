@@ -144,4 +144,5 @@ module.exports = {
   getReferralInfo: (code) => googleSheetsService.getReferralInfo(code),
   getAvailableTasks: () => googleSheetsService.getAvailableTasks(),
   getUserData: (userId) => googleSheetsService.getUserData(userId),
+  getSheetInstance: () => googleSheetsService.sheets
 };

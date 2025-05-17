@@ -6,11 +6,11 @@ const { bot, webhookCallback } = require('./bot');
 const { 
   initGoogleSheets, 
   readTasks, 
-  claimTaskForUser, 
+  getUserData,
   getReferralInfo,
-  claimRandomTaskForUser,
   getSheetInstance
 } = require('./googleSheets');
+const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -25,22 +25,36 @@ app.use((req, res, next) => {
   next();
 });
 
-// Init Google Sheets
-let sheetsInitialized = false;
-initGoogleSheets()
-  .then(() => {
-    sheetsInitialized = true;
-    console.log('Google Sheets initialized successfully');
-  })
-  .catch(err => {
-    console.error('Google Sheets init error:', err);
-    process.exit(1);
-  });
-
 const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = process.env.PUBLIC_URL ?
   `${process.env.PUBLIC_URL}${webhookSecretPath}` :
   `http://localhost:${PORT}${webhookSecretPath}`;
+
+let sheetsInitialized = false;
+
+async function initializeApp() {
+  try {
+    await initGoogleSheets();
+    sheetsInitialized = true;
+    console.log('Google Sheets initialized successfully');
+    
+    app.listen(PORT, () => {
+      console.log(`Server started on port ${PORT}`);
+      console.log(`Webhook URL: ${webhookUrl}`);
+
+      if (!process.env.PUBLIC_URL) {
+        console.log('Development mode, starting polling');
+        bot.launch().catch(err => {
+          console.error('Bot launch error:', err);
+          process.exit(1);
+        });
+      }
+    });
+  } catch (err) {
+    console.error('Initialization failed:', err);
+    process.exit(1);
+  }
+}
 
 // Telegram Webhook
 app.post(webhookSecretPath, webhookCallback);
@@ -60,31 +74,18 @@ app.get('/tasks', async (req, res) => {
 app.get('/user/:userId', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not initialized');
-    const sheets = getSheetInstance();
     
-    // Récupération des données utilisateur
-    const usersResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:F"
-    });
-
-    console.log("Tous les users:", usersResponse.data.values); // Log pour débogage
-
-    // Conversion en string pour la comparaison
-    const userIdToFind = req.params.userId.toString();
-    const user = (usersResponse.data.values || []).find(row => 
-      row[2].toString() === userIdToFind
-    );
-
+    const user = await getUserData(req.params.userId);
+    
     if (!user) {
-      console.log("User non trouvé. ID recherché:", userIdToFind);
+      console.log("User non trouvé. ID recherché:", req.params.userId);
       return res.status(404).json({ error: 'User not found' });
     }
 
     res.json({
-      username: user[1],  // Colonne B (Username)
-      balance: user[3],   // Colonne D (Balance)
-      lastClaim: user[4]  // Colonne E (Last_Claim_Time)
+      username: user[1],
+      balance: user[3],
+      lastClaim: user[4]
     });
 
   } catch (error) {
@@ -96,16 +97,12 @@ app.get('/user/:userId', async (req, res) => {
   }
 });
 
-const { getUserData } = require('./googleSheets');
-const { google } = require('googleapis');
-
 app.post('/claim', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not initialized');
 
     const { userId, minutes, username = "inconnu" } = req.body;
 
-    // Validation
     if (!userId) return res.status(400).json({ success: false, message: "User ID requis" });
     if (!minutes || minutes < 10 || minutes > 60) {
       return res.status(400).json({ success: false, message: "Durée invalide (10-60 minutes)" });
@@ -114,14 +111,12 @@ app.post('/claim', async (req, res) => {
     const timestamp = new Date().toISOString();
     const points = minutes;
 
-    // Récupérer Google Sheets API instance
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // 1. Enregistrer la transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
@@ -137,7 +132,6 @@ app.post('/claim', async (req, res) => {
       }
     });
 
-    // 2. Lire les utilisateurs existants
     const usersResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:F"
@@ -147,7 +141,6 @@ app.post('/claim', async (req, res) => {
     const userIndex = users.findIndex(row => row[2] === userId);
 
     if (userIndex >= 0) {
-      // Mise à jour utilisateur existant
       const rowNumber = userIndex + 2;
       const currentBalance = parseInt(users[userIndex][3]) || 0;
 
@@ -163,7 +156,6 @@ app.post('/claim', async (req, res) => {
         }
       });
     } else {
-      // Ajouter un nouvel utilisateur
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: "Users!A2:F",
@@ -240,21 +232,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
-  console.log(`Webhook URL: ${webhookUrl}`);
-
-  if (process.env.PUBLIC_URL) {
-    console.log('Production mode with webhook');
-  } else {
-    console.log('Development mode, starting polling');
-    bot.launch().catch(err => {
-      console.error('Bot launch error:', err);
-      process.exit(1);
-    });
-  }
-});
+// Initialisation de l'application
+initializeApp();
 
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err);
