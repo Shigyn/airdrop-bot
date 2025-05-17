@@ -103,87 +103,132 @@ function showClaim() {
     </div>
   `;
 
+  // Constantes
+  const MAX_SESSION_TIME = 3600; // 1h en secondes
+  const COOLDOWN_TIME = 600;    // 10min en secondes
+  const TOKENS_PER_SECOND = 0.000278; // ~1 token/heure (1/3600)
+
   let tokens = 0;
-  const maxSessionTime = 600;
-  let remainingTime = maxSessionTime;
+  let remainingCooldown = 0;
+  let sessionStartTime = 0;
+  let miningInterval;
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
 
+  // ===== FONCTIONS UTILITAIRES =====
   function saveState() {
     localStorage.setItem('miningState', JSON.stringify({
       tokens,
-      startTime: Date.now()
+      sessionStartTime,
+      lastUpdate: Date.now()
     }));
   }
 
   function resetMiningSession() {
     localStorage.removeItem('miningState');
     tokens = 0;
-    remainingTime = maxSessionTime;
+    sessionStartTime = Date.now();
+    remainingCooldown = 0;
     updateDisplay();
   }
 
   function loadState() {
-  const saved = localStorage.getItem('miningState');
-  if (saved) {
+    const saved = localStorage.getItem('miningState');
+    if (!saved) return false;
+
     const state = JSON.parse(saved);
-    const elapsed = Math.floor((Date.now() - state.startTime) / 1000);
-    
-    // Calcul précis
-    tokens = Math.min(elapsed * 0.0167, maxSessionTime * 0.0167); // 1 token/minute max
-    remainingTime = Math.max(0, maxSessionTime - elapsed);
-    
-    // Mise à jour immédiate de l'UI
-    updateDisplay();
-    btn.disabled = (remainingTime > 0);
-    
+    const now = Date.now();
+    const elapsedSinceLastUpdate = Math.floor((now - state.lastUpdate) / 1000);
+    const totalElapsed = Math.floor((now - state.sessionStartTime) / 1000);
+
+    // Calcul des tokens (max 1 token/heure)
+    tokens = Math.min(
+      state.tokens + (elapsedSinceLastUpdate * TOKENS_PER_SECOND),
+      MAX_SESSION_TIME * TOKENS_PER_SECOND
+    );
+
+    // Gestion du cooldown
+    if (totalElapsed >= MAX_SESSION_TIME) {
+      const timeSinceSessionEnd = totalElapsed - MAX_SESSION_TIME;
+      remainingCooldown = Math.max(0, COOLDOWN_TIME - timeSinceSessionEnd);
+    }
+
+    sessionStartTime = state.sessionStartTime;
     return true;
   }
-  return false;
-}
 
   function updateDisplay() {
-    tokensDisplay.textContent = `${tokens.toFixed(2)} tokens`;
+    // Affichage des tokens
+    tokensDisplay.textContent = tokens.toFixed(4);
+
+    // Calcul du temps à afficher
+    const totalElapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+    let displayTime;
     
-    const minutes = Math.floor(remainingTime / 60);
-    const seconds = remainingTime % 60;
+    if (totalElapsed < MAX_SESSION_TIME) {
+      displayTime = MAX_SESSION_TIME - totalElapsed; // Temps restant minage
+    } else {
+      displayTime = remainingCooldown; // Temps restant cooldown
+    }
+
+    const minutes = Math.floor(displayTime / 60);
+    const seconds = displayTime % 60;
     const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    
+
+    // Mise à jour du bouton
     document.getElementById('claim-text').textContent = 
-      remainingTime > 0 
+      (remainingCooldown > 0 || totalElapsed < MAX_SESSION_TIME)
         ? `MINING LOCKED (00:${timeStr})` 
-        : `CLAIM ${tokens.toFixed(2)} TOKENS`;
+        : `CLAIM ${tokens.toFixed(4)} TOKENS`;
   }
 
   function startMiningSession() {
+    // Chargement de l'état existant
     const hasSavedState = loadState();
     
+    // Nouvelle session si aucun état sauvegardé
     if (!hasSavedState) {
-      tokens = 0;
-      remainingTime = maxSessionTime;
+      sessionStartTime = Date.now();
       saveState();
     }
 
+    // Nettoyage de l'intervalle précédent
     clearInterval(miningInterval);
     
+    // Lancement du nouveau timer
     miningInterval = setInterval(() => {
-      remainingTime = Math.max(0, remainingTime - 1);
-      tokens += 0.0167;
-      
-      if (remainingTime <= 0) {
-        btn.disabled = false;
+      const now = Date.now();
+      const totalElapsed = Math.floor((now - sessionStartTime) / 1000);
+
+      // Pendant la session de minage
+      if (totalElapsed < MAX_SESSION_TIME) {
+        tokens = Math.min(
+          totalElapsed * TOKENS_PER_SECOND,
+          MAX_SESSION_TIME * TOKENS_PER_SECOND
+        );
+        remainingCooldown = 0;
+      } 
+      // Pendant le cooldown
+      else {
+        const timeSinceSessionEnd = totalElapsed - MAX_SESSION_TIME;
+        remainingCooldown = Math.max(0, COOLDOWN_TIME - timeSinceSessionEnd);
       }
 
+      // Activation/désactivation du bouton
+      btn.disabled = (remainingCooldown > 0 || totalElapsed < MAX_SESSION_TIME);
+      
       updateDisplay();
       saveState();
     }, 1000);
   }
 
+  // ===== GESTION DU CLAIM =====
   btn.addEventListener('click', async () => {
-    if (remainingTime > 0) return;
+    const totalElapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+    if (totalElapsed < MAX_SESSION_TIME || remainingCooldown > 0) return;
     
     btn.disabled = true;
-    const claimAmount = tokens.toFixed(2);
+    const claimAmount = tokens.toFixed(4);
     
     try {
       const response = await fetch('/claim', {
@@ -209,6 +254,7 @@ function showClaim() {
     }
   });
 
+  // ===== LANCEMENT INITIAL =====
   startMiningSession();
 }
 
