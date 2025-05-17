@@ -18,6 +18,27 @@ function initTelegramWebApp() {
   }
 }
 
+async function loadUserData() {
+  try {
+    const response = await fetch(`/user/${userId}`);
+    const data = await response.json();
+    
+    if (!response.ok) throw new Error(data.error || 'Erreur serveur');
+    
+    // Mise à jour de l'UI
+    document.getElementById('username').textContent = data.username || "Anonyme";
+    document.getElementById('balance').textContent = data.balance ?? "0";
+    document.getElementById('lastClaim').textContent = 
+      data.lastClaim ? new Date(data.lastClaim).toLocaleString('fr-FR') : "Jamais";
+
+    balance = parseFloat(data.balance) || 0;
+    return data;
+  } catch (error) {
+    console.error("Erreur:", error);
+    throw error;
+  }
+}
+
 function showClaim() {
   const content = document.getElementById('content');
   content.innerHTML = `
