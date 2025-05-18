@@ -237,12 +237,35 @@ function showClaim() {
 // INITIALISATION
 // ==============================================
 
+// Navigation et structure de base
+document.body.innerHTML += `
+  <nav class="app-nav">
+    <button id="nav-claim" class="nav-button active">Mining</button>
+    <button id="nav-tasks" class="nav-button">Tasks</button>
+  </nav>
+  <div id="content"></div>
+`;
+
+// Gestion des clics sur les boutons de navigation
+document.getElementById('nav-claim').addEventListener('click', function() {
+  showClaim();
+  document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+  this.classList.add('active');
+});
+
+document.getElementById('nav-tasks').addEventListener('click', function() {
+  TasksPage.showTasksPage();
+  document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+  this.classList.add('active');
+});
+// ------------------------------------------------- //
+
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     initTelegramWebApp();
     initParticles();
     await loadUserData();
-    showClaim();
+    showClaim(); // Affiche la page Mining par défaut
   } catch (error) {
     document.body.innerHTML = `
       <div class="error-container">
