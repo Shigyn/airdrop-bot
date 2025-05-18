@@ -70,27 +70,28 @@ function initTelegramWebApp() {
 
 async function loadUserData() {
   try {
-    const response = await fetch(`/user/${userId}`);
-    if (!response.ok) throw new Error('Network response was not ok');
+    // Utilisez l'URL complet de votre backend
+    const backendUrl = process.env.PUBLIC_URL || 'https://airdrop-bot.onrender.com';
+    const response = await fetch(`${backendUrl}/user/${userId}`);
+    
+    console.log("Réponse du serveur:", response.status); // Debug
+    
+    if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
     
     const data = await response.json();
+    console.log("Données utilisateur:", data); // Debug
     
-    // Debug logging
-    console.log("Données reçues:", data);
-    
-    // Mise à jour de l'UI avec vérification des données
     document.getElementById('username').textContent = data.username || "Anonyme";
-    document.getElementById('balance').textContent = data.balance !== undefined ? data.balance : "--";
+    document.getElementById('balance').textContent = data.balance ?? "--";
     document.getElementById('lastClaim').textContent = data.lastClaim ? 
       new Date(data.lastClaim).toLocaleString('fr-FR') : "--";
 
-    balance = parseFloat(data.balance) || 0;
     return data;
   } catch (error) {
-    console.error("Erreur chargement données:", error);
-    // Mettre à jour l'UI avec des valeurs par défaut en cas d'erreur
-    document.getElementById('balance').textContent = "--";
-    document.getElementById('lastClaim').textContent = "--";
+    console.error("ECHEC chargement données:", error);
+    // Valeurs par défaut
+    document.getElementById('balance').textContent = "0";
+    document.getElementById('lastClaim').textContent = "Jamais";
     throw error;
   }
 }

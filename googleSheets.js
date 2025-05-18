@@ -110,18 +110,17 @@ class GoogleSheetsService {
     return this.claimTask(userId, randomTask.id);
   }
 
-  async getUserData(userId) {
-    try {
-      const res = await this.sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Users!A2:F"
-      });
-      return (res.data.values || []).find(row => row[2] === userId);
-    } catch (error) {
-      console.error('Error getting user data:', error);
-      throw error;
-    }
-  }
+  async function getUserData(userId) {
+  const sheets = await getSheetInstance();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: "Users!A2:F"
+  });
+  
+  console.log("Toutes les données Users:", response.data.values); // Debug
+  
+  return response.data.values.find(row => row[2] === userId);
+}
 
   async getReferralInfo(code) {
     // Stub for now — replace with real referral logic if needed
