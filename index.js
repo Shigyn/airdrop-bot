@@ -119,24 +119,30 @@ app.post('/claim', async (req, res) => {
     const { userId, tokens, deviceId, username } = req.body;
     const session = activeSessions.get(userId);
 
-    // Vérification robuste de la session
+    // Vérification plus robuste de la session
     if (!session || session.deviceId !== deviceId) {
+      console.log(`Session invalide pour ${userId}. Session:`, session);
       return res.status(403).json({ 
         error: "INVALID_SESSION",
-        message: "Session invalide. Redémarrez le minage."
+        message: "Votre session a expiré. Veuillez redémarrer le minage."
       });
     }
 
+    // Convertir les tokens en points (entier)
+    const points = Math.floor(parseFloat(tokens));
+    if (isNaN(points) || points <= 0) {
+      return res.status(400).json({ error: "TOKENS_INVALID" });
+    }
+
+    // Enregistrement dans Google Sheets
+    const timestamp = new Date().toISOString();
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Enregistrement de la transaction
-    const timestamp = new Date().toISOString();
-    const points = Math.floor(parseFloat(tokens));
-    
+    // Ajout de la transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
@@ -195,30 +201,15 @@ app.post('/claim', async (req, res) => {
       });
     }
 
-    // Conserve les infos de session pour le reload
-    const sessionInfo = {
-      startTime: session.startTime,
+    // Réinitialiser la session mais garder le deviceId
+    activeSessions.set(userId, {
+      startTime: Date.now(),
       deviceId: session.deviceId,
-      tokens: 0 // Réinitialise les tokens après claim
-    };
-    activeSessions.set(userId, sessionInfo);
+      tokens: 0
+    });
 
     res.json({ 
-      success: true, 
-      points,
-      balance: newBalance,
-      sessionStart: session.startTime
-    });
-
-  } catch (error) {
-    console.error("Claim error:", error);
-    res.status(500).json({ 
-      error: "CLAIM_FAILED",
-      message: "Erreur lors du traitement. Veuillez réessayer.",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
+      success:
 
 // [TELEGRAM] Webhook
 app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, webhookCallback);

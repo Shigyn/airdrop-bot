@@ -1,6 +1,3 @@
-let tg = window.Telegram?.WebApp;
-let userId = tg?.initDataUnsafe?.user?.id?.toString() || '';
-
 const ReferralPage = {
   showReferralPage: async function() {
     const content = document.getElementById('content');
@@ -37,32 +34,35 @@ const ReferralPage = {
     `;
 
     try {
-      // Configuration de la requête avec les headers Telegram
+      // Vérifiez que Telegram WebApp est initialisé
+      if (!window.Telegram?.WebApp?.initData) {
+        throw new Error("Telegram WebApp non initialisé");
+      }
+
       const response = await fetch('/get-referrals', {
         headers: {
-          'Telegram-Data': tg.initData || '',
-          'Content-Type': 'application/json'
+          'Telegram-Data': window.Telegram.WebApp.initData
         }
       });
-      
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erreur lors du chargement');
+        const error = await response.json();
+        throw new Error(error.message || 'Erreur API');
       }
 
       const data = await response.json();
       
-      // Génération du lien de parrainage
-      const referralLink = `https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}?start=ref-${userId.slice(0, 8)}`;
+      // Mettez à jour l'UI
+      const user = window.Telegram.WebApp.initDataUnsafe.user;
+      const referralLink = `https://t.me/${user?.username || 'your_bot'}?start=ref-${user?.id?.toString().slice(0, 8)}`;
       document.getElementById('referral-link').value = referralLink;
       
-      // Mise à jour des statistiques
       document.getElementById('referral-count').textContent = data.referralCount || 0;
       document.getElementById('referral-earnings').textContent = data.earnedTokens || 0;
 
-      // Affichage de la liste des filleuls
+      // Remplir la liste des filleuls
       const listContainer = document.getElementById('referral-list');
-      if (data.referrals && data.referrals.length > 0) {
+      if (data.referrals?.length > 0) {
         listContainer.innerHTML = data.referrals.map(ref => `
           <div class="referral-item">
             <span>${ref.username || 'Utilisateur'} - ${new Date(ref.date).toLocaleDateString('fr-FR')}</span>
@@ -91,11 +91,10 @@ const ReferralPage = {
       console.error("Referral error:", error);
       document.getElementById('referral-list').innerHTML = `
         <div class="error-message">
-          ${error.message || 'Erreur de chargement des données'}
+          ${error.message || 'Erreur de chargement'}
+          <button onclick="ReferralPage.showReferralPage()">Réessayer</button>
         </div>
       `;
     }
   }
 };
-
-window.ReferralPage = ReferralPage;
