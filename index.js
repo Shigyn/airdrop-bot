@@ -63,35 +63,31 @@ app.post('/sync-session', (req, res) => {
 
 // [SESSION] Nouvelle session
 app.post('/start-session', (req, res) => {
-  const { userId, deviceId } = req.body;
-  
-  if (activeSessions.has(userId)) {
-    const existing = activeSessions.get(userId);
-    if (existing.deviceId !== deviceId) {
-      return res.status(400).json({ 
-        error: "OTHER_DEVICE_ACTIVE",
-        sessionStart: existing.startTime
-      });
+    const { userId, deviceId } = req.body;
+    const existingSession = activeSessions.get(userId);
+
+    // Si session existe MAIS est inactive (dernière activité > 2 min)
+    if (existingSession && (new Date() - existingSession.lastActive > 120000)) {
+        console.log(`Remplacement session inactive pour ${userId}`);
+        // On écrase sans erreur
+    } 
+    // Si session active sur autre appareil → erreur
+    else if (existingSession && existingSession.deviceId !== deviceId) {
+        return res.status(400).json({ 
+            error: "OTHER_DEVICE_ACTIVE",
+            sessionStart: existingSession.startTime
+        });
     }
-    return res.json({ 
-      exists: true,
-      sessionStart: existing.startTime,
-      tokens: existing.tokens
+
+    // Crée/réinitialise la session
+    activeSessions.set(userId, {
+        startTime: new Date(),
+        lastActive: new Date(),
+        deviceId,
+        tokens: 0
     });
-  }
-  
-  const newSession = {
-    startTime: new Date(),
-    lastActive: new Date(),
-    deviceId,
-    tokens: 0
-  };
-  
-  activeSessions.set(userId, newSession);
-  res.json({ 
-    success: true,
-    sessionStart: newSession.startTime
-  });
+
+    res.json({ success: true });
 });
 
 app.post('/update-session', (req, res) => {
@@ -254,13 +250,15 @@ app.get('/health', (req, res) => {
 
 // [MAINTENANCE]
 setInterval(() => {
-  const now = new Date();
-  for (const [userId, session] of activeSessions.entries()) {
-    if ((now - session.lastActive) > 3600000) {
-      activeSessions.delete(userId);
+    const now = new Date();
+    for (const [userId, session] of activeSessions.entries()) {
+        // Si inactif depuis 5 min (300 000 ms) au lieu de 1h
+        if ((now - session.lastActive) > 300000) { 
+            activeSessions.delete(userId);
+            console.log(`Session expirée pour ${userId}`);
+        }
     }
-  }
-}, 300000);
+}, 300000); // Vérifie toutes les 5 min
 
 process.on('unhandledRejection', err => console.error('Rejection:', err));
 process.on('uncaughtException', err => {
