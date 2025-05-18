@@ -323,7 +323,7 @@ app.get('/get-referrals', async (req, res) => {
     res.json({
       referralCode,
       referralCount: userReferrals.length,
-      earnedTokens,
+      earnedTokens: userReferrals.reduce((sum, row) => sum + (parseInt(row[1] || 0), 0), // Correction ici
       referrals: userReferrals.map(row => ({
         userId: row[2],
         username: row[3] || 'Anonyme',
@@ -336,8 +336,7 @@ app.get('/get-referrals', async (req, res) => {
     console.error("Referral error:", error);
     res.status(500).json({ 
       error: "SERVER_ERROR",
-      message: "Erreur lors de la récupération des données",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: error.message || "Erreur serveur"
     });
   }
 });

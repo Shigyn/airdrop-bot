@@ -34,9 +34,8 @@ const ReferralPage = {
     `;
 
     try {
-      // Vérifiez que Telegram WebApp est initialisé
       if (!window.Telegram?.WebApp?.initData) {
-        throw new Error("Telegram WebApp non initialisé");
+        throw new Error("Veuillez ouvrir via Telegram");
       }
 
       const response = await fetch('/get-referrals', {
@@ -46,21 +45,21 @@ const ReferralPage = {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Erreur API');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erreur API');
       }
 
       const data = await response.json();
       
-      // Mettez à jour l'UI
+      if (!data) throw new Error('Aucune donnée reçue');
+
       const user = window.Telegram.WebApp.initDataUnsafe.user;
-      const referralLink = `https://t.me/${user?.username || 'your_bot'}?start=ref-${user?.id?.toString().slice(0, 8)}`;
+      const referralLink = `https://t.me/${user?.username || 'your_bot'}?start=ref_${user?.id}`;
       document.getElementById('referral-link').value = referralLink;
       
-      document.getElementById('referral-count').textContent = data.referralCount || 0;
-      document.getElementById('referral-earnings').textContent = data.earnedTokens || 0;
+      document.getElementById('referral-count').textContent = data.referralCount ?? 0;
+      document.getElementById('referral-earnings').textContent = data.earnedTokens ?? 0;
 
-      // Remplir la liste des filleuls
       const listContainer = document.getElementById('referral-list');
       if (data.referrals?.length > 0) {
         listContainer.innerHTML = data.referrals.map(ref => `
@@ -73,13 +72,11 @@ const ReferralPage = {
         listContainer.innerHTML = '<p class="no-referrals">Aucun filleul pour le moment</p>';
       }
 
-      // Gestion du bouton de copie
       document.getElementById('copy-referral-btn').addEventListener('click', () => {
         const linkInput = document.getElementById('referral-link');
         linkInput.select();
         document.execCommand('copy');
         
-        // Feedback visuel
         const btn = document.getElementById('copy-referral-btn');
         btn.innerHTML = '<span class="copy-icon">✓</span>';
         setTimeout(() => {
@@ -92,9 +89,11 @@ const ReferralPage = {
       document.getElementById('referral-list').innerHTML = `
         <div class="error-message">
           ${error.message || 'Erreur de chargement'}
-          <button onclick="ReferralPage.showReferralPage()">Réessayer</button>
+          <button onclick="ReferralPage.showReferralPage()" class="retry-button">Réessayer</button>
         </div>
       `;
     }
   }
 };
+
+window.ReferralPage = ReferralPage;

@@ -176,7 +176,10 @@ async function handleClaim() {
   try {
     const response = await fetch('/claim', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Telegram-Data': window.Telegram.WebApp.initData || '' // Ajout crucial
+      },
       body: JSON.stringify({ 
         userId,
         deviceId,
@@ -185,7 +188,11 @@ async function handleClaim() {
       })
     });
 
-    if (!response.ok) throw new Error('Claim failed');
+    const data = await response.json(); // Ajout de cette ligne
+    
+    if (!response.ok) {
+      throw new Error(data.message || 'Claim failed');
+    }
 
     localStorage.removeItem('miningSession');
     sessionStartTime = Date.now();
@@ -199,7 +206,7 @@ async function handleClaim() {
   } catch (error) {
     console.error("Claim error:", error);
     btn.disabled = false;
-    btn.innerHTML = '<span id="claim-text">ERREUR - RETRY</span>';
+    btn.innerHTML = `<span id="claim-text">ERREUR - ${error.message || 'RETRY'}</span>`;
   }
 }
 
