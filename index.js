@@ -274,6 +274,7 @@ app.get('/health', (req, res) => {
 });
 
 // [REFERRAL] Récupération des infos de parrainage
+// [REFERRAL] Récupération des infos de parrainage
 app.get('/get-referrals', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not ready');
@@ -316,14 +317,14 @@ app.get('/get-referrals', async (req, res) => {
     const referralCode = userData[5] || '';
     const allReferrals = referrals.data.values || [];
     const userReferrals = allReferrals.filter(row => row[0] === referralCode);
-    
-    // Correction ici - problème de parenthèse dans le reduce
-    const earnedTokens = userReferrals.reduce((sum, row) => sum + (parseInt(row[1]) || 0), 0);
+    const earnedTokens = userReferrals.reduce((sum, row) => {
+      return sum + (parseInt(row[1]) || 0;
+    }, 0);
 
     res.json({
       referralCode,
       referralCount: userReferrals.length,
-      earnedTokens: userReferrals.reduce((sum, row) => sum + (parseInt(row[1] || 0), 0), // Correction ici
+      earnedTokens,
       referrals: userReferrals.map(row => ({
         userId: row[2],
         username: row[3] || 'Anonyme',
@@ -336,7 +337,8 @@ app.get('/get-referrals', async (req, res) => {
     console.error("Referral error:", error);
     res.status(500).json({ 
       error: "SERVER_ERROR",
-      message: error.message || "Erreur serveur"
+      message: "Erreur lors de la récupération des données",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
