@@ -1,3 +1,6 @@
+let tg = window.Telegram?.WebApp;
+let userId = tg?.initDataUnsafe?.user?.id?.toString() || '';
+
 const ReferralPage = {
   showReferralPage: async function() {
     const content = document.getElementById('content');

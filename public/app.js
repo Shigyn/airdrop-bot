@@ -281,12 +281,7 @@ function setupNavigation() {
   });
 
   navReferral.addEventListener('click', function() {
-    setActiveButton(this);
-  });
-}
-
-document.getElementById('nav-referral').addEventListener('click', function() {
-    ReferralPage.showReferralPage();
+    ReferralPage.showReferralPage(); // Déplacez cette ligne ici
     setActiveButton(this);
   });
 }
