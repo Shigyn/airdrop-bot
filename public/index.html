@@ -33,20 +33,17 @@
       <div id="content" class="dynamic-content"></div>
     </main>
 
-    <nav class="bottom-nav">
-      <button id="btn-tasks" class="nav-btn">
-        <span class="nav-icon">📋</span>
-        <span class="nav-label">Tasks</span>
-      </button>
-      <button id="btn-claim" class="nav-btn active">
-        <span class="nav-icon">⚡</span>
-        <span class="nav-label">Claim</span>
-      </button>
-      <button id="btn-referral" class="nav-btn">
-        <span class="nav-icon">👥</span>
-        <span class="nav-label">Referral</span>
-      </button>
-    </nav>
+    <body>
+  <nav class="app-nav">
+    <button id="nav-claim" class="nav-button active">Mining</button>
+    <button id="nav-tasks" class="nav-button">Tasks</button>
+    <button id="nav-referral" class="nav-button">Referral</button>
+  </nav>
+  <div id="content"></div>
+
+  <script src="TasksPage.js"></script>
+  <script src="app.js"></script>
+</body>
     
     <div id="notification" class="notification hidden"></div>
   </div>
