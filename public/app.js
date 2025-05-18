@@ -104,9 +104,9 @@ function showClaim() {
   `;
 
   // Configuration
-  const MIN_CLAIM_TIME = 600;
-  const MAX_SESSION_TIME = 3600;
-  const TOKENS_PER_SECOND = 1/60;
+  const MIN_CLAIM_TIME = 600;     // 10min
+  const MAX_SESSION_TIME = 3600;  // 1h
+  const TOKENS_PER_SECOND = 1/60; // 1 token/minute
 
   // État
   let tokens = 0;
@@ -115,50 +115,72 @@ function showClaim() {
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
 
-  // Vérifie l'état côté serveur
-  async function checkServerSession() {
-    try {
-      const response = await fetch(`/check-session/${userId}`);
-      const data = await response.json();
-      
-      if (data.activeSession) {
-        sessionStartTime = new Date(data.sessionStart).getTime();
-        return true;
-      }
-    } catch (e) {
-      console.error("Check session error:", e);
-    }
-    return false;
-  }
+  // ID unique par appareil
+  const deviceId = tg.initDataUnsafe?.query_id || `web_${Math.random().toString(36).substr(2, 9)}`;
 
-  async function startMining() {
-    // Vérifie d'abord si une session existe déjà
-    const hasActiveSession = await checkServerSession();
-    
-    if (!hasActiveSession) {
-      sessionStartTime = Date.now();
-      // Notifie le serveur du démarrage
-      await fetch('/start-session', {
+  // Synchronisation avec le serveur
+  async function syncWithServer() {
+    try {
+      const response = await fetch('/sync-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, startTime: new Date().toISOString() })
+        body: JSON.stringify({ userId, deviceId })
       });
-    }
+      const data = await response.json();
 
-    updateDisplay();
-    miningInterval = setInterval(updateDisplay, 1000);
+      if (data.status === 'other_device_active') {
+        alert("⚠️ Une session est déjà active sur un autre appareil !");
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error("Sync error:", error);
+      return true; // Continue en mode dégradé
+    }
   }
 
-  async function updateDisplay() {
+  async function startNewSession() {
+    try {
+      const response = await fetch('/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, deviceId })
+      });
+      
+      if (!response.ok) throw new Error("Failed to start session");
+      
+      sessionStartTime = Date.now();
+      tokens = 0;
+      startMiningTimer();
+    } catch (error) {
+      console.error("Session error:", error);
+    }
+  }
+
+  function startMiningTimer() {
+    clearInterval(miningInterval);
+    
+    miningInterval = setInterval(() => {
+      const now = Date.now();
+      const elapsed = (now - sessionStartTime) / 1000;
+      
+      tokens = Math.min(elapsed * TOKENS_PER_SECOND, MAX_SESSION_TIME * TOKENS_PER_SECOND);
+      updateDisplay();
+
+      if (elapsed >= MAX_SESSION_TIME) {
+        clearInterval(miningInterval);
+      }
+    }, 1000);
+  }
+
+  function updateDisplay() {
     const now = Date.now();
     const elapsed = (now - sessionStartTime) / 1000;
     const remainingTime = Math.max(0, MIN_CLAIM_TIME - elapsed);
 
-    tokens = Math.min(elapsed * TOKENS_PER_SECOND, MAX_SESSION_TIME * TOKENS_PER_SECOND);
     tokensDisplay.textContent = tokens.toFixed(2);
 
     if (elapsed >= MAX_SESSION_TIME) {
-      clearInterval(miningInterval);
       document.getElementById('claim-text').textContent = "SESSION EXPIRED";
       btn.disabled = true;
     } 
@@ -183,8 +205,8 @@ function showClaim() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           userId,
+          deviceId,
           tokens: tokens.toFixed(2),
-          startTime: new Date(sessionStartTime).toISOString(),
           username: tg.initDataUnsafe.user?.username || 'Anonyme'
         })
       });
@@ -194,20 +216,23 @@ function showClaim() {
       // Reset après claim
       await fetch('/end-session', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })
       });
       
-      startMining(); // Nouvelle session
+      startNewSession();
       await loadUserData();
       
     } catch (error) {
-      console.error(error);
+      console.error("Claim error:", error);
       btn.disabled = false;
     }
   });
 
   // DÉMARRAGE
-  startMining();
+  syncWithServer().then((canContinue) => {
+    if (canContinue) startNewSession();
+  });
 }
 
 // ==============================================

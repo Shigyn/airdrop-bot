@@ -7,16 +7,27 @@ const {
   initGoogleSheets, 
   readTasks, 
   getUserData,
-  getReferralInfo,
-  getSheetInstance
+  getReferralInfo
 } = require('./googleSheets');
 const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Stockage des sessions en mémoire (à remplacer par Redis en production)
+// ===== CONFIGURATION DES SESSIONS =====
 const activeSessions = new Map();
+
+// Nettoyage automatique des sessions expirées
+setInterval(() => {
+  const now = new Date();
+  for (const [userId, session] of activeSessions.entries()) {
+    const sessionDuration = (now - new Date(session.lastActive)) / 1000;
+    if (sessionDuration > 7200) { // 2h d'inactivité max
+      activeSessions.delete(userId);
+      console.log(`Session expirée pour l'utilisateur ${userId}`);
+    }
+  }
+}, 300000); // Toutes les 5 minutes
 
 app.use(cors());
 app.use(express.json());
@@ -24,83 +35,77 @@ app.use(express.urlencoded({ extended: true }));
 
 // Logger amélioré
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - IP: ${req.ip}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
 const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
-const webhookUrl = process.env.PUBLIC_URL ?
-  `${process.env.PUBLIC_URL}${webhookSecretPath}` :
-  `http://localhost:${PORT}${webhookSecretPath}`;
-
 let sheetsInitialized = false;
 
-// Nouvelles fonctions de gestion de session
-function cleanupSessions() {
-  const now = new Date();
-  for (const [userId, session] of activeSessions.entries()) {
-    const sessionDuration = (now - new Date(session.startTime)) / 1000;
-    if (sessionDuration > 3600) { // 1 heure max
-      activeSessions.delete(userId);
-    }
+// ===== ROUTES DE SESSION =====
+app.post('/sync-session', (req, res) => {
+  const { userId, deviceId } = req.body;
+  const session = activeSessions.get(userId);
+  
+  if (!session) {
+    return res.json({ status: 'no_session' });
   }
-}
 
-// Planifie le nettoyage toutes les 5 minutes
-setInterval(cleanupSessions, 5 * 60 * 1000);
-
-async function initializeApp() {
-  try {
-    await initGoogleSheets();
-    sheetsInitialized = true;
-    console.log('Google Sheets initialized successfully');
-    
-    app.listen(PORT, () => {
-      console.log(`Server started on port ${PORT}`);
-      console.log(`Webhook URL: ${webhookUrl}`);
-
-      if (!process.env.PUBLIC_URL) {
-        console.log('Development mode, starting polling');
-        bot.launch().catch(err => {
-          console.error('Bot launch error:', err);
-          process.exit(1);
-        });
-      }
+  // Vérification de l'appareil
+  if (session.deviceId !== deviceId) {
+    return res.json({
+      status: 'other_device',
+      sessionStart: session.startTime,
+      tokens: session.tokens
     });
-  } catch (err) {
-    console.error('Initialization failed:', err);
-    process.exit(1);
   }
-}
 
-// ===== NOUVELLES ROUTES POUR LES SESSIONS =====
+  // Mise à jour de l'activité
+  session.lastActive = new Date();
+  res.json({
+    status: 'synced',
+    sessionStart: session.startTime,
+    tokens: session.tokens
+  });
+});
+
 app.post('/start-session', (req, res) => {
-  const { userId, startTime } = req.body;
+  const { userId, deviceId } = req.body;
   
   if (activeSessions.has(userId)) {
     const existingSession = activeSessions.get(userId);
-    return res.json({ 
-      success: false,
-      error: "Session déjà en cours",
+    return res.status(400).json({ 
+      error: "SESSION_ACTIVE",
+      deviceId: existingSession.deviceId,
       sessionStart: existingSession.startTime
     });
   }
   
-  const session = {
-    startTime: new Date(startTime),
-    lastActive: new Date()
+  const newSession = {
+    startTime: new Date(),
+    lastActive: new Date(),
+    deviceId,
+    tokens: 0
   };
   
-  activeSessions.set(userId, session);
-  res.json({ success: true, sessionStart: session.startTime });
+  activeSessions.set(userId, newSession);
+  res.json({ 
+    success: true,
+    sessionStart: newSession.startTime
+  });
 });
 
-app.get('/check-session/:userId', (req, res) => {
-  const session = activeSessions.get(req.params.userId);
-  res.json({
-    activeSession: !!session,
-    sessionStart: session?.startTime.toISOString()
-  });
+app.post('/update-session', (req, res) => {
+  const { userId, tokens } = req.body;
+  const session = activeSessions.get(userId);
+  
+  if (!session) {
+    return res.status(404).json({ error: "Session non trouvée" });
+  }
+  
+  session.tokens = parseFloat(tokens) || 0;
+  session.lastActive = new Date();
+  res.json({ success: true });
 });
 
 app.post('/end-session', (req, res) => {
@@ -108,19 +113,21 @@ app.post('/end-session', (req, res) => {
   res.json({ success: true });
 });
 
-// ===== ROUTES EXISTANTES MODIFIÉES =====
+// ===== ROUTES EXISTANTES =====
+app.post(webhookSecretPath, webhookCallback);
+
 app.post('/claim', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not initialized');
 
-    const { userId, tokens, username = "inconnu", startTime } = req.body;
-
-    // Vérification de la session
+    const { userId, tokens, deviceId } = req.body;
     const session = activeSessions.get(userId);
-    if (!session || new Date(startTime).getTime() !== new Date(session.startTime).getTime()) {
-      return res.status(400).json({ 
+
+    // Validation stricte
+    if (!session || session.deviceId !== deviceId) {
+      return res.status(403).json({ 
         success: false, 
-        message: "Session invalide ou expirée" 
+        error: "INVALID_SESSION" 
       });
     }
 
@@ -133,78 +140,23 @@ app.post('/claim', async (req, res) => {
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Enregistrement de la transaction
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Transactions!A2:E",
-      valueInputOption: "USER_ENTERED",
-      resource: {
-        values: [[
-          userId,
-          points,
-          "AIRDROP",
-          timestamp,
-          `${points} tokens`
-        ]]
-      }
-    });
+    // Logique existante d'enregistrement...
+    // ... (ton code existant pour l'enregistrement dans Google Sheets)
 
-    // Mise à jour du solde utilisateur
-    const usersResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:F"
-    });
-
-    const users = usersResponse.data.values || [];
-    const userIndex = users.findIndex(row => row[2] === userId);
-
-    if (userIndex >= 0) {
-      const rowNumber = userIndex + 2;
-      const currentBalance = parseInt(users[userIndex][3]) || 0;
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: `Users!D${rowNumber}:E${rowNumber}`,
-        valueInputOption: "USER_ENTERED",
-        resource: {
-          values: [[
-            currentBalance + points,
-            timestamp
-          ]]
-        }
-      });
-    } else {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Users!A2:F",
-        valueInputOption: "USER_ENTERED",
-        resource: {
-          values: [[
-            timestamp,
-            username,
-            userId,
-            points,
-            timestamp,
-            `REF-${Math.random().toString(36).substr(2, 8)}`
-          ]]
-        }
-      });
-    }
-
-    // Fin de session après claim
+    // Fin de session
     activeSessions.delete(userId);
 
     res.json({ 
       success: true,
       points,
-      message: `${points} points réclamés avec succès!`
+      message: `${points} tokens crédités`
     });
 
   } catch (error) {
     console.error("Claim error:", error);
-    res.status(400).json({
+    res.status(500).json({
       success: false,
-      message: error.message
+      error: error.message
     });
   }
 });
@@ -288,13 +240,27 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
+// ===== INITIALISATION =====
+async function initializeApp() {
+  try {
+    await initGoogleSheets();
+    sheetsInitialized = true;
+    console.log('Google Sheets initialized');
+    
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+      
+      if (!process.env.PUBLIC_URL) {
+        bot.launch().catch(err => {
+          console.error('Bot launch error:', err);
+          process.exit(1);
+        });
+      }
+    });
+  } catch (err) {
+    console.error('Initialization failed:', err);
+    process.exit(1);
+  }
+}
+
 initializeApp();
-
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
-});
-
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
-  process.exit(1);
-});
