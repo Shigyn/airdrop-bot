@@ -62,36 +62,46 @@ function initTelegramWebApp() {
   tg = window.Telegram.WebApp;
   tg.expand();
   
-  userId = tg.initDataUnsafe?.user?.id;
+  userId = tg.initDataUnsafe?.user?.id?.toString(); // Conversion en string explicite
   if (!userId) {
     throw new Error("User ID non trouvé");
   }
+  console.log('User ID détecté:', userId);
 }
 
 async function loadUserData() {
   try {
-    // Utilisez l'URL complet de votre backend
-    const backendUrl = process.env.PUBLIC_URL || 'https://airdrop-bot.onrender.com';
-    const response = await fetch(`${backendUrl}/user/${userId}`);
+    const backendUrl = window.location.origin; // Utilise l'URL actuelle automatiquement
+    console.log(`Tentative de chargement depuis: ${backendUrl}/user/${userId}`);
     
-    console.log("Réponse du serveur:", response.status); // Debug
+    const response = await fetch(`${backendUrl}/user/${userId}`, {
+      headers: {
+        'Telegram-Data': tg.initData || 'mock-data' // Header requis
+      }
+    });
     
-    if (!response.ok) throw new Error(`Erreur HTTP: ${response.status}`);
+    console.log("Statut de la réponse:", response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Erreur HTTP ${response.status}: ${errorText}`);
+    }
     
     const data = await response.json();
-    console.log("Données utilisateur:", data); // Debug
+    console.log("Données utilisateur reçues:", data);
     
+    // Affichage protégé
     document.getElementById('username').textContent = data.username || "Anonyme";
-    document.getElementById('balance').textContent = data.balance ?? "--";
+    document.getElementById('balance').textContent = data.balance ?? "0";
     document.getElementById('lastClaim').textContent = data.lastClaim ? 
-      new Date(data.lastClaim).toLocaleString('fr-FR') : "--";
+      new Date(data.lastClaim).toLocaleString('fr-FR') : "Jamais";
 
     return data;
   } catch (error) {
-    console.error("ECHEC chargement données:", error);
-    // Valeurs par défaut
+    console.error("Erreur de chargement:", error);
+    // Fallback UI
     document.getElementById('balance').textContent = "0";
-    document.getElementById('lastClaim').textContent = "Jamais";
+    document.getElementById('lastClaim').textContent = "Erreur";
     throw error;
   }
 }
@@ -112,6 +122,7 @@ function showClaim() {
 
   const MIN_CLAIM_TIME = 600; // 10 min
   const TOKENS_PER_SECOND = 1/60; // 1 token/min
+  const MAX_SESSION_TIME = 3600; // 1h
   
   let tokens = 0;
   let sessionStartTime = Date.now();
@@ -147,70 +158,9 @@ function showClaim() {
   function updateDisplay() {
     const now = Date.now();
     const elapsed = (now - sessionStartTime) / 1000;
-    tokens = Math.min(elapsed * TOKENS_PER_SECOND, 60); // Max 60 tokens
-    
-    tokensDisplay.textContent = tokens.toFixed(2);
-
-    if (elapsed < MIN_CLAIM_TIME) {
-      const remaining = MIN_CLAIM_TIME - elapsed;
-      const mins = Math.floor(remaining / 60);
-      const secs = Math.floor(remaining % 60);
-      document.getElementById('claim-text').textContent = 
-        `MINING IN PROGRESS (${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')})`;
-      btn.disabled = true;
-    } else {
-      document.getElementById('claim-text').textContent = `CLAIM ${tokens.toFixed(2)} TOKENS`;
-      btn.disabled = false;
-    }
-  }
-
-  async function startMining() {
-    const sessionOK = await initSession();
-    if (!sessionOK) return;
-
-    const timer = setInterval(() => {
-      updateDisplay();
-      
-      // Envoi périodique au serveur
-      fetch('/update-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, tokens, deviceId })
-      }).catch(console.error);
-
-    }, 1000);
-  }
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    try {
-      const response = await fetch('/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, tokens, deviceId })
-      });
-      
-      if (!response.ok) throw new Error('Claim failed');
-      
-      // Reset
-      sessionStartTime = Date.now();
-      tokens = 0;
-      updateDisplay();
-      
-    } catch (error) {
-      console.error(error);
-      btn.disabled = false;
-    }
-  });
-
-  startMining();
-}
-
-  function updateDisplay() {
-    const now = Date.now();
-    const elapsed = (now - sessionStartTime) / 1000;
     const remainingTime = Math.max(0, MIN_CLAIM_TIME - elapsed);
 
+    tokens = Math.min(elapsed * TOKENS_PER_SECOND, 60);
     tokensDisplay.textContent = tokens.toFixed(2);
 
     if (elapsed >= MAX_SESSION_TIME) {
@@ -230,6 +180,22 @@ function showClaim() {
     }
   }
 
+  async function startMining() {
+    const sessionOK = await initSession();
+    if (!sessionOK) return;
+
+    const timer = setInterval(() => {
+      updateDisplay();
+      
+      fetch('/update-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, tokens, deviceId })
+      }).catch(console.error);
+
+    }, 1000);
+  }
+
   btn.addEventListener('click', async () => {
     btn.disabled = true;
     try {
@@ -246,14 +212,15 @@ function showClaim() {
       
       if (!response.ok) throw new Error('Claim failed');
       
-      // Reset après claim
       await fetch('/end-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })
       });
       
-      startNewSession();
+      sessionStartTime = Date.now();
+      tokens = 0;
+      updateDisplay();
       await loadUserData();
       
     } catch (error) {
@@ -262,10 +229,7 @@ function showClaim() {
     }
   });
 
-  // DÉMARRAGE
-  syncWithServer().then((canContinue) => {
-    if (canContinue) startNewSession();
-  });
+  startMining();
 }
 
 // ==============================================
@@ -283,6 +247,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <div class="error-container">
         <h2>Erreur</h2>
         <p>${error.message}</p>
+        <button onclick="location.reload()">Réessayer</button>
       </div>
     `;
   }

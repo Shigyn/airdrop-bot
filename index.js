@@ -13,13 +13,16 @@ const activeSessions = new Map();
 // Middlewares
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Telegram-Data']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
+    headers: req.headers,
+    body: req.body
+  });
   next();
 });
 
@@ -130,7 +133,13 @@ app.post('/claim', async (req, res) => {
       range: "Transactions!A2:E",
       valueInputOption: "USER_ENTERED",
       resource: {
-        values: [[ userId, points, "AIRDROP", timestamp, `${points} tokens` ]]
+        values: [[ 
+          timestamp,
+          userId,
+          "AIRDROP",
+          points,
+          "PENDING"
+        ]]
       }
     });
 
@@ -140,7 +149,7 @@ app.post('/claim', async (req, res) => {
       range: "Users!A2:F"
     })).data.values || [];
 
-    const userIndex = users.findIndex(row => row[2] === userId);
+    const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
     if (userIndex >= 0) {
       const row = userIndex + 2;
       const balance = parseInt(users[userIndex][3]) || 0;
@@ -148,7 +157,12 @@ app.post('/claim', async (req, res) => {
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${row}:E${row}`,
         valueInputOption: "USER_ENTERED",
-        resource: { values: [[ balance + points, timestamp ]] }
+        resource: { 
+          values: [[ 
+            balance + points, 
+            timestamp 
+          ]] 
+        }
       });
     } else {
       await sheets.spreadsheets.values.append({
@@ -172,7 +186,10 @@ app.post('/claim', async (req, res) => {
     res.json({ success: true, points });
   } catch (error) {
     console.error("Claim error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
@@ -194,15 +211,38 @@ app.get('/tasks', async (req, res) => {
 });
 
 app.get('/user/:userId', async (req, res) => {
-  // Bypass complet de Google Sheets
-  const MOCK_DATA = {
-    username: "TEST_USER",
-    balance: 1000,
-    lastClaim: new Date().toISOString()
-  };
-  
-  console.log("⚠️ ENVOI DE DONNÉES MOCKÉES");
-  res.json(MOCK_DATA);
+  try {
+    console.log(`Requête pour userID: ${req.params.userId}`);
+    
+    if (!req.headers['telegram-data']) {
+      console.warn("Accès non autorisé - header manquant");
+      return res.status(403).json({ error: "Authentification requise" });
+    }
+
+    const userData = await getUserData(req.params.userId);
+    
+    if (!userData) {
+      console.log("Nouvel utilisateur détecté");
+      return res.json({
+        username: "Nouveau",
+        balance: 0,
+        lastClaim: null
+      });
+    }
+
+    res.json({
+      username: String(userData.username || "Anonyme"),
+      balance: Number(userData.balance) || 0,
+      lastClaim: userData.lastClaim || null
+    });
+    
+  } catch (error) {
+    console.error("ERREUR:", error);
+    res.status(500).json({ 
+      error: "Erreur serveur",
+      details: process.env.NODE_ENV === 'development' ? error.message : null
+    });
+  }
 });
 
 app.get('/health', (req, res) => {
@@ -213,10 +253,10 @@ app.get('/health', (req, res) => {
 });
 
 // [MAINTENANCE]
-setInterval(() => { // Nettoyage sessions
+setInterval(() => {
   const now = new Date();
   for (const [userId, session] of activeSessions.entries()) {
-    if ((now - new Date(session.lastActive)) > 3600000) {
+    if ((now - session.lastActive) > 3600000) {
       activeSessions.delete(userId);
     }
   }
