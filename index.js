@@ -191,14 +191,30 @@ app.get('/tasks', async (req, res) => {
 
 app.get('/user/:userId', async (req, res) => {
   try {
+    console.log("Requête user reçue pour:", req.params.userId); // Debug
     const user = await getUserData(req.params.userId);
-    user ? res.json({
-      username: user[1],
-      balance: user[3],
-      lastClaim: user[4]
-    }) : res.status(404).json({ error: 'User not found' });
+    
+    if (!user) {
+      console.log("Aucune donnée trouvée pour:", req.params.userId);
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Formatage explicite des données
+    const responseData = {
+      username: user[1] || "Anonyme",
+      balance: user[3] !== undefined ? user[3] : 0,
+      lastClaim: user[4] || null
+    };
+
+    console.log("Données envoyées:", responseData); // Debug
+    res.json(responseData);
+    
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Erreur complète:", error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 
