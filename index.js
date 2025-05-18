@@ -317,10 +317,13 @@ app.get('/get-referrals', async (req, res) => {
     const allReferrals = referrals.data.values || [];
     const userReferrals = allReferrals.filter(row => row[0] === referralCode);
     
+    // Correction ici - problème de parenthèse dans le reduce
+    const earnedTokens = userReferrals.reduce((sum, row) => sum + (parseInt(row[1]) || 0), 0);
+
     res.json({
       referralCode,
       referralCount: userReferrals.length,
-      earnedTokens: userReferrals.reduce((sum, row) => sum + (parseInt(row[1]) || 0, 0),
+      earnedTokens,
       referrals: userReferrals.map(row => ({
         userId: row[2],
         username: row[3] || 'Anonyme',
