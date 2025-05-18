@@ -128,7 +128,7 @@ function showClaim() {
   let sessionStartTime = Date.now();
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
-  const deviceId = tg.initDataUnsafe?.query_id || `web_${Math.random().toString(36).slice(2, 9)}`;
+  const deviceId = navigator.userAgent + "-" + userId; // Stable entre les ouvertures
 
   async function initSession() {
     try {

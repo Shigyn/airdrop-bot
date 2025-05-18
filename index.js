@@ -63,34 +63,39 @@ app.post('/sync-session', (req, res) => {
 
 // [SESSION] Nouvelle session
 app.post('/start-session', (req, res) => {
-    const { userId, deviceId } = req.body;
+    const { userId } = req.body;
+    // Génère un deviceId STABLE basé sur l'userAgent + userId (plutôt que aléatoire)
+    const deviceId = `${req.headers['user-agent']}-${userId}`; 
+
     const existingSession = activeSessions.get(userId);
 
-    if (existingSession) {
-        if (existingSession.deviceId !== deviceId) {
-            return res.status(400).json({ 
-                error: "OTHER_DEVICE_ACTIVE",
-                sessionStart: existingSession.startTime
-            });
-        }
-        // Renvoie le temps écoulé (en secondes) si session existe
+    // Si session existe MAIS c'est le MÊME appareil → On reprend la session
+    if (existingSession && existingSession.deviceId === deviceId) {
         const elapsed = (new Date() - new Date(existingSession.startTime)) / 1000;
         return res.json({ 
             exists: true,
             sessionStart: existingSession.startTime,
-            elapsedTime: elapsed, // <-- Nouveau champ
+            elapsedTime: elapsed,
             tokens: existingSession.tokens
         });
     }
 
-    // Crée une nouvelle session
-    const newSession = {
+    // Si session existe sur UN AUTRE appareil → Erreur
+    if (existingSession) {
+        return res.status(400).json({ 
+            error: "OTHER_DEVICE_ACTIVE",
+            sessionStart: existingSession.startTime
+        });
+    }
+
+    // Sinon, nouvelle session
+    activeSessions.set(userId, {
         startTime: new Date(),
         lastActive: new Date(),
-        deviceId,
+        deviceId, // Stocke le deviceId stable
         tokens: 0
-    };
-    activeSessions.set(userId, newSession);
+    });
+
     res.json({ success: true });
 });
 
