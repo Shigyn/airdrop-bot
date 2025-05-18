@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { bot, webhookCallback } = require('./bot');
-const { initGoogleSheets, readTasks, getUserData, getReferralInfo } = require('./googleSheets');
+const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
 const { google } = require('googleapis');
 
 const app = express();
@@ -274,8 +274,6 @@ app.get('/health', (req, res) => {
 });
 
 // [REFERRAL] Récupération des infos de parrainage
-// [REFERRAL] Récupération des infos de parrainage
-// [REFERRAL] Récupération des infos de parrainage
 app.get('/get-referrals', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not ready');
@@ -319,9 +317,10 @@ app.get('/get-referrals', async (req, res) => {
     const allReferrals = referrals.data.values || [];
     const userReferrals = allReferrals.filter(row => row[0] === referralCode);
     
-    // Correction ici - version simplifiée et sécurisée
+    // Correction finale - version totalement sécurisée
     const earnedTokens = userReferrals.reduce((sum, row) => {
-      return sum + (parseInt(row[1]) || 0;
+      const reward = parseInt(row[1]) || 0;
+      return sum + reward;
     }, 0);
 
     res.json({
