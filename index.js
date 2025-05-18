@@ -66,27 +66,31 @@ app.post('/start-session', (req, res) => {
     const { userId, deviceId } = req.body;
     const existingSession = activeSessions.get(userId);
 
-    // Si session existe MAIS est inactive (dernière activité > 2 min)
-    if (existingSession && (new Date() - existingSession.lastActive > 120000)) {
-        console.log(`Remplacement session inactive pour ${userId}`);
-        // On écrase sans erreur
-    } 
-    // Si session active sur autre appareil → erreur
-    else if (existingSession && existingSession.deviceId !== deviceId) {
-        return res.status(400).json({ 
-            error: "OTHER_DEVICE_ACTIVE",
-            sessionStart: existingSession.startTime
+    if (existingSession) {
+        if (existingSession.deviceId !== deviceId) {
+            return res.status(400).json({ 
+                error: "OTHER_DEVICE_ACTIVE",
+                sessionStart: existingSession.startTime
+            });
+        }
+        // Renvoie le temps écoulé (en secondes) si session existe
+        const elapsed = (new Date() - new Date(existingSession.startTime)) / 1000;
+        return res.json({ 
+            exists: true,
+            sessionStart: existingSession.startTime,
+            elapsedTime: elapsed, // <-- Nouveau champ
+            tokens: existingSession.tokens
         });
     }
 
-    // Crée/réinitialise la session
-    activeSessions.set(userId, {
+    // Crée une nouvelle session
+    const newSession = {
         startTime: new Date(),
         lastActive: new Date(),
         deviceId,
         tokens: 0
-    });
-
+    };
+    activeSessions.set(userId, newSession);
     res.json({ success: true });
 });
 

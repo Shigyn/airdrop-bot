@@ -132,28 +132,29 @@ function showClaim() {
 
   async function initSession() {
     try {
-      const response = await fetch('/start-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, deviceId })
-      });
-      const data = await response.json();
+        const response = await fetch('/start-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, deviceId })
+        });
+        const data = await response.json();
 
-      if (data.error === "OTHER_DEVICE_ACTIVE") {
-        alert("Session active sur un autre appareil !");
-        return false;
-      }
+        if (data.error === "OTHER_DEVICE_ACTIVE") {
+            alert("Session active sur un autre appareil !");
+            return false;
+        }
 
-      if (data.exists) {
-        sessionStartTime = new Date(data.sessionStart).getTime();
-        tokens = data.tokens || 0;
-      }
-      return true;
+        if (data.exists) {
+            // Reprend le timer existant
+            sessionStartTime = new Date().getTime() - (data.elapsedTime * 1000); // <-- Correction ici
+            tokens = data.tokens || 0;
+        }
+        return true;
     } catch (error) {
-      console.error("Session error:", error);
-      return true;
+        console.error("Session error:", error);
+        return true;
     }
-  }
+}
 
   function updateDisplay() {
     const now = Date.now();
