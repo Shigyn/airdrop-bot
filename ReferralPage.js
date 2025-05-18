@@ -37,19 +37,30 @@ const ReferralPage = {
     `;
 
     try {
-      // Charger les données de parrainage
-      const response = await fetch('/get-referrals');
-      if (!response.ok) throw new Error('Erreur API');
-      const data = await response.json();
-
-      // Mettre à jour l'UI
-      document.getElementById('referral-link').value = 
-        `https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}?start=ref-${userId.slice(0, 8)}`;
+      // Configuration de la requête avec les headers Telegram
+      const response = await fetch('/get-referrals', {
+        headers: {
+          'Telegram-Data': tg.initData || '',
+          'Content-Type': 'application/json'
+        }
+      });
       
-      document.getElementById('referral-count').textContent = data.referralsCount || 0;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Erreur lors du chargement');
+      }
+
+      const data = await response.json();
+      
+      // Génération du lien de parrainage
+      const referralLink = `https://t.me/${tg.initDataUnsafe.user?.username || 'your_bot'}?start=ref-${userId.slice(0, 8)}`;
+      document.getElementById('referral-link').value = referralLink;
+      
+      // Mise à jour des statistiques
+      document.getElementById('referral-count').textContent = data.referralCount || 0;
       document.getElementById('referral-earnings').textContent = data.earnedTokens || 0;
 
-      // Remplir la liste des filleuls
+      // Affichage de la liste des filleuls
       const listContainer = document.getElementById('referral-list');
       if (data.referrals && data.referrals.length > 0) {
         listContainer.innerHTML = data.referrals.map(ref => `
@@ -77,10 +88,10 @@ const ReferralPage = {
       });
 
     } catch (error) {
-      console.error("Erreur Referral:", error);
+      console.error("Referral error:", error);
       document.getElementById('referral-list').innerHTML = `
         <div class="error-message">
-          Erreur de chargement. Veuillez réessayer.
+          ${error.message || 'Erreur de chargement des données'}
         </div>
       `;
     }

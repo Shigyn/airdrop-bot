@@ -116,11 +116,15 @@ app.post('/update-session', (req, res) => {
 app.post('/claim', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not ready');
-    const { userId, tokens, deviceId } = req.body;
+    const { userId, tokens, deviceId, username } = req.body;
     const session = activeSessions.get(userId);
 
+    // Vérification robuste de la session
     if (!session || session.deviceId !== deviceId) {
-      return res.status(403).json({ error: "INVALID_SESSION" });
+      return res.status(403).json({ 
+        error: "INVALID_SESSION",
+        message: "Session invalide. Redémarrez le minage."
+      });
     }
 
     const auth = new google.auth.GoogleAuth({
@@ -129,7 +133,7 @@ app.post('/claim', async (req, res) => {
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Enregistrement
+    // Enregistrement de la transaction
     const timestamp = new Date().toISOString();
     const points = Math.floor(parseFloat(tokens));
     
@@ -143,28 +147,32 @@ app.post('/claim', async (req, res) => {
           userId,
           "AIRDROP",
           points,
-          "PENDING"
+          "COMPLETED"
         ]]
       }
     });
 
-    // Mise à jour solde
+    // Mise à jour du solde utilisateur
     const users = (await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:F"
     })).data.values || [];
 
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
+    let newBalance = points;
+
     if (userIndex >= 0) {
       const row = userIndex + 2;
-      const balance = parseInt(users[userIndex][3]) || 0;
+      const currentBalance = parseInt(users[userIndex][3]) || 0;
+      newBalance = currentBalance + points;
+      
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${row}:E${row}`,
         valueInputOption: "USER_ENTERED",
         resource: { 
           values: [[ 
-            balance + points, 
+            newBalance, 
             timestamp 
           ]] 
         }
@@ -177,7 +185,7 @@ app.post('/claim', async (req, res) => {
         resource: {
           values: [[
             timestamp,
-            req.body.username || "Anonyme",
+            username || "Anonyme",
             userId,
             points,
             timestamp,
@@ -187,13 +195,27 @@ app.post('/claim', async (req, res) => {
       });
     }
 
-    activeSessions.delete(userId);
-    res.json({ success: true, points });
+    // Conserve les infos de session pour le reload
+    const sessionInfo = {
+      startTime: session.startTime,
+      deviceId: session.deviceId,
+      tokens: 0 // Réinitialise les tokens après claim
+    };
+    activeSessions.set(userId, sessionInfo);
+
+    res.json({ 
+      success: true, 
+      points,
+      balance: newBalance,
+      sessionStart: session.startTime
+    });
+
   } catch (error) {
     console.error("Claim error:", error);
     res.status(500).json({ 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: "CLAIM_FAILED",
+      message: "Erreur lors du traitement. Veuillez réessayer.",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -262,27 +284,28 @@ app.get('/get-referrals', async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not ready');
     
+    // Vérification des données Telegram
+    const tgData = req.headers['telegram-data'];
+    if (!tgData) {
+      return res.status(403).json({ error: "Authentification Telegram requise" });
+    }
+
+    // Extraction du userId
+    const params = new URLSearchParams(tgData);
+    const user = params.get('user') ? JSON.parse(params.get('user')) : {};
+    const userId = user.id || '';
+    
+    if (!userId) {
+      return res.status(400).json({ error: "User ID non trouvé dans les données Telegram" });
+    }
+
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // 1. Récupérer l'ID utilisateur depuis les headers Telegram
-    const tgData = req.headers['telegram-data'];
-    if (!tgData) {
-      return res.status(403).json({ error: "Authentification requise" });
-    }
-
-    // 2. Parser les données Telegram pour obtenir userId
-    const params = new URLSearchParams(tgData);
-    const userId = params.get('user')?.id || params.get('id');
-
-    if (!userId) {
-      return res.status(400).json({ error: "User ID non trouvé" });
-    }
-
-    // 3. Lire les données depuis Google Sheets
+    // Récupération des données
     const [users, referrals] = await Promise.all([
       sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -294,26 +317,27 @@ app.get('/get-referrals', async (req, res) => {
       })
     ]);
 
+    // Recherche de l'utilisateur
     const userData = (users.data.values || []).find(row => row[2] === userId);
     if (!userData) {
-      return res.status(404).json({ error: "Utilisateur non trouvé" });
+      return res.json({
+        referralCount: 0,
+        earnedTokens: 0,
+        referrals: []
+      });
     }
 
     const referralCode = userData[5] || '';
     const allReferrals = referrals.data.values || [];
 
-    // 4. Filtrer les références pour cet utilisateur
+    // Filtrage des filleuls
     const userReferrals = allReferrals.filter(row => row[0] === referralCode);
-    const referralCount = userReferrals.length;
     
-    // 5. Calculer les tokens gagnés
-    const earnedTokens = userReferrals.reduce((sum, row) => sum + (parseInt(row[1]) || 0), 0);
-
-    // 6. Formater la réponse
+    // Formatage de la réponse
     res.json({
       referralCode,
-      referralCount,
-      earnedTokens,
+      referralCount: userReferrals.length,
+      earnedTokens: userReferrals.reduce((sum, row) => sum + (parseInt(row[1]) || 0, 0),
       referrals: userReferrals.map(row => ({
         userId: row[2],
         username: row[3] || 'Anonyme',
@@ -325,8 +349,9 @@ app.get('/get-referrals', async (req, res) => {
   } catch (error) {
     console.error("Referral error:", error);
     res.status(500).json({ 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: "SERVER_ERROR",
+      message: "Erreur lors de la récupération des données",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
