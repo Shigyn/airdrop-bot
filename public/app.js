@@ -62,7 +62,7 @@ function initTelegramWebApp() {
   tg = window.Telegram.WebApp;
   tg.expand();
   
-  userId = tg.initDataUnsafe?.user?.id?.toString(); // Conversion en string explicite
+  userId = tg.initDataUnsafe?.user?.id?.toString();
   if (!userId) {
     throw new Error("User ID non trouvé");
   }
@@ -71,12 +71,12 @@ function initTelegramWebApp() {
 
 async function loadUserData() {
   try {
-    const backendUrl = window.location.origin; // Utilise l'URL actuelle automatiquement
+    const backendUrl = window.location.origin;
     console.log(`Tentative de chargement depuis: ${backendUrl}/user/${userId}`);
     
     const response = await fetch(`${backendUrl}/user/${userId}`, {
       headers: {
-        'Telegram-Data': tg.initData || 'mock-data' // Header requis
+        'Telegram-Data': tg.initData || 'mock-data'
       }
     });
     
@@ -90,7 +90,6 @@ async function loadUserData() {
     const data = await response.json();
     console.log("Données utilisateur reçues:", data);
     
-    // Affichage protégé
     document.getElementById('username').textContent = data.username || "Anonyme";
     document.getElementById('balance').textContent = data.balance ?? "0";
     document.getElementById('lastClaim').textContent = data.lastClaim ? 
@@ -99,7 +98,6 @@ async function loadUserData() {
     return data;
   } catch (error) {
     console.error("Erreur de chargement:", error);
-    // Fallback UI
     document.getElementById('balance').textContent = "0";
     document.getElementById('lastClaim').textContent = "Erreur";
     throw error;
@@ -120,41 +118,40 @@ function showClaim() {
     </div>
   `;
 
-  const MIN_CLAIM_TIME = 600; // 10 min
-  const TOKENS_PER_SECOND = 1/60; // 1 token/min
-  const MAX_SESSION_TIME = 3600; // 1h
+  const MIN_CLAIM_TIME = 600;
+  const TOKENS_PER_SECOND = 1/60;
+  const MAX_SESSION_TIME = 3600;
   
   let tokens = 0;
   let sessionStartTime = Date.now();
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
-  const deviceId = navigator.userAgent + "-" + userId; // Stable entre les ouvertures
+  const deviceId = navigator.userAgent + "-" + userId;
 
   async function initSession() {
     try {
-        const response = await fetch('/start-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId, deviceId })
-        });
-        const data = await response.json();
+      const response = await fetch('/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, deviceId })
+      });
+      const data = await response.json();
 
-        if (data.error === "OTHER_DEVICE_ACTIVE") {
-            alert("Session active sur un autre appareil !");
-            return false;
-        }
+      if (data.error === "OTHER_DEVICE_ACTIVE") {
+        alert("Session active sur un autre appareil !");
+        return false;
+      }
 
-        if (data.exists) {
-            // Reprend le timer existant
-            sessionStartTime = new Date().getTime() - (data.elapsedTime * 1000); // <-- Correction ici
-            tokens = data.tokens || 0;
-        }
-        return true;
+      if (data.exists) {
+        sessionStartTime = new Date().getTime() - (data.elapsedTime * 1000);
+        tokens = data.tokens || 0;
+      }
+      return true;
     } catch (error) {
-        console.error("Session error:", error);
-        return true;
+      console.error("Session error:", error);
+      return true;
     }
-}
+  }
 
   function updateDisplay() {
     const now = Date.now();
@@ -182,91 +179,92 @@ function showClaim() {
   }
 
   async function startMining() {
-  // Clear any existing interval to prevent duplicates
-  if (this.miningInterval) {
-    clearInterval(this.miningInterval);
+    if (miningInterval) {
+      clearInterval(miningInterval);
+    }
+
+    const sessionOK = await initSession();
+    if (!sessionOK) return;
+
+    sessionStartTime = Date.now();
+    tokens = 0;
+    updateDisplay();
+
+    miningInterval = setInterval(() => {
+      updateDisplay();
+      
+      fetch('/update-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, tokens, deviceId })
+      }).catch(console.error);
+    }, 1000);
   }
 
-  const sessionOK = await initSession();
-  if (!sessionOK) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      btn.innerHTML = '<div class="loading-spinner-small"></div>';
+      
+      const response = await fetch('/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId,
+          deviceId,
+          tokens: tokens.toFixed(2),
+          username: tg.initDataUnsafe.user?.username || 'Anonyme'
+        })
+      });
+      
+      if (!response.ok) throw new Error('Claim failed');
+      
+      await fetch('/end-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId })
+      }).catch(e => console.log("Nettoyage session:", e));
+      
+      await startMining();
+      await loadUserData();
+      
+      btn.innerHTML = '<span id="claim-text">MINING IN PROGRESS</span>';
+      
+    } catch (error) {
+      console.error("Claim error:", error);
+      btn.disabled = false;
+      btn.innerHTML = '<span id="claim-text">CLAIM FAILED - RETRY</span>';
+    }
+  });
 
-  // Reset mining session
-  this.sessionStartTime = Date.now();
-  this.tokens = 0;
-  updateDisplay();
-
-  // Start new mining interval
-  this.miningInterval = setInterval(() => {
-    updateDisplay();
-    
-    fetch('/update-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, tokens, deviceId })
-    }).catch(console.error);
-  }, 1000);
+  startMining();
 }
 
-btn.addEventListener('click', async () => {
-  btn.disabled = true;
-  try {
-    // Show loading state
-    btn.innerHTML = '<div class="loading-spinner-small"></div>';
-    
-    const response = await fetch('/claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        userId,
-        deviceId,
-        tokens: tokens.toFixed(2),
-        username: tg.initDataUnsafe.user?.username || 'Anonyme'
-      })
-    });
-    
-    if (!response.ok) throw new Error('Claim failed');
-    
-    // Optional: End session on server if needed
-    await fetch('/end-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId })
-    }).catch(e => console.log("Optional session cleanup failed:", e));
-    
-    // Immediately restart mining
-    await startMining();
-    await loadUserData();
-    
-    // Restore button text
-    btn.innerHTML = '<span id="claim-text">MINING IN PROGRESS</span>';
-    
-  } catch (error) {
-    console.error("Claim error:", error);
-    btn.disabled = false;
-    btn.innerHTML = '<span id="claim-text">CLAIM FAILED - RETRY</span>';
-  }
-});
-
-// Start initial mining session
-startMining();
-
 // ==============================================
-// INITIALISATION
+// NAVIGATION
 // ==============================================
 
 function setupNavigation() {
-  document.getElementById('nav-claim').addEventListener('click', function() {
+  const navClaim = document.getElementById('nav-claim');
+  const navTasks = document.getElementById('nav-tasks');
+  const navReferral = document.getElementById('nav-referral');
+
+  if (!navClaim || !navTasks || !navReferral) {
+    console.error("Éléments de navigation manquants");
+    return;
+  }
+
+  navClaim.addEventListener('click', function() {
     showClaim();
     setActiveButton(this);
   });
 
-  document.getElementById('nav-tasks').addEventListener('click', function() {
+  navTasks.addEventListener('click', function() {
     TasksPage.showTasksPage();
     setActiveButton(this);
   });
 
-  document.getElementById('nav-referral').addEventListener('click', function() {
-    // ReferralPage.showReferralPage(); // À implémenter plus tard
+  navReferral.addEventListener('click', function() {
     setActiveButton(this);
   });
 }
@@ -286,10 +284,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     initTelegramWebApp();
     initParticles();
-    setupNavigation(); // <-- Initialise les boutons
+    setupNavigation();
     await loadUserData();
-    showClaim(); // Page par défaut
+    showClaim();
   } catch (error) {
+    console.error("Erreur d'initialisation:", error);
     document.body.innerHTML = `
       <div class="error-container">
         <h2>Erreur</h2>
