@@ -157,21 +157,39 @@ function showClaim() {
     }
   }
 
-  function startMiningTimer() {
-    clearInterval(miningInterval);
-    
-    miningInterval = setInterval(() => {
-      const now = Date.now();
-      const elapsed = (now - sessionStartTime) / 1000;
-      
-      tokens = Math.min(elapsed * TOKENS_PER_SECOND, MAX_SESSION_TIME * TOKENS_PER_SECOND);
-      updateDisplay();
+  async function startMining() {
+  // Génère un ID d'appareil unique
+  const deviceId = tg.initDataUnsafe?.query_id || `web_${Math.random().toString(36).slice(2, 9)}`;
+  
+  // Synchronisation avec le serveur
+  const syncResponse = await fetch('/sync-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, deviceId })
+  });
+  const syncData = await syncResponse.json();
 
-      if (elapsed >= MAX_SESSION_TIME) {
-        clearInterval(miningInterval);
-      }
-    }, 1000);
+  if (syncData.status === 'other_device') {
+    alert("Une session est déjà active sur un autre appareil !");
+    return;
   }
+
+  // Démarrer nouvelle session si besoin
+  if (syncData.status !== 'synced') {
+    await fetch('/start-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, deviceId })
+    });
+    sessionStartTime = Date.now();
+  } else {
+    sessionStartTime = new Date(syncData.sessionStart).getTime();
+    tokens = syncData.tokens || 0;
+  }
+
+  // Démarrer le timer
+  startMiningTimer();
+}
 
   function updateDisplay() {
     const now = Date.now();
