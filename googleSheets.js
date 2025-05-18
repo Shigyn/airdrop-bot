@@ -110,26 +110,52 @@ class GoogleSheetsService {
     return this.claimTask(userId, randomTask.id);
   }
 
-  async function getUserData(userId) {
-  const sheets = await getSheetInstance();
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Users!A2:F"
-  });
-  
-  console.log("Toutes les données Users:", response.data.values); // Debug
-  
-  return response.data.values.find(row => row[2] === userId);
-}
+  async getUserData(userId) {
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "Users!A2:F"
+      });
+      
+      console.log("Debug - Données utilisateurs:", response.data.values);
+      
+      const user = (response.data.values || []).find(row => row[2] === userId);
+      
+      if (!user) {
+        console.log("Utilisateur non trouvé pour ID:", userId);
+        return null;
+      }
+      
+      return {
+        username: user[1] || "Anonyme",
+        balance: user[3] || "0",
+        lastClaim: user[4] || null
+      };
+    } catch (error) {
+      console.error('Erreur getUserData:', error);
+      throw error;
+    }
+  }
 
   async getReferralInfo(code) {
-    // Stub for now — replace with real referral logic if needed
-    return {
-      referralCode: code,
-      pointsEarned: 10,
-      referralsCount: 0,
-      referrals: []
-    };
+    try {
+      const response = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "Referrals!A2:D"
+      });
+      
+      const referral = (response.data.values || []).find(row => row[0] === code);
+      
+      return referral ? {
+        referralCode: code,
+        pointsEarned: referral[1] || 0,
+        referralsCount: referral[2] || 0,
+        referrals: referral[3] ? referral[3].split(',') : []
+      } : null;
+    } catch (error) {
+      console.error('Erreur getReferralInfo:', error);
+      throw error;
+    }
   }
 }
 
