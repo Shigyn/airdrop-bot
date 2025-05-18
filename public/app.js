@@ -2,12 +2,12 @@
 let tg, userId;
 let balance = 0;
 let miningInterval;
-let sessionStartTime = Date.now(); // Déplacé en variable globale
-let tokens = 0; // Déplacé en variable globale
-const deviceId = navigator.userAgent + "-" + userId; // Déplacé en variable globale
+let sessionStartTime = Date.now();
+let tokens = 0;
+let deviceId; // Changé de const à let pour permettre la modification
 
 // ==============================================
-// SYSTEME DE PARTICULES COSMIQUES (inchangé)
+// SYSTEME DE PARTICULES COSMIQUES
 // ==============================================
 
 function createParticles() {
@@ -71,10 +71,8 @@ function chargerSession() {
     const session = localStorage.getItem('miningSession');
     if (session) {
       const parsed = JSON.parse(session);
-      // Vérifier que c'est la même session utilisateur
       if (parsed.userId === userId && parsed.deviceId === deviceId) {
         const elapsed = (Date.now() - parsed.sessionStartTime) / 1000;
-        // Session valide si moins d'1h
         if (elapsed < 3600) {
           sessionStartTime = parsed.sessionStartTime;
           tokens = parsed.tokens;
@@ -87,7 +85,7 @@ function chargerSession() {
 }
 
 // ==============================================
-// FONCTIONS PRINCIPALES MODIFIEES
+// FONCTIONS PRINCIPALES
 // ==============================================
 
 function initTelegramWebApp() {
@@ -105,18 +103,18 @@ function initTelegramWebApp() {
     throw new Error("User ID non trouvé");
   }
   console.log('User ID détecté:', userId);
+  
+  // Initialisation de deviceId après avoir userId
+  deviceId = navigator.userAgent + "-" + userId;
 }
 
 async function demarrerMinage() {
-  // Nettoyer l'intervalle existant
   if (miningInterval) {
     clearInterval(miningInterval);
   }
 
-  // Vérifier session existante
   const sessionExistante = chargerSession();
   
-  // Si pas de session valide, en créer une nouvelle
   if (!sessionExistante) {
     sessionStartTime = Date.now();
     tokens = 0;
@@ -127,11 +125,10 @@ async function demarrerMinage() {
     }).catch(console.error);
   }
 
-  // Démarrer le minage
   miningInterval = setInterval(() => {
     const now = Date.now();
     const elapsed = (now - sessionStartTime) / 1000;
-    tokens = Math.min(elapsed * (1/60), 60); // 1 token/min, max 60
+    tokens = Math.min(elapsed * (1/60), 60);
     
     updateDisplay();
     sauvegarderSession();
@@ -151,15 +148,15 @@ function updateDisplay() {
   
   const now = Date.now();
   const elapsed = (now - sessionStartTime) / 1000;
-  const remainingTime = Math.max(0, 600 - elapsed); // 10 min pour claim
+  const remainingTime = Math.max(0, 600 - elapsed);
 
   tokensDisplay.textContent = tokens.toFixed(2);
 
-  if (elapsed >= 3600) { // 1h max
+  if (elapsed >= 3600) {
     claimText.textContent = "SESSION EXPIRED";
     btn.disabled = true;
   } 
-  else if (elapsed >= 600) { // 10 min min
+  else if (elapsed >= 600) {
     claimText.textContent = `CLAIM ${tokens.toFixed(2)} TOKENS`;
     btn.disabled = false;
   } 
@@ -190,7 +187,6 @@ async function handleClaim() {
 
     if (!response.ok) throw new Error('Claim failed');
 
-    // Nettoyer et redémarrer
     localStorage.removeItem('miningSession');
     sessionStartTime = Date.now();
     tokens = 0;
@@ -226,7 +222,7 @@ function showClaim() {
 }
 
 // ==============================================
-// FONCTIONS EXISTANTES (inchangées)
+// FONCTIONS EXISTANTES
 // ==============================================
 
 async function loadUserData() {
@@ -302,16 +298,12 @@ function setActiveButton(button) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    initTelegramWebApp();
+    initTelegramWebApp(); // Initialise userId et deviceId
     initParticles();
     setupNavigation();
     await loadUserData();
-    
-    // Démarrer le minage après avoir obtenu userId
-    deviceId = navigator.userAgent + "-" + userId;
     await demarrerMinage();
     showClaim();
-
   } catch (error) {
     console.error("Erreur d'initialisation:", error);
     document.body.innerHTML = `
