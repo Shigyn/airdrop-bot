@@ -285,6 +285,12 @@ function setupNavigation() {
   });
 }
 
+document.getElementById('nav-referral').addEventListener('click', function() {
+    ReferralPage.showReferralPage();
+    setActiveButton(this);
+  });
+}
+
 function setActiveButton(button) {
   document.querySelectorAll('.nav-button').forEach(btn => {
     btn.classList.remove('active');

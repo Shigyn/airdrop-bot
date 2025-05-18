@@ -257,6 +257,80 @@ app.get('/health', (req, res) => {
   });
 });
 
+// [REFERRAL] Récupération des infos de parrainage
+app.get('/get-referrals', async (req, res) => {
+  try {
+    if (!sheetsInitialized) throw new Error('Service not ready');
+    
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    // 1. Récupérer l'ID utilisateur depuis les headers Telegram
+    const tgData = req.headers['telegram-data'];
+    if (!tgData) {
+      return res.status(403).json({ error: "Authentification requise" });
+    }
+
+    // 2. Parser les données Telegram pour obtenir userId
+    const params = new URLSearchParams(tgData);
+    const userId = params.get('user')?.id || params.get('id');
+
+    if (!userId) {
+      return res.status(400).json({ error: "User ID non trouvé" });
+    }
+
+    // 3. Lire les données depuis Google Sheets
+    const [users, referrals] = await Promise.all([
+      sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "Users!A2:F"
+      }),
+      sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "Referrals!A2:D"
+      })
+    ]);
+
+    const userData = (users.data.values || []).find(row => row[2] === userId);
+    if (!userData) {
+      return res.status(404).json({ error: "Utilisateur non trouvé" });
+    }
+
+    const referralCode = userData[5] || '';
+    const allReferrals = referrals.data.values || [];
+
+    // 4. Filtrer les références pour cet utilisateur
+    const userReferrals = allReferrals.filter(row => row[0] === referralCode);
+    const referralCount = userReferrals.length;
+    
+    // 5. Calculer les tokens gagnés
+    const earnedTokens = userReferrals.reduce((sum, row) => sum + (parseInt(row[1]) || 0), 0);
+
+    // 6. Formater la réponse
+    res.json({
+      referralCode,
+      referralCount,
+      earnedTokens,
+      referrals: userReferrals.map(row => ({
+        userId: row[2],
+        username: row[3] || 'Anonyme',
+        date: row[4] || new Date().toISOString(),
+        reward: parseInt(row[1]) || 0
+      }))
+    });
+
+  } catch (error) {
+    console.error("Referral error:", error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // [MAINTENANCE]
 setInterval(() => {
     const now = new Date();
