@@ -99,96 +99,103 @@ function showClaim() {
       <button id="main-claim-btn" class="claim-button" disabled>
         <span id="claim-text">MINING IN PROGRESS (00:10:00)</span>
       </button>
-      <div id="main-claim-result" class="claim-result"></div>
     </div>
   `;
 
-  // Configuration
-  const MIN_CLAIM_TIME = 600;     // 10min
-  const MAX_SESSION_TIME = 3600;  // 1h
-  const TOKENS_PER_SECOND = 1/60; // 1 token/minute
-
-  // État
+  const MIN_CLAIM_TIME = 600; // 10 min
+  const TOKENS_PER_SECOND = 1/60; // 1 token/min
+  
   let tokens = 0;
   let sessionStartTime = Date.now();
-  let miningInterval;
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
+  const deviceId = tg.initDataUnsafe?.query_id || `web_${Math.random().toString(36).slice(2, 9)}`;
 
-  // ID unique par appareil
-  const deviceId = tg.initDataUnsafe?.query_id || `web_${Math.random().toString(36).substr(2, 9)}`;
-
-  // Synchronisation avec le serveur
-  async function syncWithServer() {
-    try {
-      const response = await fetch('/sync-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, deviceId })
-      });
-      const data = await response.json();
-
-      if (data.status === 'other_device_active') {
-        alert("⚠️ Une session est déjà active sur un autre appareil !");
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error("Sync error:", error);
-      return true; // Continue en mode dégradé
-    }
-  }
-
-  async function startNewSession() {
+  async function initSession() {
     try {
       const response = await fetch('/start-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, deviceId })
       });
-      
-      if (!response.ok) throw new Error("Failed to start session");
-      
-      sessionStartTime = Date.now();
-      tokens = 0;
-      startMiningTimer();
+      const data = await response.json();
+
+      if (data.error === "OTHER_DEVICE_ACTIVE") {
+        alert("Session active sur un autre appareil !");
+        return false;
+      }
+
+      if (data.exists) {
+        sessionStartTime = new Date(data.sessionStart).getTime();
+        tokens = data.tokens || 0;
+      }
+      return true;
     } catch (error) {
       console.error("Session error:", error);
+      return true;
+    }
+  }
+
+  function updateDisplay() {
+    const now = Date.now();
+    const elapsed = (now - sessionStartTime) / 1000;
+    tokens = Math.min(elapsed * TOKENS_PER_SECOND, 60); // Max 60 tokens
+    
+    tokensDisplay.textContent = tokens.toFixed(2);
+
+    if (elapsed < MIN_CLAIM_TIME) {
+      const remaining = MIN_CLAIM_TIME - elapsed;
+      const mins = Math.floor(remaining / 60);
+      const secs = Math.floor(remaining % 60);
+      document.getElementById('claim-text').textContent = 
+        `MINING IN PROGRESS (${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')})`;
+      btn.disabled = true;
+    } else {
+      document.getElementById('claim-text').textContent = `CLAIM ${tokens.toFixed(2)} TOKENS`;
+      btn.disabled = false;
     }
   }
 
   async function startMining() {
-  // Génère un ID d'appareil unique
-  const deviceId = tg.initDataUnsafe?.query_id || `web_${Math.random().toString(36).slice(2, 9)}`;
-  
-  // Synchronisation avec le serveur
-  const syncResponse = await fetch('/sync-session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, deviceId })
+    const sessionOK = await initSession();
+    if (!sessionOK) return;
+
+    const timer = setInterval(() => {
+      updateDisplay();
+      
+      // Envoi périodique au serveur
+      fetch('/update-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, tokens, deviceId })
+      }).catch(console.error);
+
+    }, 1000);
+  }
+
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      const response = await fetch('/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, tokens, deviceId })
+      });
+      
+      if (!response.ok) throw new Error('Claim failed');
+      
+      // Reset
+      sessionStartTime = Date.now();
+      tokens = 0;
+      updateDisplay();
+      
+    } catch (error) {
+      console.error(error);
+      btn.disabled = false;
+    }
   });
-  const syncData = await syncResponse.json();
 
-  if (syncData.status === 'other_device') {
-    alert("Une session est déjà active sur un autre appareil !");
-    return;
-  }
-
-  // Démarrer nouvelle session si besoin
-  if (syncData.status !== 'synced') {
-    await fetch('/start-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, deviceId })
-    });
-    sessionStartTime = Date.now();
-  } else {
-    sessionStartTime = new Date(syncData.sessionStart).getTime();
-    tokens = syncData.tokens || 0;
-  }
-
-  // Démarrer le timer
-  startMiningTimer();
+  startMining();
 }
 
   function updateDisplay() {

@@ -3,64 +3,49 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { bot, webhookCallback } = require('./bot');
-const { 
-  initGoogleSheets, 
-  readTasks, 
-  getUserData,
-  getReferralInfo
-} = require('./googleSheets');
+const { initGoogleSheets, readTasks, getUserData, getReferralInfo } = require('./googleSheets');
 const { google } = require('googleapis');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
-
-// ===== CONFIGURATION DES SESSIONS =====
 const activeSessions = new Map();
 
-// Nettoyage automatique des sessions expirées
-setInterval(() => {
-  const now = new Date();
-  for (const [userId, session] of activeSessions.entries()) {
-    const sessionDuration = (now - new Date(session.lastActive)) / 1000;
-    if (sessionDuration > 7200) { // 2h d'inactivité max
-      activeSessions.delete(userId);
-      console.log(`Session expirée pour l'utilisateur ${userId}`);
-    }
-  }
-}, 300000); // Toutes les 5 minutes
-
+// Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Logger amélioré
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
-const webhookSecretPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+// Initialisation
 let sheetsInitialized = false;
+const initializeApp = async () => {
+  try {
+    await initGoogleSheets();
+    sheetsInitialized = true;
+    console.log('Server ready');
+    app.listen(PORT, () => console.log(`Running on port ${PORT}`));
+  } catch (err) {
+    console.error('Init failed:', err);
+    process.exit(1);
+  }
+};
 
-// ===== ROUTES DE SESSION =====
+// ===== [ROUTES] =====
+
+// [SESSION] Synchronisation
 app.post('/sync-session', (req, res) => {
   const { userId, deviceId } = req.body;
   const session = activeSessions.get(userId);
   
-  if (!session) {
-    return res.json({ status: 'no_session' });
-  }
+  if (!session) return res.json({ status: 'no_session' });
+  if (session.deviceId !== deviceId) return res.json({
+    status: 'other_device',
+    sessionStart: session.startTime
+  });
 
-  // Vérification de l'appareil
-  if (session.deviceId !== deviceId) {
-    return res.json({
-      status: 'other_device',
-      sessionStart: session.startTime,
-      tokens: session.tokens
-    });
-  }
-
-  // Mise à jour de l'activité
   session.lastActive = new Date();
   res.json({
     status: 'synced',
@@ -69,15 +54,22 @@ app.post('/sync-session', (req, res) => {
   });
 });
 
+// [SESSION] Nouvelle session
 app.post('/start-session', (req, res) => {
   const { userId, deviceId } = req.body;
   
   if (activeSessions.has(userId)) {
-    const existingSession = activeSessions.get(userId);
-    return res.status(400).json({ 
-      error: "SESSION_ACTIVE",
-      deviceId: existingSession.deviceId,
-      sessionStart: existingSession.startTime
+    const existing = activeSessions.get(userId);
+    if (existing.deviceId !== deviceId) {
+      return res.status(400).json({ 
+        error: "OTHER_DEVICE_ACTIVE",
+        sessionStart: existing.startTime
+      });
+    }
+    return res.json({ 
+      exists: true,
+      sessionStart: existing.startTime,
+      tokens: existing.tokens
     });
   }
   
@@ -96,43 +88,28 @@ app.post('/start-session', (req, res) => {
 });
 
 app.post('/update-session', (req, res) => {
-  const { userId, tokens } = req.body;
+  const { userId, tokens, deviceId } = req.body;
   const session = activeSessions.get(userId);
   
-  if (!session) {
-    return res.status(404).json({ error: "Session non trouvée" });
+  if (session && session.deviceId === deviceId) {
+    session.tokens = parseFloat(tokens);
+    session.lastActive = new Date();
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: "Invalid session" });
   }
-  
-  session.tokens = parseFloat(tokens) || 0;
-  session.lastActive = new Date();
-  res.json({ success: true });
 });
 
-app.post('/end-session', (req, res) => {
-  activeSessions.delete(req.body.userId);
-  res.json({ success: true });
-});
-
-// ===== ROUTES EXISTANTES =====
-app.post(webhookSecretPath, webhookCallback);
-
+// [CLAIM] Enregistrement
 app.post('/claim', async (req, res) => {
   try {
-    if (!sheetsInitialized) throw new Error('Service not initialized');
-
+    if (!sheetsInitialized) throw new Error('Service not ready');
     const { userId, tokens, deviceId } = req.body;
     const session = activeSessions.get(userId);
 
-    // Validation stricte
     if (!session || session.deviceId !== deviceId) {
-      return res.status(403).json({ 
-        success: false, 
-        error: "INVALID_SESSION" 
-      });
+      return res.status(403).json({ error: "INVALID_SESSION" });
     }
-
-    const timestamp = new Date().toISOString();
-    const points = Math.floor(parseFloat(tokens));
 
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
@@ -140,127 +117,112 @@ app.post('/claim', async (req, res) => {
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Logique existante d'enregistrement...
-    // ... (ton code existant pour l'enregistrement dans Google Sheets)
-
-    // Fin de session
-    activeSessions.delete(userId);
-
-    res.json({ 
-      success: true,
-      points,
-      message: `${points} tokens crédités`
+    // Enregistrement
+    const timestamp = new Date().toISOString();
+    const points = Math.floor(parseFloat(tokens));
+    
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Transactions!A2:E",
+      valueInputOption: "USER_ENTERED",
+      resource: {
+        values: [[ userId, points, "AIRDROP", timestamp, `${points} tokens` ]]
+      }
     });
 
+    // Mise à jour solde
+    const users = (await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:F"
+    })).data.values || [];
+
+    const userIndex = users.findIndex(row => row[2] === userId);
+    if (userIndex >= 0) {
+      const row = userIndex + 2;
+      const balance = parseInt(users[userIndex][3]) || 0;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: `Users!D${row}:E${row}`,
+        valueInputOption: "USER_ENTERED",
+        resource: { values: [[ balance + points, timestamp ]] }
+      });
+    } else {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "Users!A2:F",
+        valueInputOption: "USER_ENTERED",
+        resource: {
+          values: [[
+            timestamp,
+            req.body.username || "Anonyme",
+            userId,
+            points,
+            timestamp,
+            `REF-${Math.random().toString(36).slice(2, 8)}`
+          ]]
+        }
+      });
+    }
+
+    activeSessions.delete(userId);
+    res.json({ success: true, points });
   } catch (error) {
     console.error("Claim error:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
 });
 
-// ===== ROUTES EXISTANTES (inchangées) =====
-app.post(webhookSecretPath, webhookCallback);
+// [TELEGRAM] Webhook
+app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, webhookCallback);
 
+// [STATIC] Routes
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// [API] Routes
 app.get('/tasks', async (req, res) => {
   try {
-    if (!sheetsInitialized) throw new Error('Service not initialized');
-    const tasks = await readTasks();
-    res.json(tasks);
+    if (!sheetsInitialized) throw new Error('Service not ready');
+    res.json(await readTasks());
   } catch (err) {
-    console.error('Tasks error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
 app.get('/user/:userId', async (req, res) => {
   try {
-    if (!sheetsInitialized) throw new Error('Service not initialized');
-    
     const user = await getUserData(req.params.userId);
-    
-    if (!user) {
-      console.log("User non trouvé. ID recherché:", req.params.userId);
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({
+    user ? res.json({
       username: user[1],
       balance: user[3],
       lastClaim: user[4]
-    });
-
+    }) : res.status(404).json({ error: 'User not found' });
   } catch (error) {
-    console.error('User data error:', error);
-    res.status(500).json({ 
-      error: error.message,
-      details: "Vérifiez le format des données dans Google Sheets" 
-    });
-  }
-});
-
-app.get('/referral/:code', async (req, res) => {
-  try {
-    if (!sheetsInitialized) throw new Error('Service not initialized');
-    const { code } = req.params;
-    const referralInfo = await getReferralInfo(code);
-    res.json(referralInfo);
-  } catch (err) {
-    console.error('Referral error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.get('/health', (req, res) => {
-  const status = {
+  res.json({
     status: sheetsInitialized ? 'OK' : 'INITIALIZING',
-    timestamp: new Date().toISOString(),
-    services: {
-      googleSheets: sheetsInitialized,
-      telegram: !!process.env.TELEGRAM_BOT_TOKEN,
-      sessions: activeSessions.size
+    sessions: activeSessions.size
+  });
+});
+
+// [MAINTENANCE]
+setInterval(() => { // Nettoyage sessions
+  const now = new Date();
+  for (const [userId, session] of activeSessions.entries()) {
+    if ((now - new Date(session.lastActive)) > 3600000) {
+      activeSessions.delete(userId);
     }
-  };
-  res.status(sheetsInitialized ? 200 : 503).json(status);
-});
-
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
-});
-
-app.use((err, req, res, next) => {
-  console.error('Global error:', err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-// ===== INITIALISATION =====
-async function initializeApp() {
-  try {
-    await initGoogleSheets();
-    sheetsInitialized = true;
-    console.log('Google Sheets initialized');
-    
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-      
-      if (!process.env.PUBLIC_URL) {
-        bot.launch().catch(err => {
-          console.error('Bot launch error:', err);
-          process.exit(1);
-        });
-      }
-    });
-  } catch (err) {
-    console.error('Initialization failed:', err);
-    process.exit(1);
   }
-}
+}, 300000);
+
+process.on('unhandledRejection', err => console.error('Rejection:', err));
+process.on('uncaughtException', err => {
+  console.error('Crash:', err);
+  process.exit(1);
+});
 
 initializeApp();
