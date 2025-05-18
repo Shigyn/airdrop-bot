@@ -194,36 +194,15 @@ app.get('/tasks', async (req, res) => {
 });
 
 app.get('/user/:userId', async (req, res) => {
-  try {
-    console.log("Requête user reçue pour:", req.params.userId);
-    const userRow = await getUserData(req.params.userId);
-    
-    if (!userRow) {
-      console.log("Aucune donnée trouvée pour:", req.params.userId);
-      return res.status(404).json({ 
-        username: "Nouveau",
-        balance: 0,
-        lastClaim: null
-      });
-    }
-
-    // Transformation explicite des données
-    const userData = {
-      username: userRow[1] || "Anonyme",
-      balance: parseInt(userRow[3]) || 0,
-      lastClaim: userRow[4] || null
-    };
-
-    console.log("Données envoyées:", userData);
-    res.json(userData);
-    
-  } catch (error) {
-    console.error("Erreur complète:", error);
-    res.status(500).json({ 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
+  // Bypass complet de Google Sheets
+  const MOCK_DATA = {
+    username: "TEST_USER",
+    balance: 1000,
+    lastClaim: new Date().toISOString()
+  };
+  
+  console.log("⚠️ ENVOI DE DONNÉES MOCKÉES");
+  res.json(MOCK_DATA);
 });
 
 app.get('/health', (req, res) => {
