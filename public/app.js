@@ -2,9 +2,12 @@
 let tg, userId;
 let balance = 0;
 let miningInterval;
+let sessionStartTime = Date.now(); // Déplacé en variable globale
+let tokens = 0; // Déplacé en variable globale
+const deviceId = navigator.userAgent + "-" + userId; // Déplacé en variable globale
 
 // ==============================================
-// SYSTEME DE PARTICULES COSMIQUES
+// SYSTEME DE PARTICULES COSMIQUES (inchangé)
 // ==============================================
 
 function createParticles() {
@@ -49,7 +52,42 @@ function initParticles() {
 }
 
 // ==============================================
-// FONCTIONS PRINCIPALES
+// GESTION DE SESSION PERSISTANTE
+// ==============================================
+
+function sauvegarderSession() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('miningSession', JSON.stringify({
+      sessionStartTime,
+      tokens,
+      userId,
+      deviceId
+    }));
+  }
+}
+
+function chargerSession() {
+  if (typeof localStorage !== 'undefined' && userId) {
+    const session = localStorage.getItem('miningSession');
+    if (session) {
+      const parsed = JSON.parse(session);
+      // Vérifier que c'est la même session utilisateur
+      if (parsed.userId === userId && parsed.deviceId === deviceId) {
+        const elapsed = (Date.now() - parsed.sessionStartTime) / 1000;
+        // Session valide si moins d'1h
+        if (elapsed < 3600) {
+          sessionStartTime = parsed.sessionStartTime;
+          tokens = parsed.tokens;
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+// ==============================================
+// FONCTIONS PRINCIPALES MODIFIEES
 // ==============================================
 
 function initTelegramWebApp() {
@@ -68,6 +106,128 @@ function initTelegramWebApp() {
   }
   console.log('User ID détecté:', userId);
 }
+
+async function demarrerMinage() {
+  // Nettoyer l'intervalle existant
+  if (miningInterval) {
+    clearInterval(miningInterval);
+  }
+
+  // Vérifier session existante
+  const sessionExistante = chargerSession();
+  
+  // Si pas de session valide, en créer une nouvelle
+  if (!sessionExistante) {
+    sessionStartTime = Date.now();
+    tokens = 0;
+    await fetch('/start-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, deviceId })
+    }).catch(console.error);
+  }
+
+  // Démarrer le minage
+  miningInterval = setInterval(() => {
+    const now = Date.now();
+    const elapsed = (now - sessionStartTime) / 1000;
+    tokens = Math.min(elapsed * (1/60), 60); // 1 token/min, max 60
+    
+    updateDisplay();
+    sauvegarderSession();
+    
+    fetch('/update-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, tokens, deviceId })
+    }).catch(console.error);
+  }, 1000);
+}
+
+function updateDisplay() {
+  const btn = document.getElementById('main-claim-btn');
+  const tokensDisplay = document.getElementById('tokens');
+  const claimText = document.getElementById('claim-text');
+  
+  const now = Date.now();
+  const elapsed = (now - sessionStartTime) / 1000;
+  const remainingTime = Math.max(0, 600 - elapsed); // 10 min pour claim
+
+  tokensDisplay.textContent = tokens.toFixed(2);
+
+  if (elapsed >= 3600) { // 1h max
+    claimText.textContent = "SESSION EXPIRED";
+    btn.disabled = true;
+  } 
+  else if (elapsed >= 600) { // 10 min min
+    claimText.textContent = `CLAIM ${tokens.toFixed(2)} TOKENS`;
+    btn.disabled = false;
+  } 
+  else {
+    const mins = Math.floor(remainingTime / 60);
+    const secs = Math.floor(remainingTime % 60);
+    claimText.textContent = `MINING IN PROGRESS (${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')})`;
+    btn.disabled = true;
+  }
+}
+
+async function handleClaim() {
+  const btn = document.getElementById('main-claim-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="loading-spinner-small"></div>';
+
+  try {
+    const response = await fetch('/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        userId,
+        deviceId,
+        tokens: tokens.toFixed(2),
+        username: tg.initDataUnsafe.user?.username || 'Anonyme'
+      })
+    });
+
+    if (!response.ok) throw new Error('Claim failed');
+
+    // Nettoyer et redémarrer
+    localStorage.removeItem('miningSession');
+    sessionStartTime = Date.now();
+    tokens = 0;
+    
+    await demarrerMinage();
+    await loadUserData();
+    
+    btn.innerHTML = '<span id="claim-text">MINING IN PROGRESS</span>';
+
+  } catch (error) {
+    console.error("Claim error:", error);
+    btn.disabled = false;
+    btn.innerHTML = '<span id="claim-text">ERREUR - RETRY</span>';
+  }
+}
+
+function showClaim() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="claim-container">
+      <div class="token-display">
+        <span id="tokens">0.00</span>
+        <span class="token-unit">tokens</span>
+      </div>
+      <button id="main-claim-btn" class="claim-button" disabled>
+        <span id="claim-text">MINING IN PROGRESS (00:10:00)</span>
+      </button>
+    </div>
+  `;
+
+  document.getElementById('main-claim-btn').addEventListener('click', handleClaim);
+  updateDisplay();
+}
+
+// ==============================================
+// FONCTIONS EXISTANTES (inchangées)
+// ==============================================
 
 async function loadUserData() {
   try {
@@ -103,146 +263,6 @@ async function loadUserData() {
     throw error;
   }
 }
-
-function showClaim() {
-  const content = document.getElementById('content');
-  content.innerHTML = `
-    <div class="claim-container">
-      <div class="token-display">
-        <span id="tokens">0.00</span>
-        <span class="token-unit">tokens</span>
-      </div>
-      <button id="main-claim-btn" class="claim-button" disabled>
-        <span id="claim-text">MINING IN PROGRESS (00:10:00)</span>
-      </button>
-    </div>
-  `;
-
-  const MIN_CLAIM_TIME = 600;
-  const TOKENS_PER_SECOND = 1/60;
-  const MAX_SESSION_TIME = 3600;
-  
-  let tokens = 0;
-  let sessionStartTime = Date.now();
-  const btn = document.getElementById('main-claim-btn');
-  const tokensDisplay = document.getElementById('tokens');
-  const deviceId = navigator.userAgent + "-" + userId;
-
-  async function initSession() {
-    try {
-      const response = await fetch('/start-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, deviceId })
-      });
-      const data = await response.json();
-
-      if (data.error === "OTHER_DEVICE_ACTIVE") {
-        alert("Session active sur un autre appareil !");
-        return false;
-      }
-
-      if (data.exists) {
-        sessionStartTime = new Date().getTime() - (data.elapsedTime * 1000);
-        tokens = data.tokens || 0;
-      }
-      return true;
-    } catch (error) {
-      console.error("Session error:", error);
-      return true;
-    }
-  }
-
-  function updateDisplay() {
-    const now = Date.now();
-    const elapsed = (now - sessionStartTime) / 1000;
-    const remainingTime = Math.max(0, MIN_CLAIM_TIME - elapsed);
-
-    tokens = Math.min(elapsed * TOKENS_PER_SECOND, 60);
-    tokensDisplay.textContent = tokens.toFixed(2);
-
-    if (elapsed >= MAX_SESSION_TIME) {
-      document.getElementById('claim-text').textContent = "SESSION EXPIRED";
-      btn.disabled = true;
-    } 
-    else if (elapsed >= MIN_CLAIM_TIME) {
-      document.getElementById('claim-text').textContent = `CLAIM ${tokens.toFixed(2)} TOKENS`;
-      btn.disabled = false;
-    } 
-    else {
-      const mins = Math.floor(remainingTime / 60);
-      const secs = Math.floor(remainingTime % 60);
-      document.getElementById('claim-text').textContent = 
-        `MINING IN PROGRESS (${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')})`;
-      btn.disabled = true;
-    }
-  }
-
-  async function startMining() {
-    if (miningInterval) {
-      clearInterval(miningInterval);
-    }
-
-    const sessionOK = await initSession();
-    if (!sessionOK) return;
-
-    sessionStartTime = Date.now();
-    tokens = 0;
-    updateDisplay();
-
-    miningInterval = setInterval(() => {
-      updateDisplay();
-      
-      fetch('/update-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, tokens, deviceId })
-      }).catch(console.error);
-    }, 1000);
-  }
-
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    try {
-      btn.innerHTML = '<div class="loading-spinner-small"></div>';
-      
-      const response = await fetch('/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId,
-          deviceId,
-          tokens: tokens.toFixed(2),
-          username: tg.initDataUnsafe.user?.username || 'Anonyme'
-        })
-      });
-      
-      if (!response.ok) throw new Error('Claim failed');
-      
-      await fetch('/end-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      }).catch(e => console.log("Nettoyage session:", e));
-      
-      await startMining();
-      await loadUserData();
-      
-      btn.innerHTML = '<span id="claim-text">MINING IN PROGRESS</span>';
-      
-    } catch (error) {
-      console.error("Claim error:", error);
-      btn.disabled = false;
-      btn.innerHTML = '<span id="claim-text">CLAIM FAILED - RETRY</span>';
-    }
-  });
-
-  startMining();
-}
-
-// ==============================================
-// NAVIGATION
-// ==============================================
 
 function setupNavigation() {
   const navClaim = document.getElementById('nav-claim');
@@ -286,7 +306,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     initParticles();
     setupNavigation();
     await loadUserData();
+    
+    // Démarrer le minage après avoir obtenu userId
+    deviceId = navigator.userAgent + "-" + userId;
+    await demarrerMinage();
     showClaim();
+
   } catch (error) {
     console.error("Erreur d'initialisation:", error);
     document.body.innerHTML = `
