@@ -383,3 +383,21 @@ body::before {
     max-width: 90%;
   }
 }
+@keyframes navPulse {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+  100% { transform: translateY(0); }
+}
+
+.nav-btn.active {
+  animation: navPulse 2s infinite ease-in-out;
+}
+.loading-spinner-small {
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top: 2px solid var(--primary);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}

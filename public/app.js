@@ -182,56 +182,73 @@ function showClaim() {
   }
 
   async function startMining() {
-    const sessionOK = await initSession();
-    if (!sessionOK) return;
-
-    const timer = setInterval(() => {
-      updateDisplay();
-      
-      fetch('/update-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, tokens, deviceId })
-      }).catch(console.error);
-
-    }, 1000);
+  // Clear any existing interval to prevent duplicates
+  if (this.miningInterval) {
+    clearInterval(this.miningInterval);
   }
 
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    try {
-      const response = await fetch('/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId,
-          deviceId,
-          tokens: tokens.toFixed(2),
-          username: tg.initDataUnsafe.user?.username || 'Anonyme'
-        })
-      });
-      
-      if (!response.ok) throw new Error('Claim failed');
-      
-      await fetch('/end-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      
-      sessionStartTime = Date.now();
-      tokens = 0;
-      updateDisplay();
-      await loadUserData();
-      
-    } catch (error) {
-      console.error("Claim error:", error);
-      btn.disabled = false;
-    }
-  });
+  const sessionOK = await initSession();
+  if (!sessionOK) return;
 
-  startMining();
+  // Reset mining session
+  this.sessionStartTime = Date.now();
+  this.tokens = 0;
+  updateDisplay();
+
+  // Start new mining interval
+  this.miningInterval = setInterval(() => {
+    updateDisplay();
+    
+    fetch('/update-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, tokens, deviceId })
+    }).catch(console.error);
+  }, 1000);
 }
+
+btn.addEventListener('click', async () => {
+  btn.disabled = true;
+  try {
+    // Show loading state
+    btn.innerHTML = '<div class="loading-spinner-small"></div>';
+    
+    const response = await fetch('/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        userId,
+        deviceId,
+        tokens: tokens.toFixed(2),
+        username: tg.initDataUnsafe.user?.username || 'Anonyme'
+      })
+    });
+    
+    if (!response.ok) throw new Error('Claim failed');
+    
+    // Optional: End session on server if needed
+    await fetch('/end-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    }).catch(e => console.log("Optional session cleanup failed:", e));
+    
+    // Immediately restart mining
+    await startMining();
+    await loadUserData();
+    
+    // Restore button text
+    btn.innerHTML = '<span id="claim-text">MINING IN PROGRESS</span>';
+    
+  } catch (error) {
+    console.error("Claim error:", error);
+    btn.disabled = false;
+    btn.innerHTML = '<span id="claim-text">CLAIM FAILED - RETRY</span>';
+  }
+});
+
+// Start initial mining session
+startMining();
 
 // ==============================================
 // INITIALISATION
