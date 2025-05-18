@@ -195,23 +195,27 @@ app.get('/tasks', async (req, res) => {
 
 app.get('/user/:userId', async (req, res) => {
   try {
-    console.log("Requête user reçue pour:", req.params.userId); // Debug
-    const user = await getUserData(req.params.userId);
+    console.log("Requête user reçue pour:", req.params.userId);
+    const userRow = await getUserData(req.params.userId);
     
-    if (!user) {
+    if (!userRow) {
       console.log("Aucune donnée trouvée pour:", req.params.userId);
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ 
+        username: "Nouveau",
+        balance: 0,
+        lastClaim: null
+      });
     }
 
-    // Formatage explicite des données
-    const responseData = {
-      username: user[1] || "Anonyme",
-      balance: user[3] !== undefined ? user[3] : 0,
-      lastClaim: user[4] || null
+    // Transformation explicite des données
+    const userData = {
+      username: userRow[1] || "Anonyme",
+      balance: parseInt(userRow[3]) || 0,
+      lastClaim: userRow[4] || null
     };
 
-    console.log("Données envoyées:", responseData); // Debug
-    res.json(responseData);
+    console.log("Données envoyées:", userData);
+    res.json(userData);
     
   } catch (error) {
     console.error("Erreur complète:", error);
