@@ -212,7 +212,7 @@ app.post('/claim', async (req, res) => {
       success:
 
 // [TELEGRAM] Webhook
-app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, webhookCallback);
+app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, webhookCallback)
 
 // [STATIC] Routes
 app.use(express.static(path.join(__dirname, 'public')));
