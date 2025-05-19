@@ -12,9 +12,13 @@ const activeSessions = new Map();
 
 // Middlewares
 app.use(cors({
-  origin: '*',
+  origin: [
+    'https://airdrop-bot-soy1.onrender.com',
+    'https://web.telegram.org'
+  ],
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Telegram-Data']
+  allowedHeaders: ['Content-Type', 'Telegram-Data'],
+  credentials: true
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
