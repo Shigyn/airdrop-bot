@@ -24,7 +24,7 @@ const ReferralPage = {
         <div class="referral-card">
           <h3>Votre lien unique</h3>
           <div class="referral-link-container">
-            <input type="text" id="referral-link" readonly value="Chargement...">
+            <input type="text" id="referral-link" readonly value="Génération du lien...">
             <button id="copy-referral-btn" class="copy-button">
               <span class="copy-icon">⎘</span>
             </button>
@@ -53,6 +53,7 @@ const ReferralPage = {
       const tg = window.Telegram.WebApp;
       if (!tg.initData) throw new Error("Données Telegram non disponibles");
 
+      // 1. Récupération des données du backend
       const response = await fetch('/get-referrals', {
         headers: {
           'Telegram-Data': tg.initData,
@@ -61,81 +62,88 @@ const ReferralPage = {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Erreur ${response.status}`);
+        throw new Error(`Erreur HTTP ${response.status}`);
       }
 
       const data = await response.json();
       console.log("Données reçues:", data);
 
-      // PARTIE CRITIQUE - Génération du lien de parrainage
-      const botUsername = 'CRYPTORATS_bot'; // Remplacez par le vrai username de votre bot
-      let referralCode = data.referralCode;
-      
-      if (!referralCode) {
-        // Fallback 1: Utiliser l'ID utilisateur Telegram
-        const userId = tg.initDataUnsafe.user?.id;
-        if (userId) {
-          referralCode = `ref_${userId}`;
-        } else {
-          // Fallback 2: Générer un code temporaire
-          referralCode = `temp_${Math.random().toString(36).substring(2, 8)}`;
-        }
-      }
+      // 2. Génération ABSOLUMENT GARANTIE du lien
+      const generateReferralLink = () => {
+        // a) Nom du bot (à confirmer)
+        const BOT_USERNAME = 'CRYPTORATS_bot'; // Remplacer par @username réel
+        
+        // b) Code de parrainage (5 sources possibles par ordre de priorité)
+        const referralSources = [
+          data.referralCode,                          // 1. Depuis le backend
+          tg.initDataUnsafe.start_param,              // 2. Paramètre de démarrage
+          `ref_${tg.initDataUnsafe.user?.id}`,        // 3. ID utilisateur
+          `usr_${tg.initDataUnsafe.user?.username}`,  // 4. Nom d'utilisateur
+          `tmp_${Math.random().toString(36).substr(2, 8)}` // 5. Code temporaire
+        ];
+        
+        const validCode = referralSources.find(code => code && code.trim().length > 0);
+        return `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(validCode)}`;
+      };
 
-      const referralLink = `https://t.me/${botUsername}?start=${encodeURIComponent(referralCode)}`;
-      console.log("Lien de parrainage généré:", referralLink); // Important pour le debug
+      const referralLink = generateReferralLink();
+      console.log("Lien GÉNÉRÉ:", referralLink); // DEBUG OBLIGATOIRE
 
-      // Mise à jour de l'interface
-      const linkInput = document.getElementById('referral-link');
-      if (linkInput) {
-        linkInput.value = referralLink;
-      } else {
-        console.error("Champ referral-link introuvable");
-      }
+      // 3. Mise à jour de l'interface avec vérifications strictes
+      const updateUI = () => {
+        try {
+          // a) Lien de parrainage
+          const linkInput = document.getElementById('referral-link');
+          if (linkInput) linkInput.value = referralLink;
 
-      // Mise à jour des statistiques
-      if (document.getElementById('referral-count')) {
-        document.getElementById('referral-count').textContent = data.referralCount ?? 0;
-      }
-      if (document.getElementById('referral-earnings')) {
-        document.getElementById('referral-earnings').textContent = data.earnedTokens ?? 0;
-      }
+          // b) Statistiques
+          const countEl = document.getElementById('referral-count');
+          const earningsEl = document.getElementById('referral-earnings');
+          if (countEl) countEl.textContent = data.referralCount ?? 0;
+          if (earningsEl) earningsEl.textContent = data.earnedTokens ?? 0;
 
-      // Affichage des filleuls
-      const listContainer = document.getElementById('referral-list');
-      if (listContainer) {
-        if (data.referrals?.length > 0) {
-          listContainer.innerHTML = data.referrals.map(ref => `
-            <div class="referral-item">
-              <span>${ref.username || 'Utilisateur'} - ${new Date(ref.date).toLocaleDateString('fr-FR')}</span>
-              <span class="reward-badge">+${ref.reward || 0} tokens</span>
-            </div>
-          `).join('');
-        } else {
-          listContainer.innerHTML = '<p class="no-referrals">Aucun filleul pour le moment</p>';
-        }
-      }
-
-      // Gestion du bouton copie
-      const copyBtn = document.getElementById('copy-referral-btn');
-      if (copyBtn) {
-        copyBtn.addEventListener('click', () => {
-          if (linkInput) {
-            linkInput.select();
-            document.execCommand('copy');
-            
-            // Feedback visuel
-            copyBtn.innerHTML = '<span class="copy-icon">✓</span>';
-            setTimeout(() => {
-              copyBtn.innerHTML = '<span class="copy-icon">⎘</span>';
-            }, 2000);
+          // c) Liste des filleuls
+          const listContainer = document.getElementById('referral-list');
+          if (listContainer) {
+            if (data.referrals?.length > 0) {
+              listContainer.innerHTML = data.referrals.map(ref => `
+                <div class="referral-item">
+                  <span>${ref.username || 'Utilisateur'} - ${new Date(ref.date).toLocaleDateString('fr-FR')}</span>
+                  <span class="reward-badge">+${ref.reward || 0} tokens</span>
+                </div>
+              `).join('');
+            } else {
+              listContainer.innerHTML = '<p class="no-referrals">Aucun filleul pour le moment</p>';
+            }
           }
-        });
-      }
+
+          // d) Bouton copie
+          const copyBtn = document.getElementById('copy-referral-btn');
+          if (copyBtn && linkInput) {
+            copyBtn.addEventListener('click', () => {
+              linkInput.select();
+              document.execCommand('copy');
+              copyBtn.innerHTML = '<span class="copy-icon">✓</span>';
+              setTimeout(() => {
+                copyBtn.innerHTML = '<span class="copy-icon">⎘</span>';
+              }, 2000);
+            });
+          }
+        } catch (uiError) {
+          console.error("Erreur UI:", uiError);
+        }
+      };
+
+      updateUI();
 
     } catch (error) {
       console.error("Erreur Referral:", error);
+      
+      // Fallback ULTIME
+      const fallbackLink = 'https://t.me/CRYPTORATS_bot'; // Lien de secours
+      const linkInput = document.getElementById('referral-link');
+      if (linkInput) linkInput.value = fallbackLink;
+
       const errorContainer = document.getElementById('referral-list') || content;
       if (errorContainer) {
         errorContainer.innerHTML = `
