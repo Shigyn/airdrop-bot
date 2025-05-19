@@ -523,3 +523,13 @@ body::before {
   opacity: 0.7;
   margin-top: 5px;
 }
+@media (max-width: 768px) {
+  .particle {
+    animation-duration: 20s !important;
+  }
+  
+  .nav-btn.active {
+    transform: translateY(-3px);
+    animation: none;
+  }
+}

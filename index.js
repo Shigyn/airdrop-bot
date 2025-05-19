@@ -295,19 +295,13 @@ app.get('/get-referrals', validateTelegramData, async (req, res) => {
     if (!sheetsInitialized) throw new Error('Service not ready');
     
     const tgData = req.headers['telegram-data'];
-    if (!tgData) {
-      return res.status(403).json({ error: "Authentification requise" });
-    }
-
     const params = new URLSearchParams(tgData);
     const user = params.get('user') ? JSON.parse(params.get('user')) : {};
-    const userId = user.id || '';
+    const userId = user.id?.toString();
 
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-    const sheets = google.sheets({ version: 'v4', auth });
+    if (!userId) {
+      return res.status(400).json({ error: "USER_ID_REQUIRED" });
+    }
 
     const [users, referrals] = await Promise.all([
       sheets.spreadsheets.values.get({
@@ -320,9 +314,10 @@ app.get('/get-referrals', validateTelegramData, async (req, res) => {
       })
     ]);
 
-    const userData = (users.data.values || []).find(row => row[2] === userId);
+    const userData = (users.data.values || []).find(row => row[2]?.toString() === userId);
     if (!userData) {
       return res.json({
+        referralCode: `REF-${Math.random().toString(36).substring(2, 8)}`,
         referralCount: 0,
         earnedTokens: 0,
         referrals: []
@@ -331,29 +326,27 @@ app.get('/get-referrals', validateTelegramData, async (req, res) => {
 
     const referralCode = userData[5] || '';
     const allReferrals = referrals.data.values || [];
-    const userReferrals = allReferrals.filter(row => row[0] === referralCode);
     
-    const earnedTokens = userReferrals.reduce((sum, row) => {
-      return sum + (parseInt(row[1]) || 0);
-    }, 0);
+    const userReferrals = allReferrals
+      .filter(row => row[0] === referralCode)
+      .map(row => ({
+        username: row[3] || 'Anonyme',
+        date: row[4] || new Date().toISOString(),
+        reward: parseInt(row[1]) || 0
+      }));
 
     res.json({
       referralCode,
       referralCount: userReferrals.length,
-      earnedTokens,
-      referrals: userReferrals.map(row => ({
-        userId: row[2],
-        username: row[3] || 'Anonyme',
-        date: row[4] || new Date().toISOString(),
-        reward: parseInt(row[1]) || 0
-      }))
+      earnedTokens: userReferrals.reduce((sum, ref) => sum + ref.reward, 0),
+      referrals: userReferrals
     });
 
   } catch (error) {
     console.error("Referral error:", error);
     res.status(500).json({ 
       error: "SERVER_ERROR",
-      message: error.message || "Erreur serveur"
+      message: error.message 
     });
   }
 });

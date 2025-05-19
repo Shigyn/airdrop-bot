@@ -272,11 +272,6 @@ function setupNavigation() {
   const navTasks = document.getElementById('nav-tasks');
   const navReferral = document.getElementById('nav-referral');
 
-  if (!navClaim || !navTasks || !navReferral) {
-    console.error("Éléments de navigation manquants");
-    return;
-  }
-
   navClaim.addEventListener('click', function() {
     showClaim();
     setActiveButton(this);
@@ -288,14 +283,16 @@ function setupNavigation() {
   });
 
   navReferral.addEventListener('click', function() {
-  window.location.href = '/referrals'; // Utilisez la navigation native
-});
-
-function setActiveButton(button) {
-  document.querySelectorAll('.nav-button').forEach(btn => {
-    btn.classList.remove('active');
+    ReferralPage.showReferralPage();
+    setActiveButton(this);
   });
-  button.classList.add('active');
+
+  function setActiveButton(button) {
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    button.classList.add('active');
+  }
 }
 
 // ==============================================

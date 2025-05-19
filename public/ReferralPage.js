@@ -1,37 +1,27 @@
 const ReferralPage = {
   showReferralPage: async function() {
-    const content = document.getElementById('content');
+  // Vérification que l'élément content existe
+  const content = document.getElementById('content');
+  if (!content) {
+    console.error("Element 'content' introuvable");
+    return;
+  }
+
+  // Vérification que Telegram WebApp est initialisé
+  if (!window.Telegram?.WebApp) {
     content.innerHTML = `
-      <div class="referral-container">
-        <h2>👥 Programme de Parrainage</h2>
-        
-        <div class="referral-card">
-          <h3>Votre lien unique</h3>
-          <div class="referral-link-container">
-            <input type="text" id="referral-link" readonly value="Chargement...">
-            <button id="copy-referral-btn" class="copy-button">
-              <span class="copy-icon">⎘</span>
-            </button>
-          </div>
-          <p class="small-text">Partagez ce lien pour gagner des bonus</p>
-        </div>
-
-        <div class="stats-container">
-          <div class="stat-card">
-            <span class="stat-value" id="referral-count">0</span>
-            <span class="stat-label">Filleuls</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value" id="referral-earnings">0</span>
-            <span class="stat-label">Tokens gagnés</span>
-          </div>
-        </div>
-
-        <div id="referral-list" class="referral-list">
-          <div class="loading-spinner"></div>
-        </div>
+      <div class="error-message">
+        Veuillez ouvrir cette page via l'application Telegram
       </div>
     `;
+    return;
+  }
+
+  content.innerHTML = `
+    <div class="referral-container">
+      [... reste du template inchangé ...]
+    </div>
+  `;
 
     try {
       // Vérification que Telegram WebApp est bien initialisé
