@@ -24,22 +24,22 @@ const ReferralPage = {
         <div class="referral-card">
           <h3>Votre lien unique</h3>
           <div class="referral-link-container">
-            <input type="text" id="referral-link" readonly value="Génération du lien...">
+            <input type="text" id="referral-link" readonly value="Création de votre lien...">
             <button id="copy-referral-btn" class="copy-button">
               <span class="copy-icon">⎘</span>
             </button>
           </div>
-          <p class="small-text">Partagez ce lien pour gagner des bonus</p>
+          <p class="small-text">Partagez ce lien pour gagner 10% de leurs gains</p>
         </div>
 
         <div class="stats-container">
           <div class="stat-card">
             <span class="stat-value" id="referral-count">0</span>
-            <span class="stat-label">Filleuls</span>
+            <span class="stat-label">Filleuls actifs</span>
           </div>
           <div class="stat-card">
             <span class="stat-value" id="referral-earnings">0</span>
-            <span class="stat-label">Tokens gagnés</span>
+            <span class="stat-label">Vos récompenses</span>
           </div>
         </div>
 
@@ -53,43 +53,51 @@ const ReferralPage = {
       const tg = window.Telegram.WebApp;
       if (!tg.initData) throw new Error("Données Telegram non disponibles");
 
-      // 1. Récupération des données du backend
-      const response = await fetch('/get-referrals', {
+      // 1. Récupération de l'ID utilisateur
+      const userId = tg.initDataUnsafe.user?.id;
+      if (!userId) throw new Error("ID utilisateur introuvable");
+
+      // 2. Génération du lien avec l'ID utilisateur intégré
+      const BOT_USERNAME = 'CRYPTORATS_bot'; // À remplacer par votre @username_bot
+      const referralCode = `ref_${userId}`;
+      const referralLink = `https://t.me/${BOT_USERNAME}?start=${referralCode}`;
+      
+      console.log("Lien de parrainage généré:", referralLink);
+
+      // 3. Envoi des données au backend pour enregistrement
+      const registerResponse = await fetch('/register-referral', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Telegram-Data': tg.initData
+        },
+        body: JSON.stringify({
+          userId: userId,
+          referralCode: referralCode,
+          username: tg.initDataUnsafe.user?.username || 'Anonyme'
+        })
+      });
+
+      if (!registerResponse.ok) {
+        throw new Error("Échec de l'enregistrement");
+      }
+
+      // 4. Récupération des données de parrainage
+      const statsResponse = await fetch('/get-referrals', {
         headers: {
           'Telegram-Data': tg.initData,
           'Content-Type': 'application/json'
         }
       });
 
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP ${response.status}`);
+      if (!statsResponse.ok) {
+        throw new Error(`Erreur HTTP ${statsResponse.status}`);
       }
 
-      const data = await response.json();
-      console.log("Données reçues:", data);
+      const referralData = await statsResponse.json();
+      console.log("Données de parrainage:", referralData);
 
-      // 2. Génération ABSOLUMENT GARANTIE du lien
-      const generateReferralLink = () => {
-        // a) Nom du bot (à confirmer)
-        const BOT_USERNAME = 'CRYPTORATS_bot'; // Remplacer par @username réel
-        
-        // b) Code de parrainage (5 sources possibles par ordre de priorité)
-        const referralSources = [
-          data.referralCode,                          // 1. Depuis le backend
-          tg.initDataUnsafe.start_param,              // 2. Paramètre de démarrage
-          `ref_${tg.initDataUnsafe.user?.id}`,        // 3. ID utilisateur
-          `usr_${tg.initDataUnsafe.user?.username}`,  // 4. Nom d'utilisateur
-          `tmp_${Math.random().toString(36).substr(2, 8)}` // 5. Code temporaire
-        ];
-        
-        const validCode = referralSources.find(code => code && code.trim().length > 0);
-        return `https://t.me/${BOT_USERNAME}?start=${encodeURIComponent(validCode)}`;
-      };
-
-      const referralLink = generateReferralLink();
-      console.log("Lien GÉNÉRÉ:", referralLink); // DEBUG OBLIGATOIRE
-
-      // 3. Mise à jour de l'interface avec vérifications strictes
+      // 5. Mise à jour de l'interface
       const updateUI = () => {
         try {
           // a) Lien de parrainage
@@ -99,21 +107,21 @@ const ReferralPage = {
           // b) Statistiques
           const countEl = document.getElementById('referral-count');
           const earningsEl = document.getElementById('referral-earnings');
-          if (countEl) countEl.textContent = data.referralCount ?? 0;
-          if (earningsEl) earningsEl.textContent = data.earnedTokens ?? 0;
+          if (countEl) countEl.textContent = referralData.referralCount ?? 0;
+          if (earningsEl) earningsEl.textContent = referralData.earnedTokens ?? 0;
 
           // c) Liste des filleuls
           const listContainer = document.getElementById('referral-list');
           if (listContainer) {
-            if (data.referrals?.length > 0) {
-              listContainer.innerHTML = data.referrals.map(ref => `
+            if (referralData.referrals?.length > 0) {
+              listContainer.innerHTML = referralData.referrals.map(ref => `
                 <div class="referral-item">
-                  <span>${ref.username || 'Utilisateur'} - ${new Date(ref.date).toLocaleDateString('fr-FR')}</span>
-                  <span class="reward-badge">+${ref.reward || 0} tokens</span>
+                  <span>${ref.username || 'Nouveau membre'} - ${new Date(ref.date).toLocaleDateString('fr-FR')}</span>
+                  <span class="reward-badge">+${Math.floor(ref.reward * 0.1)} tokens (10%)</span>
                 </div>
               `).join('');
             } else {
-              listContainer.innerHTML = '<p class="no-referrals">Aucun filleul pour le moment</p>';
+              listContainer.innerHTML = '<p class="no-referrals">Aucun filleul actif pour le moment</p>';
             }
           }
 
@@ -140,9 +148,10 @@ const ReferralPage = {
       console.error("Erreur Referral:", error);
       
       // Fallback ULTIME
-      const fallbackLink = 'https://t.me/CRYPTORATS_bot'; // Lien de secours
       const linkInput = document.getElementById('referral-link');
-      if (linkInput) linkInput.value = fallbackLink;
+      if (linkInput) {
+        linkInput.value = 'https://t.me/CRYPTORATS_bot';
+      }
 
       const errorContainer = document.getElementById('referral-list') || content;
       if (errorContainer) {

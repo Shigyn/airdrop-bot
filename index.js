@@ -351,6 +351,42 @@ app.get('/get-referrals', validateTelegramData, async (req, res) => {
   }
 });
 
+app.post('/register-referral', async (req, res) => {
+  try {
+    const { userId, referralCode, username } = req.body;
+    
+    // 1. Vérifier si l'utilisateur existe déjà
+    const userSheet = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:D"
+    });
+
+    const userExists = userSheet.data.values?.some(row => row[2] === userId);
+
+    // 2. Si nouvel utilisateur, l'ajouter
+    if (!userExists) {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "Users!A2:D",
+        valueInputOption: "USER_ENTERED",
+        resource: {
+          values: [[
+            new Date().toISOString(),
+            username,
+            userId,
+            referralCode // Stocke le code de parrainage
+          ]]
+        }
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Register error:", error);
+    res.status(500).json({ error: "Erreur d'enregistrement" });
+  }
+});
+
 // [MAINTENANCE]
 setInterval(() => {
     const now = new Date();
