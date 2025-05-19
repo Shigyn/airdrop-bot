@@ -217,6 +217,10 @@ app.post('/claim', async (req, res) => {
 // [TELEGRAM] Webhook
 app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, webhookCallback);
 
+app.get('/referrals', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // [STATIC] Routes
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -274,7 +278,15 @@ app.get('/health', (req, res) => {
 });
 
 // [REFERRAL] Récupération des infos de parrainage
-app.get('/get-referrals', async (req, res) => {
+const validateTelegramData = (req, res, next) => {
+  if (!req.headers['telegram-data']) {
+    return res.status(403).json({ error: "Accès non autorisé" });
+  }
+  next();
+};
+
+// Protégez les routes :
+app.get('/get-referrals', validateTelegramData, async (req, res) => {
   try {
     if (!sheetsInitialized) throw new Error('Service not ready');
     
@@ -352,6 +364,10 @@ setInterval(() => {
         }
     }
 }, 300000);
+
+setInterval(() => {
+  console.log('[Keep-Alive] Instance active...');
+}, 5 * 60 * 1000); // Ping toutes les 5 minutes
 
 process.on('unhandledRejection', err => console.error('Rejection:', err));
 process.on('uncaughtException', err => {

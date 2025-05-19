@@ -288,10 +288,8 @@ function setupNavigation() {
   });
 
   navReferral.addEventListener('click', function() {
-    ReferralPage.showReferralPage(); // Déplacez cette ligne ici
-    setActiveButton(this);
-  });
-}
+  window.location.href = '/referrals'; // Utilisez la navigation native
+});
 
 function setActiveButton(button) {
   document.querySelectorAll('.nav-button').forEach(btn => {
