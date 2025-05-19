@@ -1,22 +1,18 @@
 const ReferralPage = {
   showReferralPage: async function() {
-    // Vérification que l'élément content existe
+    // Vérifications initiales
     const content = document.getElementById('content');
     if (!content) {
       console.error("Element 'content' introuvable");
       return;
     }
 
-    // Vérification que Telegram WebApp est initialisé
     if (!window.Telegram?.WebApp) {
-      content.innerHTML = `
-        <div class="error-message">
-          Veuillez ouvrir cette page via l'application Telegram
-        </div>
-      `;
+      content.innerHTML = `<div class="error-message">Ouvrez via Telegram</div>`;
       return;
     }
 
+    // Template avec améliorations
     content.innerHTML = `
       <div class="referral-container">
         <h2>👥 Programme de Parrainage</h2>
@@ -24,22 +20,23 @@ const ReferralPage = {
         <div class="referral-card">
           <h3>Votre lien unique</h3>
           <div class="referral-link-container">
-            <input type="text" id="referral-link" readonly value="Création de votre lien...">
+            <input type="text" id="referral-link" readonly value="Génération...">
             <button id="copy-referral-btn" class="copy-button">
               <span class="copy-icon">⎘</span>
+              <span class="copy-text">Copier</span>
             </button>
           </div>
-          <p class="small-text">Partagez ce lien pour gagner 10% de leurs gains</p>
+          <p class="small-text">Partagez pour gagner 10% de leurs gains</p>
         </div>
 
         <div class="stats-container">
           <div class="stat-card">
             <span class="stat-value" id="referral-count">0</span>
-            <span class="stat-label">Filleuls actifs</span>
+            <span class="stat-label">Filleuls</span>
           </div>
           <div class="stat-card">
             <span class="stat-value" id="referral-earnings">0</span>
-            <span class="stat-label">Vos récompenses</span>
+            <span class="stat-label">Vos gains</span>
           </div>
         </div>
 
@@ -51,20 +48,40 @@ const ReferralPage = {
 
     try {
       const tg = window.Telegram.WebApp;
-      if (!tg.initData) throw new Error("Données Telegram non disponibles");
-
-      // 1. Récupération de l'ID utilisateur
-      const userId = tg.initDataUnsafe.user?.id;
-      if (!userId) throw new Error("ID utilisateur introuvable");
-
-      // 2. Génération du lien avec l'ID utilisateur intégré
-      const BOT_USERNAME = 'CRYPTORATS_bot'; // À remplacer par votre @username_bot
-      const referralCode = `ref_${userId}`;
-      const referralLink = `https://t.me/${BOT_USERNAME}?start=${referralCode}`;
+      const user = tg.initDataUnsafe?.user;
       
-      console.log("Lien de parrainage généré:", referralLink);
+      if (!user?.id) throw new Error("ID utilisateur introuvable");
 
-      // 3. Envoi des données au backend pour enregistrement
+      // 1. Génération garantie du lien
+      const BOT_USERNAME = 'CRYPTORATS_bot'; // À confirmer
+      const referralLink = `https://t.me/${BOT_USERNAME}?start=ref_${user.id}`;
+      
+      // 2. Mise à jour immédiate du champ
+      const linkInput = document.getElementById('referral-link');
+      if (!linkInput) throw new Error("Champ lien introuvable");
+      linkInput.value = referralLink;
+
+      // 3. Bouton copie fonctionnel (version améliorée)
+      const copyBtn = document.getElementById('copy-referral-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', () => {
+          linkInput.select();
+          document.execCommand('copy');
+          
+          // Feedback visuel complet
+          const icon = copyBtn.querySelector('.copy-icon');
+          const text = copyBtn.querySelector('.copy-text');
+          if (icon) icon.textContent = '✓';
+          if (text) text.textContent = 'Copié!';
+          
+          setTimeout(() => {
+            if (icon) icon.textContent = '⎘';
+            if (text) text.textContent = 'Copier';
+          }, 2000);
+        });
+      }
+
+      // 4. Enregistrement (conservé de l'ancienne version)
       const registerResponse = await fetch('/register-referral', {
         method: 'POST',
         headers: {
@@ -72,93 +89,57 @@ const ReferralPage = {
           'Telegram-Data': tg.initData
         },
         body: JSON.stringify({
-          userId: userId,
-          referralCode: referralCode,
-          username: tg.initDataUnsafe.user?.username || 'Anonyme'
+          userId: user.id,
+          referralCode: `ref_${user.id}`,
+          username: user.username || 'Anonyme'
         })
       });
+      if (!registerResponse.ok) throw new Error("Échec enregistrement");
 
-      if (!registerResponse.ok) {
-        throw new Error("Échec de l'enregistrement");
-      }
-
-      // 4. Récupération des données de parrainage
+      // 5. Récupération des données (version optimisée)
       const statsResponse = await fetch('/get-referrals', {
         headers: {
           'Telegram-Data': tg.initData,
           'Content-Type': 'application/json'
         }
       });
-
-      if (!statsResponse.ok) {
-        throw new Error(`Erreur HTTP ${statsResponse.status}`);
-      }
-
       const referralData = await statsResponse.json();
-      console.log("Données de parrainage:", referralData);
 
-      // 5. Mise à jour de l'interface
-      const updateUI = () => {
-        try {
-          // a) Lien de parrainage
-          const linkInput = document.getElementById('referral-link');
-          if (linkInput) linkInput.value = referralLink;
-
-          // b) Statistiques
-          const countEl = document.getElementById('referral-count');
-          const earningsEl = document.getElementById('referral-earnings');
-          if (countEl) countEl.textContent = referralData.referralCount ?? 0;
-          if (earningsEl) earningsEl.textContent = referralData.earnedTokens ?? 0;
-
-          // c) Liste des filleuls
-          const listContainer = document.getElementById('referral-list');
-          if (listContainer) {
-            if (referralData.referrals?.length > 0) {
-              listContainer.innerHTML = referralData.referrals.map(ref => `
-                <div class="referral-item">
-                  <span>${ref.username || 'Nouveau membre'} - ${new Date(ref.date).toLocaleDateString('fr-FR')}</span>
-                  <span class="reward-badge">+${Math.floor(ref.reward * 0.1)} tokens (10%)</span>
-                </div>
-              `).join('');
-            } else {
-              listContainer.innerHTML = '<p class="no-referrals">Aucun filleul actif pour le moment</p>';
-            }
-          }
-
-          // d) Bouton copie
-          const copyBtn = document.getElementById('copy-referral-btn');
-          if (copyBtn && linkInput) {
-            copyBtn.addEventListener('click', () => {
-              linkInput.select();
-              document.execCommand('copy');
-              copyBtn.innerHTML = '<span class="copy-icon">✓</span>';
-              setTimeout(() => {
-                copyBtn.innerHTML = '<span class="copy-icon">⎘</span>';
-              }, 2000);
-            });
-          }
-        } catch (uiError) {
-          console.error("Erreur UI:", uiError);
-        }
+      // 6. Mise à jour de l'UI (avec vérifications)
+      const updateElement = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
       };
 
-      updateUI();
+      updateElement('referral-count', referralData.referralCount ?? 0);
+      updateElement('referral-earnings', referralData.earnedTokens ?? 0);
+
+      const listContainer = document.getElementById('referral-list');
+      if (listContainer) {
+        listContainer.innerHTML = referralData.referrals?.length > 0 
+          ? referralData.referrals.map(ref => `
+              <div class="referral-item">
+                <span>${ref.username || 'Anonyme'}</span>
+                <span>${new Date(ref.date).toLocaleDateString('fr-FR')}</span>
+                <span class="reward-badge">+${Math.floor(ref.reward * 0.1)} tokens</span>
+              </div>
+            `).join('')
+          : '<p class="no-referrals">Aucun filleul actif</p>';
+      }
 
     } catch (error) {
-      console.error("Erreur Referral:", error);
+      console.error('Erreur:', error);
       
-      // Fallback ULTIME
+      // Fallback amélioré
       const linkInput = document.getElementById('referral-link');
-      if (linkInput) {
-        linkInput.value = 'https://t.me/CRYPTORATS_bot';
-      }
+      if (linkInput) linkInput.value = 'https://t.me/CRYPTORATS_bot';
 
       const errorContainer = document.getElementById('referral-list') || content;
       if (errorContainer) {
         errorContainer.innerHTML = `
           <div class="error-message">
-            ${error.message || 'Erreur de chargement'}
-            <button onclick="ReferralPage.showReferralPage()" class="retry-button">Réessayer</button>
+            ${error.message || 'Erreur système'}
+            <button onclick="ReferralPage.showReferralPage()">Réessayer</button>
           </div>
         `;
       }
