@@ -109,6 +109,7 @@ function initTelegramWebApp() {
   
   // Remplacer la ligne deviceId existante par :
 deviceId = `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_');
+}
 
 async function demarrerMinage() {
   if (miningInterval) {
