@@ -72,39 +72,40 @@ app.post('/sync-session', (req, res) => {
 });
 
 app.post('/start-session', (req, res) => {
-    const { userId, deviceId } = req.body; // Récupérer deviceId du body directement
-    
-    if (!deviceId) {
-        return res.status(400).json({ error: "DEVICE_ID_REQUIRED" });
-    }
-    const existingSession = activeSessions.get(userId);
+  const { userId, deviceId } = req.body;
+  
+  if (!deviceId) {
+    return res.status(400).json({ error: "DEVICE_ID_REQUIRED" });
+  }
 
-    if (existingSession && existingSession.deviceId === deviceId) {
-        const elapsed = (new Date() - new Date(existingSession.startTime)) / 1000;
-        return res.json({ 
-            exists: true,
-            sessionStart: existingSession.startTime,
-            elapsedTime: elapsed,
-            tokens: existingSession.tokens
-        });
-    }
+  const existingSession = activeSessions.get(userId);
 
-    if (existingSession) {
-        return res.status(400).json({ 
-            error: "OTHER_DEVICE_ACTIVE",
-            sessionStart: existingSession.startTime
-        });
-    }
-
-    activeSessions.set(userId, {
-        startTime: new Date(),
-        lastActive: new Date(),
-        deviceId,
-        tokens: 0
+  if (existingSession && existingSession.deviceId === deviceId) {
+    const elapsed = (new Date() - new Date(existingSession.startTime)) / 1000;
+    return res.json({ 
+      exists: true,
+      sessionStart: existingSession.startTime,
+      elapsedTime: elapsed,
+      tokens: existingSession.tokens
     });
+  }
 
-    res.json({ success: true });
-});
+  if (existingSession) {
+    return res.status(400).json({ 
+      error: "OTHER_DEVICE_ACTIVE",
+      sessionStart: existingSession.startTime
+    });
+  }
+
+  activeSessions.set(userId, {
+    startTime: new Date(),
+    lastActive: new Date(),
+    deviceId,
+    tokens: 0
+  });
+
+  res.json({ success: true });
+});  // <-- Cette parenthèse fermante était manquante
 
 app.post('/update-session', (req, res) => {
   const { userId, tokens, deviceId } = req.body;
