@@ -65,11 +65,12 @@ app.post('/sync-session', (req, res) => {
   });
 });
 
-// [SESSION] Nouvelle session
 app.post('/start-session', (req, res) => {
-    const { userId } = req.body;
-    const deviceId = `${req.headers['user-agent']}-${userId}`; 
-
+    const { userId, deviceId } = req.body; // Récupérer deviceId du body directement
+    
+    if (!deviceId) {
+        return res.status(400).json({ error: "DEVICE_ID_REQUIRED" });
+    }
     const existingSession = activeSessions.get(userId);
 
     if (existingSession && existingSession.deviceId === deviceId) {
@@ -115,30 +116,40 @@ app.post('/update-session', (req, res) => {
 // [CLAIM] Enregistrement
 app.post('/claim', async (req, res) => {
   try {
-    if (!sheetsInitialized) throw new Error('Service not ready');
     const { userId, tokens, deviceId, username } = req.body;
+    
+    // 1. Validation de la session
     const session = activeSessions.get(userId);
-
     if (!session || session.deviceId !== deviceId) {
-      console.log(`Session invalide pour ${userId}. Session:`, session);
+      console.log(`Session validation failed for ${userId}`, {
+        expectedDevice: session?.deviceId,
+        receivedDevice: deviceId,
+        sessionExists: !!session
+      });
       return res.status(403).json({ 
         error: "INVALID_SESSION",
-        message: "Votre session a expiré. Veuillez redémarrer le minage."
+        message: "Session expired or device mismatch. Please restart mining."
       });
     }
 
+    // 2. Validation des tokens
     const points = Math.floor(parseFloat(tokens));
     if (isNaN(points) || points <= 0) {
-      return res.status(400).json({ error: "TOKENS_INVALID" });
+      return res.status(400).json({ 
+        error: "INVALID_TOKENS",
+        message: "Token value is invalid"
+      });
     }
 
-    const timestamp = new Date().toISOString();
+    // 3. Initialisation Google Sheets
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // 4. Écriture dans la feuille Transactions
+    const timestamp = new Date().toISOString();
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
@@ -154,10 +165,12 @@ app.post('/claim', async (req, res) => {
       }
     });
 
-    const users = (await sheets.spreadsheets.values.get({
+    // 5. Mise à jour du solde utilisateur
+    const usersRange = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:F"
-    })).data.values || [];
+    });
+    const users = usersRange.data.values || [];
 
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
     let newBalance = points;
@@ -196,23 +209,32 @@ app.post('/claim', async (req, res) => {
       });
     }
 
+    // 6. Réinitialisation de la session
     activeSessions.set(userId, {
       startTime: Date.now(),
       deviceId: session.deviceId,
       tokens: 0
     });
 
+    // 7. Réponse réussie
     res.json({ 
       success: true,
       balance: newBalance,
-      claimed: points
+      claimed: points,
+      timestamp
     });
 
   } catch (error) {
-    console.error("Claim error:", error);
+    console.error("Claim error:", {
+      error: error.message,
+      stack: error.stack,
+      userId: req.body.userId,
+      timestamp: new Date().toISOString()
+    });
+    
     res.status(500).json({ 
       error: "CLAIM_FAILED",
-      message: "Erreur serveur. Veuillez réessayer.",
+      message: "Server error during claim processing",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
