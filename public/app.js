@@ -107,9 +107,8 @@ function initTelegramWebApp() {
   }
   console.log('User ID détecté:', userId);
   
-  // Initialisation de deviceId après avoir userId
-  deviceId = navigator.userAgent + "-" + userId;
-}
+  // Remplacer la ligne deviceId existante par :
+deviceId = `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_');
 
 async function demarrerMinage() {
   if (miningInterval) {
@@ -177,39 +176,87 @@ async function handleClaim() {
   btn.innerHTML = '<div class="loading-spinner-small"></div>';
 
   try {
-    const response = await fetch('/claim', {
+    // 1. Synchronisation de session avant le claim
+    const syncResponse = await fetch('/sync-session', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram.WebApp.initData || '' // Ajout crucial
+        'Telegram-Data': window.Telegram.WebApp.initData || ''
       },
       body: JSON.stringify({ 
         userId,
-        deviceId,
-        tokens: tokens.toFixed(2),
-        username: tg.initDataUnsafe.user?.username || 'Anonyme'
+        deviceId: `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_')
       })
     });
 
-    const data = await response.json(); // Ajout de cette ligne
-    
-    if (!response.ok) {
-      throw new Error(data.message || 'Claim failed');
+    const syncData = await syncResponse.json();
+    if (syncData.status === 'DEVICE_MISMATCH') {
+      throw new Error("Session expired. Please restart the app.");
     }
 
+    // 2. Envoi de la requête de claim
+    const claimResponse = await fetch('/claim', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Telegram-Data': window.Telegram.WebApp.initData || ''
+      },
+      body: JSON.stringify({ 
+        userId,
+        deviceId: `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_'),
+        tokens: tokens.toFixed(2),
+        username: tg.initDataUnsafe.user?.username || 'Anonyme',
+        userAgent: navigator.userAgent
+      })
+    });
+
+    const claimData = await claimResponse.json();
+    
+    if (!claimResponse.ok) {
+      throw new Error(claimData.message || claimData.error || 'Claim failed');
+    }
+
+    // 3. Réinitialisation après succès
     localStorage.removeItem('miningSession');
     sessionStartTime = Date.now();
     tokens = 0;
     
+    // 4. Redémarrage du minage
     await demarrerMinage();
     await loadUserData();
     
+    // 5. Mise à jour de l'UI
     btn.innerHTML = '<span id="claim-text">MINING IN PROGRESS</span>';
+    updateDisplay();
+
+    // 6. Notification de succès
+    if (window.Telegram?.WebApp?.showAlert) {
+      window.Telegram.WebApp.showAlert(`Successfully claimed ${claimData.claimed} tokens!`);
+    }
 
   } catch (error) {
-    console.error("Claim error:", error);
+    console.error("Full claim error:", {
+      error: error.message,
+      userId,
+      deviceId,
+      time: new Date().toISOString()
+    });
+    
+    // Gestion d'erreur améliorée
+    let errorMessage = error.message;
+    if (errorMessage.includes('device mismatch')) {
+      errorMessage = "Session expired. Please restart the mining.";
+    } else if (errorMessage.includes('invalid session')) {
+      errorMessage = "Invalid session. Refresh the page.";
+    }
+
     btn.disabled = false;
-    btn.innerHTML = `<span id="claim-text">ERREUR - ${error.message || 'RETRY'}</span>`;
+    btn.innerHTML = `<span id="claim-text">ERREUR - ${errorMessage || 'RETRY'}</span>`;
+    
+    // Réessai automatique après 5 secondes
+    setTimeout(() => {
+      btn.innerHTML = '<span id="claim-text">TRY AGAIN</span>';
+    }, 5000);
   }
 }
 

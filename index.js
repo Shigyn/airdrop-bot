@@ -50,16 +50,22 @@ const initializeApp = async () => {
 app.post('/sync-session', (req, res) => {
   const { userId, deviceId } = req.body;
   const session = activeSessions.get(userId);
-  
-  if (!session) return res.json({ status: 'no_session' });
-  if (session.deviceId !== deviceId) return res.json({
-    status: 'other_device',
-    sessionStart: session.startTime
-  });
 
+  if (!session) {
+    return res.json({ status: 'NO_SESSION' });
+  }
+
+  if (session.deviceId !== deviceId) {
+    return res.json({ 
+      status: 'DEVICE_MISMATCH',
+      sessionStart: session.startTime
+    });
+  }
+
+  // Mettre à jour le timestamp
   session.lastActive = new Date();
-  res.json({
-    status: 'synced',
+  res.json({ 
+    status: 'SYNCED',
     sessionStart: session.startTime,
     tokens: session.tokens
   });
@@ -115,22 +121,34 @@ app.post('/update-session', (req, res) => {
 
 // [CLAIM] Enregistrement
 app.post('/claim', async (req, res) => {
-  try {
-    const { userId, tokens, deviceId, username } = req.body;
-    
-    // 1. Validation de la session
-    const session = activeSessions.get(userId);
-    if (!session || session.deviceId !== deviceId) {
-      console.log(`Session validation failed for ${userId}`, {
-        expectedDevice: session?.deviceId,
-        receivedDevice: deviceId,
-        sessionExists: !!session
-      });
-      return res.status(403).json({ 
-        error: "INVALID_SESSION",
-        message: "Session expired or device mismatch. Please restart mining."
-      });
-    }
+  const { userId, deviceId } = req.body;
+  
+  // Debug logging
+  console.log('Session check:', {
+    userId,
+    deviceId,
+    activeSessions: Array.from(activeSessions.keys())
+  });
+
+  const session = activeSessions.get(userId);
+  
+  if (!session) {
+    return res.status(403).json({
+      error: "SESSION_NOT_FOUND",
+      message: "Aucune session active. Veuillez démarrer le minage."
+    });
+  }
+
+  if (session.deviceId !== deviceId) {
+    console.log('DeviceID mismatch:', {
+      stored: session.deviceId,
+      received: deviceId
+    });
+    return res.status(403).json({
+      error: "DEVICE_MISMATCH",
+      message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
+    });
+  }
 
     // 2. Validation des tokens
     const points = Math.floor(parseFloat(tokens));
