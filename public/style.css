@@ -24,13 +24,18 @@
 }
 
 body {
-  font-family: 'Minecraft', monospace;
-  background-color: #313131;
-  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4AkEEjQZ5Uz5RgAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAJklEQVRYw+3QMQEAAAgDoJnc6FrDOahAdtQJgUAgEAgEAoFAIBAIBAL5bAEhIAQ1Q8Q0JQAAAABJRU5ErkJggg==');
+  background-color: #6B6B6B;
+  background-image: 
+    /* Texture de pierre en mosaïque */
+    url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4AkEEjQZ5Uz5RgAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRleHNgZWNrZWR3aXRoIEdJTVBkLmUHAAAAJklEQVRYw+3QMQEAAAgDoJnc6FrDOahAdtQJgUAgEAgEAoFAIBAIBAL5bAEhIAQ1Q8Q0JQAAAABJRU5ErkJggg=='),
+    /* Dégradé sombre pour assombrir */
+    linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3));
+  background-repeat: repeat;
   color: #E0E0E0;
   image-rendering: pixelated;
   margin: 0;
   padding: 0;
+  min-height: 100vh;
 }
 
 /* === BARRE DE NAVIGATION (STYLE CRAFTING TABLE) === */
