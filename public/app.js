@@ -98,6 +98,9 @@ function initTelegramWebApp() {
   tg = window.Telegram.WebApp;
   tg.expand();
   
+  Telegram.WebApp.backgroundColor = "#6B6B6B"; // Gris Minecraft
+  Telegram.WebApp.headerColor = "#6B6B6B";     // Optionnel
+  
   userId = tg.initDataUnsafe?.user?.id?.toString();
   if (!userId) {
     throw new Error("User ID non trouvé");
