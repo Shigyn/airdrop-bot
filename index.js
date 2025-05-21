@@ -144,6 +144,8 @@ app.post('/claim', async (req, res) => {
       stored: session.deviceId,
       received: deviceId
     });
+  }
+	
     return res.status(403).json({
       error: "DEVICE_MISMATCH",
       message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
