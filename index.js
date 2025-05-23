@@ -139,9 +139,9 @@ app.post('/update-session', (req, res) => {
 // [CLAIM] Enregistrement avec limite de 60 minutes
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens, username } = req.body;
-  const MAX_MINUTES = 60; // Durée maximale autorisée
+  const MAX_MINUTES = 60; // Limite max de minage
 
-  // 1. Vérifications de base
+  // 1. Vérifier session active
   const session = activeSessions.get(userId);
   if (!session) {
     return res.status(403).json({
@@ -150,7 +150,7 @@ app.post('/claim', async (req, res) => {
     });
   }
 
-  // 2. Vérification appareil
+  // 2. Vérifier que c’est le même device
   if (session.deviceId !== deviceId) {
     return res.status(403).json({
       error: "DEVICE_MISMATCH",
@@ -158,12 +158,12 @@ app.post('/claim', async (req, res) => {
     });
   }
 
-  // 3. Calcul du temps miné
+  // 3. Calcul temps écoulé
   const now = Date.now();
   const elapsedMinutes = (now - session.lastActive) / (1000 * 60);
   const totalUsedMinutes = session.totalMinutes + elapsedMinutes;
 
-  // 4. Blocage si dépassement
+  // 4. Si dépassement du temps max, bloquer
   if (totalUsedMinutes > MAX_MINUTES) {
     const remaining = Math.max(0, MAX_MINUTES - session.totalMinutes);
     activeSessions.delete(userId);
@@ -175,7 +175,7 @@ app.post('/claim', async (req, res) => {
   }
 
   try {
-    // 5. Validation des tokens
+    // 5. Validation tokens
     const points = Math.floor(parseFloat(tokens));
     if (isNaN(points) || points <= 0) {
       return res.status(400).json({
@@ -184,7 +184,7 @@ app.post('/claim', async (req, res) => {
       });
     }
 
-    // 6. Enregistrement Google Sheets
+    // 6. Setup Google Sheets API
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -193,7 +193,7 @@ app.post('/claim', async (req, res) => {
 
     const timestamp = new Date().toISOString();
 
-    // a) Écriture transaction
+    // a) Enregistrer la transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
@@ -203,7 +203,7 @@ app.post('/claim', async (req, res) => {
       }
     });
 
-    // b) Mise à jour solde utilisateur
+    // b) Lire users pour mise à jour
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:F"
@@ -213,9 +213,9 @@ app.post('/claim', async (req, res) => {
     let newBalance = points;
 
     if (userIndex >= 0) {
+      // Utilisateur existant: mise à jour solde
       newBalance = (parseInt(users[userIndex][3]) || 0) + points;
 
-      // Mise à jour solde utilisateur
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${userIndex + 2}`,
@@ -223,16 +223,15 @@ app.post('/claim', async (req, res) => {
         resource: { values: [[newBalance]] }
       });
 
-      // Gestion parrainage (10%)
-      const referralCode = users[userIndex][5]; // code de parrainage
+      // Gestion parrainage 10%
+      const referralCode = users[userIndex][5]; // code parrainage utilisateur
       if (referralCode) {
-        // Chercher le parrain correspondant au code
+        // Trouver le parrain avec ce code
         const referrerIndex = users.findIndex(row => row[5] === referralCode);
         if (referrerIndex >= 0) {
           const currentReferrerBalance = parseInt(users[referrerIndex][3]) || 0;
-          const referralReward = Math.floor(points * 0.1); // 10%
+          const referralReward = Math.floor(points * 0.1);
 
-          // Mise à jour solde parrain
           const newReferrerBalance = currentReferrerBalance + referralReward;
           await sheets.spreadsheets.values.update({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -277,7 +276,7 @@ app.post('/claim', async (req, res) => {
       });
     }
 
-    // 7. Mise à jour session
+    // 7. Mise à jour session active
     activeSessions.set(userId, {
       ...session,
       lastActive: now,
@@ -285,8 +284,8 @@ app.post('/claim', async (req, res) => {
       tokens: points
     });
 
-    // 8. Réponse
-    res.json({
+    // 8. Réponse OK
+    return res.json({
       success: true,
       balance: newBalance,
       claimedPoints: points,
@@ -296,13 +295,14 @@ app.post('/claim', async (req, res) => {
 
   } catch (error) {
     console.error("Claim error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       error: "CLAIM_FAILED",
       message: "Erreur serveur",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
+
 
 
 // [TELEGRAM] Webhook
