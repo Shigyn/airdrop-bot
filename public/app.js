@@ -279,6 +279,47 @@ function showClaim() {
   updateDisplay();
 }
 
+function startMiningButton(button, durationSeconds) {
+  const progressBar = button.querySelector('::before'); // pseudo-element, pas accessible en JS, donc on anime via style.width sur un enfant ou via animation CSS
+  const countdown = button.querySelector('.countdown');
+  
+  let startTime = Date.now();
+  let endTime = startTime + durationSeconds * 1000;
+
+  // Au lieu d'animer ::before (impossible en JS), on crée une div progress inside the button:
+  let progress = button.querySelector('.progress-bar');
+  if (!progress) {
+    progress = document.createElement('div');
+    progress.classList.add('progress-bar');
+    progress.style.position = 'absolute';
+    progress.style.left = 0;
+    progress.style.top = 0;
+    progress.style.bottom = 0;
+    progress.style.width = '0%';
+    progress.style.background = 'rgba(255, 255, 255, 0.3)';
+    progress.style.zIndex = '0';
+    button.prepend(progress);
+  }
+
+  function update() {
+    const now = Date.now();
+    const elapsed = now - startTime;
+    const percent = Math.min(elapsed / (durationSeconds * 1000), 1);
+    progress.style.width = (percent * 100) + '%';
+
+    const remaining = Math.max(0, Math.ceil((endTime - now) / 1000));
+    countdown.textContent = remaining + "s";
+
+    if (percent < 1) {
+      requestAnimationFrame(update);
+    } else {
+      countdown.textContent = "Done";
+    }
+  }
+
+  update();
+}
+
 // ==============================================
 // FONCTIONS EXISTANTES
 // ==============================================

@@ -59,5 +59,15 @@
   <script src="TasksPage.js" defer></script>
   <script src="ReferralPage.js" defer></script>
   <script src="app.js" defer></script>
+  
+  <button class="mc-button-anim">
+    <span>Claim Mining</span>
+    <div class="countdown"></div>
+  </button>
+
+  <script>
+    const btn = document.querySelector('.mc-button-anim');
+    startMiningButton(btn, 30); // lance un minage de 30 secondes
+  </script>
 </body>
 </html>

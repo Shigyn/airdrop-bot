@@ -70,7 +70,7 @@ body {
 .app-container {
   max-width: 100%;
   background-color: transparent; /* Fond transparent */
-  border: var(--mc-border);
+  border: none;
   padding: 12px;
   padding-bottom: 60px; /* Espace pour le menu fixé */
   margin: 0 auto;
@@ -195,4 +195,50 @@ body {
   box-sizing: border-box;
   border-top: 1px solid #555; /* optionnel: une petite séparation */
   z-index: 1000; /* pour qu'il soit au-dessus */
+}
+
+/* Bouton animé avec barre de progression et compteur */
+.mc-button-anim {
+  position: relative;
+  display: inline-block;
+  background-color: var(--mc-grass);
+  color: white;
+  border: var(--mc-border);
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  overflow: hidden;
+  border-radius: 12px;
+  user-select: none;
+}
+
+/* Barre de progression animée */
+.mc-button-anim::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 0%;
+  background: rgba(255, 255, 255, 0.3);
+  z-index: 0;
+  transition: width 1s linear;
+}
+
+/* Texte du bouton au-dessus de la barre */
+.mc-button-anim > span {
+  position: relative;
+  z-index: 1;
+}
+
+/* Compteur de temps sur le bouton */
+.mc-button-anim .countdown {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: white;
+  user-select: none;
+  z-index: 2;
 }
