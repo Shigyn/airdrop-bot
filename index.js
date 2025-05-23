@@ -79,39 +79,49 @@ app.post('/sync-session', (req, res) => {
 
 app.post('/start-session', (req, res) => {
   const { userId, deviceId } = req.body;
-  
-  if (!deviceId) {
-    return res.status(400).json({ error: "DEVICE_ID_REQUIRED" });
-  }
+  const MAX_MINUTES = 60; // Durée max totale
 
+  // 1. Vérifier si session existe déjà
   const existingSession = activeSessions.get(userId);
-
-  if (existingSession && existingSession.deviceId === deviceId) {
-    const elapsed = (new Date() - new Date(existingSession.startTime)) / 1000;
-    return res.json({ 
-      exists: true,
-      sessionStart: existingSession.startTime,
-      elapsedTime: elapsed,
-      tokens: existingSession.tokens
-    });
-  }
+  const now = Date.now();
 
   if (existingSession) {
-    return res.status(400).json({ 
-      error: "OTHER_DEVICE_ACTIVE",
-      sessionStart: existingSession.startTime
+    // 2. Calculer le temps déjà consommé
+    const minutesUsed = (now - existingSession.startTime) / (1000 * 60);
+    const remaining = MAX_MINUTES - minutesUsed;
+
+    // 3. Si temps restant
+    if (remaining > 0) {
+      return res.json({
+        status: "SESSION_RESUMED",
+        message: `Session reprise (${Math.floor(remaining)} minutes restantes)`,
+        startTime: existingSession.startTime,
+        remainingMinutes: Math.floor(remaining)
+      });
+    }
+
+    // 4. Si limite atteinte
+    activeSessions.delete(userId);
+    return res.status(403).json({
+      error: "SESSION_LIMIT_REACHED",
+      message: "Vous avez déjà utilisé vos 60 minutes de minage"
     });
   }
 
+  // 5. Nouvelle session
   activeSessions.set(userId, {
-    startTime: new Date(),
-    lastActive: new Date(),
-    deviceId,
-    tokens: 0
+    startTime: now,       // Timestamp de démarrage
+    lastActive: now,      // Dernière activité
+    deviceId,             // Verrouillage appareil
+    totalMinutes: 0       // Compteur de temps effectif
   });
 
-  res.json({ success: true });
-});  // <-- Cette parenthèse fermante était manquante
+  res.json({ 
+    status: "SESSION_STARTED",
+    startTime: now,
+    remainingMinutes: MAX_MINUTES
+  });
+});
 
 app.post('/update-session', (req, res) => {
   const { userId, tokens, deviceId } = req.body;
@@ -126,50 +136,65 @@ app.post('/update-session', (req, res) => {
   }
 });
 
-// [CLAIM] Enregistrement
+// [CLAIM] Enregistrement avec limite de 60 minutes
+// [CLAIM] Version finale avec limite 60min cumulative
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens, username } = req.body;
+  const MAX_MINUTES = 60; // Durée maximale autorisée
 
-  // 1. Vérification session
+  // 1. Vérifications de base
   const session = activeSessions.get(userId);
   if (!session) {
     return res.status(403).json({
-      error: "SESSION_NOT_FOUND",
-      message: "Aucune session active. Veuillez démarrer le minage."
+      error: "NO_ACTIVE_SESSION",
+      message: "Aucune session active. Démarrez d'abord le minage."
     });
   }
 
-  // 2. Vérification device
+  // 2. Vérification appareil
   if (session.deviceId !== deviceId) {
-    console.log('DeviceID mismatch:', {
-      stored: session.deviceId,
-      received: deviceId
-    });
     return res.status(403).json({
       error: "DEVICE_MISMATCH",
-      message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
+      message: "Appareil non autorisé. Utilisez le même navigateur."
+    });
+  }
+
+  // 3. Calcul du temps miné
+  const now = Date.now();
+  const elapsedMinutes = (now - session.lastActive) / (1000 * 60);
+  const totalUsedMinutes = session.totalMinutes + elapsedMinutes;
+
+  // 4. Blocage si dépassement
+  if (totalUsedMinutes > MAX_MINUTES) {
+    const remaining = Math.max(0, MAX_MINUTES - session.totalMinutes);
+    activeSessions.delete(userId);
+    return res.status(403).json({
+      error: "TIME_LIMIT_REACHED",
+      message: `Limite de ${MAX_MINUTES} minutes atteinte.`,
+      remainingMinutes: remaining.toFixed(2)
     });
   }
 
   try {
-    // 3. Validation tokens
+    // 5. Validation des tokens
     const points = Math.floor(parseFloat(tokens));
     if (isNaN(points) || points <= 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "INVALID_TOKENS",
-        message: "Valeur des tokens invalide"
+        message: "Valeur de tokens invalide"
       });
     }
 
-    // 4. Initialisation Google Sheets
+    // 6. Enregistrement Google Sheets
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // 5. Écriture transaction
     const timestamp = new Date().toISOString();
+    
+    // a) Écriture transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
@@ -179,7 +204,7 @@ app.post('/claim', async (req, res) => {
       }
     });
 
-    // 6. Mise à jour utilisateur
+    // b) Mise à jour solde utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:F"
@@ -192,9 +217,9 @@ app.post('/claim', async (req, res) => {
       newBalance = (parseInt(users[userIndex][3]) || 0) + points;
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: `Users!D${userIndex + 2}:E${userIndex + 2}`,
+        range: `Users!D${userIndex + 2}`,
         valueInputOption: "USER_ENTERED",
-        resource: { values: [[newBalance, timestamp]] }
+        resource: { values: [[newBalance]] }
       });
     } else {
       await sheets.spreadsheets.values.append({
@@ -206,7 +231,7 @@ app.post('/claim', async (req, res) => {
             timestamp,
             username || "Anonyme",
             userId,
-            points,
+            newBalance,
             timestamp,
             `REF-${Math.random().toString(36).slice(2, 8)}`
           ]]
@@ -214,24 +239,26 @@ app.post('/claim', async (req, res) => {
       });
     }
 
-    // 7. Reset session
+    // 7. Mise à jour session
     activeSessions.set(userId, {
-      startTime: Date.now(),
-      deviceId: session.deviceId,
-      tokens: 0
+      ...session,
+      lastActive: now,
+      totalMinutes: totalUsedMinutes,
+      tokens: points
     });
 
     // 8. Réponse
-    res.json({ 
+    res.json({
       success: true,
       balance: newBalance,
-      claimed: points,
-      timestamp
+      claimedPoints: points,
+      remainingMinutes: (MAX_MINUTES - totalUsedMinutes).toFixed(2),
+      sessionDuration: totalUsedMinutes.toFixed(2)
     });
 
   } catch (error) {
     console.error("Claim error:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "CLAIM_FAILED",
       message: "Erreur serveur",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined

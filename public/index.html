@@ -4,25 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Airdrop Telegram Bot</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="style.css" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="app-container">
     <header class="app-header">
-      <h1 class="app-title">Airdrop Telegram</h1>
+      <h1 class="app-title" style="text-align:center; text-shadow: 2px 2px #000;">Airdrop Telegram</h1>
+
       <div id="user-info" class="user-info-card">
         <div class="user-info-row">
-          <span class="user-info-icon">👤</span>
+          <img src="https://i.imgur.com/Jw0V97g.png" class="user-info-icon" alt="User" />
           <span id="username" class="user-info-value">Chargement...</span>
         </div>
         <div class="user-info-row">
-          <span class="user-info-icon">💰</span>
+          <img src="https://i.imgur.com/0W2QZsY.png" class="user-info-icon" alt="Coin" />
           <span id="balance" class="user-info-value">--</span>
         </div>
         <div class="user-info-row">
-          <span class="user-info-icon">📅</span>
+          <img src="https://i.imgur.com/Z9ThqLy.png" class="user-info-icon" alt="Calendar" />
           <span id="lastClaim" class="user-info-value">--</span>
         </div>
       </div>
@@ -34,15 +34,15 @@
 
     <nav class="bottom-nav">
       <button id="nav-claim" class="nav-btn active">
-        <span class="nav-icon">⛏️</span>
+        <img src="https://i.imgur.com/l9dfp6U.png" class="nav-icon" alt="Mining" />
         <span class="nav-label">Mining</span>
       </button>
       <button id="nav-tasks" class="nav-btn">
-        <span class="nav-icon">📋</span>
+        <img src="https://i.imgur.com/XjK70cN.png" class="nav-icon" alt="Tasks" />
         <span class="nav-label">Tasks</span>
       </button>
       <button id="nav-referral" class="nav-btn">
-        <span class="nav-icon">👥</span>
+        <img src="https://i.imgur.com/vIkG9q6.png" class="nav-icon" alt="Referral" />
         <span class="nav-label">Referral</span>
       </button>
     </nav>
@@ -50,9 +50,9 @@
     <div id="notification" class="notification hidden"></div>
   </div>
 
-  <!-- IMPORTANT: Ordre des scripts -->
-	<script src="TasksPage.js"></script>
-	<script src="ReferralPage.js"></script>
-	<script src="app.js"></script>
+  <!-- Scripts -->
+  <script src="TasksPage.js"></script>
+  <script src="ReferralPage.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

@@ -1,17 +1,14 @@
-/* === POLICE MINECRAFT === */
+@font-face {
+  font-family: 'Minecraft';
+  src: url('https://assets.codepen.io/21542/MinecraftRegular-Bmg3.woff2') format('woff2');
+  font-weight: normal;
+}
 @font-face {
   font-family: 'Minecraft';
   src: url('https://assets.codepen.io/21542/MinecraftBold-nMK1.woff2') format('woff2');
   font-weight: bold;
 }
 
-@font-face {
-  font-family: 'Minecraft';
-  src: url('https://assets.codepen.io/21542/MinecraftRegular-Bmg3.woff2') format('woff2');
-  font-weight: normal;
-}
-
-/* === STYLE GÉNÉRAL MINECRAFT === */
 :root {
   --dirt: #7A5426;
   --grass: #4A712E;
@@ -26,23 +23,31 @@
 body {
   background-color: #6B6B6B;
   background-image: 
-    /* Texture de pierre en mosaïque */
-    url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4AkEEjQZ5Uz5RgAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRleHNgZWNrZWR3aXRoIEdJTVBkLmUHAAAAJklEQVRYw+3QMQEAAAgDoJnc6FrDOahAdtQJgUAgEAgEAoFAIBAIBAL5bAEhIAQ1Q8Q0JQAAAABJRU5ErkJggg=='),
-    /* Dégradé sombre pour assombrir */
-    linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3));
+    url('https://i.imgur.com/WPvrv8E.png'),
+    linear-gradient(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.25));
+  background-size: cover;
   background-repeat: repeat;
-  color: #E0E0E0;
-  image-rendering: pixelated;
+  font-family: 'Minecraft', sans-serif;
   margin: 0;
   padding: 0;
   min-height: 100vh;
+  color: #E0E0E0;
+  image-rendering: pixelated;
 }
 
-/* === BARRE DE NAVIGATION (STYLE CRAFTING TABLE) === */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 10px;
+  border: 4px solid black;
+  pointer-events: none;
+  z-index: 999;
+}
+
+/* NAVIGATION */
 .app-nav {
   background-color: var(--wood);
   border: 4px solid #000;
-  border-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4AkEEjQZ5Uz5RgAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAJklEQVQ4y2NgGAXDFmzatMmKAQ38f//+vT8qKsqfSPn/DAwM/wH5M5BkHwCq+BjZtXZ/5QAAAABJRU5ErkJggg==') 4 stretch;
   padding: 8px;
   display: flex;
   justify-content: center;
@@ -53,11 +58,9 @@ body {
   background-color: var(--stone);
   border: 3px solid #000;
   color: white;
-  font-family: 'Minecraft';
   padding: 8px 16px;
   cursor: pointer;
   transition: all 0.1s;
-  image-rendering: pixelated;
 }
 
 .nav-button:hover {
@@ -68,9 +71,10 @@ body {
 .nav-button:active {
   background-color: var(--dirt);
   transform: translateY(1px);
+  filter: brightness(0.85);
 }
 
-/* === CARTE UTILISATEUR (STYLE CHEST) === */
+/* USER INFO */
 .user-info-card {
   background-color: var(--wood);
   border: 4px solid #000;
@@ -93,14 +97,13 @@ body {
   image-rendering: pixelated;
 }
 
-/* === BOUTON PRINCIPAL (STYLE BUTTON MINECRAFT) === */
+/* BOUTON PRINCIPAL */
 .claim-button {
   width: 100%;
   padding: 12px;
   background-color: var(--grass);
   border: 3px solid #000;
   color: white;
-  font-family: 'Minecraft';
   font-size: 16px;
   cursor: pointer;
   transition: all 0.1s;
@@ -114,23 +117,63 @@ body {
 .claim-button:active {
   background-color: var(--dirt);
   transform: translateY(1px);
+  filter: brightness(0.85);
 }
 
-/* === ANIMATIONS === */
-@keyframes minecraft-click {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(2px); }
-  100% { transform: translateY(0); }
+.claim-button:disabled {
+  background-color: var(--stone);
+  color: #999;
+  cursor: not-allowed;
 }
 
-/* === RESPONSIVE === */
-@media (max-width: 768px) {
-  .app-nav {
-    flex-wrap: wrap;
-  }
+.claim-button.error {
+  background-color: var(--redstone);
+  animation: shake 0.5s linear;
 }
 
-/* ===== HOTBAR STYLE ===== */
+/* TÂCHES */
+.tasks-container {
+  background-color: #5A4A42;
+  border: 4px solid #000;
+  padding: 16px;
+  max-width: 500px;
+  margin: 20px auto;
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.3);
+}
+
+.task-card {
+  background-color: #6B5B52;
+  border: 2px solid #000;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.task-title {
+  color: #FFD700;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.task-button {
+  background-color: #4A712E;
+  border: 2px solid #000;
+  color: white;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+
+.task-button:hover {
+  background-color: #5A8F32;
+  transform: translateY(-2px);
+}
+
+.task-button:active {
+  background-color: var(--dirt);
+  transform: translateY(1px);
+  filter: brightness(0.85);
+}
+
+/* BOTTOM NAV */
 .bottom-nav {
   position: fixed;
   bottom: 0;
@@ -155,7 +198,6 @@ body {
   border: none;
   cursor: pointer;
   transition: all 0.1s;
-  image-rendering: pixelated;
 }
 
 .nav-btn.active {
@@ -167,115 +209,31 @@ body {
   width: 24px;
   height: 24px;
   margin-bottom: 4px;
-  image-rendering: pixelated;
 }
 
 .nav-label {
-  font-family: 'Minecraft';
   color: white;
   font-size: 12px;
   text-shadow: 2px 2px 0 #000;
 }
 
-/* Effet de sélection */
-.nav-btn.active .nav-icon {
-  animation: item-bounce 0.3s ease;
+/* ANIMATIONS */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
 }
 
-@keyframes item-bounce {
-  0% { transform: translateY(0); }
+.floating-block {
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
-  100% { transform: translateY(0); }
 }
 
-/* ===== CLAIM PAGE ===== */
-.claim-container {
-  background-color: #3A3A3A;
-  border: 4px solid #000;
-  padding: 16px;
-  max-width: 450px;
-  margin: 20px auto;
-  text-align: center;
-  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.3);
-}
-
-.token-display {
-  font-family: 'Minecraft';
-  font-size: 32px;
-  color: #FFD700; /* Or */
-  text-shadow: 3px 3px 0 #000;
-  margin: 12px 0;
-}
-
-.token-unit {
-  font-size: 16px;
-  color: #A0A0A0;
-}
-
-.claim-button {
-  width: 80%;
-  padding: 12px;
-  background-color: #4CAF50; /* Vert Minecraft */
-  border: 3px solid #000;
-  color: white;
-  font-family: 'Minecraft';
-  font-size: 18px;
-  cursor: pointer;
-  transition: all 0.1s;
-  margin-top: 12px;
-}
-
-.claim-button:hover {
-  background-color: #5EBD62;
-  transform: translateY(-2px);
-}
-
-.claim-button:active {
-  background-color: #3D8B40;
-  transform: translateY(1px);
-}
-
-/* Animation de mining */
-@keyframes mining {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.mining-animation {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto;
-  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4AkEEjQZ5Uz5RgAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAJklEQVRYw+3UMQ0AAAgDsM9f
-  
-  /* ===== TASKS PAGE ===== */
-.tasks-container {
-  background-color: #5A4A42; /* Couleur papier parchemin */
-  border: 4px solid #000;
-  padding: 16px;
-  max-width: 500px;
-  margin: 20px auto;
-  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.3);
-}
-
-.task-card {
-  background-color: #6B5B52;
-  border: 2px solid #000;
-  padding: 12px;
-  margin-bottom: 12px;
-}
-
-.task-title {
-  font-family: 'Minecraft';
-  color: #FFD700;
-  text-shadow: 2px 2px 0 #000;
-}
-
-.task-button {
-  background-color: #4A712E; /* Vert herbe */
-  border: 2px solid #000;
-  color:
-  
-  /* À ajouter */
+/* AUTRES */
 .notification {
   position: fixed;
   top: 20px;
@@ -284,52 +242,20 @@ body {
   background-color: var(--coal);
   border: 3px solid #000;
   padding: 8px 16px;
-  font-family: 'Minecraft';
   z-index: 1000;
 }
 
-/* Styles pour le contenu dynamique */
-.dynamic-content {
-  padding: 16px;
-  margin-bottom: 80px; /* Pour éviter que le menu bas ne couvre le contenu */
-}
-
-/* Cache les notifications par défaut */
 .hidden {
   display: none;
 }
 
-.error-container {
-  background-color: var(--coal);
-  border: 4px solid #000;
-  padding: 20px;
-  text-align: center;
-  max-width: 90%;
-  margin: 50px auto;
-  font-family: 'Minecraft';
+.dynamic-content {
+  padding: 16px;
+  margin-bottom: 80px;
 }
 
-.claim-button:disabled {
-  background-color: var(--stone) !important;
-  color: #999 !important;
-  cursor: not-allowed;
+@media (max-width: 768px) {
+  .app-nav {
+    flex-wrap: wrap;
+  }
 }
-
-.loading-spinner-small {
-  width: 20px;
-  height: 20px;
-  border: 3px solid #000;
-  border-top-color: var(--gold);
-  image-rendering: pixelated;
-}
-
-.claim-button.error {
-  background-color: var(--redstone) !important;
-  animation: shake 0.5s linear;
-}
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
-}
-
