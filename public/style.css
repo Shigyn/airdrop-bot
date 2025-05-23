@@ -69,10 +69,12 @@ body {
 /* === APP CONTAINER === */
 .app-container {
   max-width: 100%;
-  background-color: var(--mc-dirt);
+  background-color: transparent; /* Fond transparent */
   border: var(--mc-border);
   padding: 12px;
+  padding-bottom: 60px; /* Espace pour le menu fixé */
   margin: 0 auto;
+  border-radius: 12px;
 }
 
 /* === HEADER === */
@@ -178,4 +180,19 @@ body {
 
 .hidden {
   display: none !important;
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-width: 480px; /* correspond à la largeur max de ton container */
+  background-color: transparent; /* pour enlever le fond marron */
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 0;
+  box-sizing: border-box;
+  border-top: 1px solid #555; /* optionnel: une petite séparation */
+  z-index: 1000; /* pour qu'il soit au-dessus */
 }
