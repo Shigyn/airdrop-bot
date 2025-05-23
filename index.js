@@ -10,6 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const activeSessions = new Map();
 let sheets;
+let sheetsInitialized = false; // ajouté pour la santé du service
 
 // Middlewares
 app.use(cors({
@@ -139,7 +140,7 @@ app.post('/update-session', (req, res) => {
 // [CLAIM] Enregistrement avec limite de 60 minutes
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens, username } = req.body;
-  const MAX_MINUTES = 60; // Limite max de minage
+  const MAX_MINUTES = 60; // limite affichée mais non bloquante
 
   // 1. Vérifier session active
   const session = activeSessions.get(userId);
@@ -150,7 +151,7 @@ app.post('/claim', async (req, res) => {
     });
   }
 
-  // 2. Vérifier que c’est le même device
+  // 2. Vérifier appareil
   if (session.deviceId !== deviceId) {
     return res.status(403).json({
       error: "DEVICE_MISMATCH",
@@ -158,24 +159,15 @@ app.post('/claim', async (req, res) => {
     });
   }
 
-  // 3. Calcul temps écoulé
+  // 3. Calcul du temps écoulé
   const now = Date.now();
   const elapsedMinutes = (now - session.lastActive) / (1000 * 60);
   const totalUsedMinutes = session.totalMinutes + elapsedMinutes;
 
-  // 4. Si dépassement du temps max, bloquer
-  if (totalUsedMinutes > MAX_MINUTES) {
-    const remaining = Math.max(0, MAX_MINUTES - session.totalMinutes);
-    activeSessions.delete(userId);
-    return res.status(403).json({
-      error: "TIME_LIMIT_REACHED",
-      message: `Limite de ${MAX_MINUTES} minutes atteinte.`,
-      remainingMinutes: remaining.toFixed(2)
-    });
-  }
+  // **PLUS DE BLOQUAGE SUR 60 MINUTES**
 
   try {
-    // 5. Validation tokens
+    // 4. Validation tokens
     const points = Math.floor(parseFloat(tokens));
     if (isNaN(points) || points <= 0) {
       return res.status(400).json({
@@ -184,7 +176,7 @@ app.post('/claim', async (req, res) => {
       });
     }
 
-    // 6. Setup Google Sheets API
+    // 5. Setup Google Sheets API
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -203,18 +195,20 @@ app.post('/claim', async (req, res) => {
       }
     });
 
-    // b) Lire users pour mise à jour
+    // b) Lire users pour mise à jour (avec Mining_Speed en G)
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G" // j'ai ajouté G pour Mining_Speed
+      range: "Users!A2:G"
     });
     const users = usersData.data.values || [];
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
     let newBalance = points;
 
     if (userIndex >= 0) {
-      // Utilisateur existant: mise à jour solde
-      newBalance = (parseInt(users[userIndex][3]) || 0) + points;
+      // Utilisateur existant : mise à jour solde + mining speed
+      const currentBalance = parseInt(users[userIndex][3]) || 0;
+      const miningSpeed = parseFloat(users[userIndex][6]) || 1; // Col G = Mining_Speed
+      newBalance = currentBalance + points * miningSpeed;
 
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -223,8 +217,16 @@ app.post('/claim', async (req, res) => {
         resource: { values: [[newBalance]] }
       });
 
+      // Mise à jour Last_Claim_Time (col E)
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: `Users!E${userIndex + 2}`,
+        valueInputOption: "USER_ENTERED",
+        resource: { values: [[timestamp]] }
+      });
+
       // Gestion parrainage 10%
-      const referralCode = users[userIndex][5]; // code parrainage utilisateur
+      const referralCode = users[userIndex][5]; // code parrainage (col F)
       if (referralCode) {
         // Trouver le parrain avec ce code
         const referrerIndex = users.findIndex(row => row[5] === referralCode);
@@ -249,16 +251,15 @@ app.post('/claim', async (req, res) => {
               values: [[
                 referralCode,
                 referralReward,
-                new Date().toISOString(),
+                timestamp,
                 username || "Anonyme"
               ]]
             }
           });
         }
       }
-
     } else {
-      // Nouvel utilisateur : ajout dans Users avec Mining_Speed = 1
+      // Nouvel utilisateur : ajout dans Users avec Mining_Speed = 1 par défaut
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: "Users!A2:G",
@@ -271,13 +272,13 @@ app.post('/claim', async (req, res) => {
             newBalance,            // Balance (D)
             timestamp,             // Last_Claim_Time (E)
             `REF-${Math.random().toString(36).slice(2, 8)}`, // Referral_Code (F)
-            1                      // Mining_Speed (G) - fixe à 1
+            1                      // Mining_Speed (G)
           ]]
         }
       });
     }
 
-    // 7. Mise à jour session active
+    // 6. Mise à jour session active
     activeSessions.set(userId, {
       ...session,
       lastActive: now,
@@ -285,13 +286,13 @@ app.post('/claim', async (req, res) => {
       tokens: points
     });
 
-    // 8. Réponse OK
+    // 7. Réponse OK
     return res.json({
       success: true,
       balance: newBalance,
       claimedPoints: points,
-      remainingMinutes: (MAX_MINUTES - totalUsedMinutes).toFixed(2),
-      sessionDuration: totalUsedMinutes.toFixed(2)
+      sessionDuration: totalUsedMinutes.toFixed(2),
+      remainingMinutes: Math.max(0, MAX_MINUTES - totalUsedMinutes).toFixed(2) // indicatif seulement
     });
 
   } catch (error) {
@@ -305,195 +306,14 @@ app.post('/claim', async (req, res) => {
 });
 
 
+// [BOT] webhook Telegram
+app.use('/bot', webhookCallback(bot));
 
-// [TELEGRAM] Webhook
-app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, webhookCallback);
-
-app.get('/referrals', (req, res) => {
+// [STATIC] Fichiers publics
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// [STATIC] Routes
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-
-// [API] Routes
-app.get('/tasks', async (req, res) => {
-  try {
-    if (!sheetsInitialized) throw new Error('Service not ready');
-    res.json(await readTasks());
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get('/user/:userId', async (req, res) => {
-  try {
-    console.log(`Requête pour userID: ${req.params.userId}`);
-    
-    if (!req.headers['telegram-data']) {
-      console.warn("Accès non autorisé - header manquant");
-      return res.status(403).json({ error: "Authentification requise" });
-    }
-
-    const userData = await getUserData(req.params.userId);
-    
-    if (!userData) {
-      console.log("Nouvel utilisateur détecté");
-      return res.json({
-        username: "Nouveau",
-        balance: 0,
-        lastClaim: null
-      });
-    }
-
-    res.json({
-      username: String(userData.username || "Anonyme"),
-      balance: Number(userData.balance) || 0,
-      lastClaim: userData.lastClaim || null
-    });
-    
-  } catch (error) {
-    console.error("ERREUR:", error);
-    res.status(500).json({ 
-      error: "Erreur serveur",
-      details: process.env.NODE_ENV === 'development' ? error.message : null
-    });
-  }
-});
-
-app.get('/health', (req, res) => {
-  res.json({
-    status: sheetsInitialized ? 'OK' : 'INITIALIZING',
-    sessions: activeSessions.size
-  });
-});
-
-// [REFERRAL] Récupération des infos de parrainage
-const validateTelegramData = (req, res, next) => {
-  if (!req.headers['telegram-data']) {
-    return res.status(403).json({ error: "Accès non autorisé" });
-  }
-  next();
-};
-
-// Protégez les routes :
-app.get('/get-referrals', validateTelegramData, async (req, res) => {
-  try {
-    if (!sheetsInitialized) throw new Error('Service not ready');
-    
-    const tgData = req.headers['telegram-data'];
-    const params = new URLSearchParams(tgData);
-    const user = params.get('user') ? JSON.parse(params.get('user')) : {};
-    const userId = user.id?.toString();
-
-    if (!userId) {
-      return res.status(400).json({ error: "USER_ID_REQUIRED" });
-    }
-
-    const [users, referrals] = await Promise.all([
-      sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Users!A2:F"
-      }),
-      sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Referrals!A2:D"
-      })
-    ]);
-
-    const userData = (users.data.values || []).find(row => row[2]?.toString() === userId);
-    if (!userData) {
-      return res.json({
-        referralCode: `REF-${Math.random().toString(36).substring(2, 8)}`,
-        referralCount: 0,
-        earnedTokens: 0,
-        referrals: []
-      });
-    }
-
-    const referralCode = userData[5] || '';
-    const allReferrals = referrals.data.values || [];
-    
-    const userReferrals = allReferrals
-      .filter(row => row[0] === referralCode)
-      .map(row => ({
-        username: row[3] || 'Anonyme',
-        date: row[4] || new Date().toISOString(),
-        reward: parseInt(row[1]) || 0
-      }));
-
-    res.json({
-      referralCode,
-      referralCount: userReferrals.length,
-      earnedTokens: userReferrals.reduce((sum, ref) => sum + ref.reward, 0),
-      referrals: userReferrals
-    });
-
-  } catch (error) {
-    console.error("Referral error:", error);
-    res.status(500).json({ 
-      error: "SERVER_ERROR",
-      message: error.message 
-    });
-  }
-});
-
-app.post('/register-referral', async (req, res) => {
-  try {
-    const { userId, referralCode, username } = req.body;
-    
-    // 1. Vérifier si l'utilisateur existe déjà
-    const userSheet = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:D"
-    });
-
-    const userExists = userSheet.data.values?.some(row => row[2] === userId);
-
-    // 2. Si nouvel utilisateur, l'ajouter
-    if (!userExists) {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Users!A2:D",
-        valueInputOption: "USER_ENTERED",
-        resource: {
-          values: [[
-            new Date().toISOString(),
-            username,
-            userId,
-            referralCode // Stocke le code de parrainage
-          ]]
-        }
-      });
-    }
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Register error:", error);
-    res.status(500).json({ error: "Erreur d'enregistrement" });
-  }
-});
-
-// [MAINTENANCE]
-setInterval(() => {
-    const now = new Date();
-    for (const [userId, session] of activeSessions.entries()) {
-        if ((now - session.lastActive) > 300000) { 
-            activeSessions.delete(userId);
-            console.log(`Session expirée pour ${userId}`);
-        }
-    }
-}, 300000);
-
-setInterval(() => {
-  console.log('[Keep-Alive] Instance active...');
-}, 5 * 60 * 1000); // Ping toutes les 5 minutes
-
-process.on('unhandledRejection', err => console.error('Rejection:', err));
-process.on('uncaughtException', err => {
-  console.error('Crash:', err);
-  process.exit(1);
-});
-
+// Lancer tout
 initializeApp();
