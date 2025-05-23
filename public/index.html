@@ -4,10 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Airdrop Telegram Bot</title>
+
+  <!-- CSS -->
   <link rel="stylesheet" href="style.css" />
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+  <!-- Telegram WebApp JS -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -16,15 +19,15 @@
 
       <div id="user-info" class="user-info-card">
         <div class="user-info-row">
-          <img src="https://i.imgur.com/Jw0V97g.png" class="user-info-icon" alt="User" />
+          <img src="./images/user.png" class="user-info-icon" alt="User" loading="lazy" />
           <span id="username" class="user-info-value">Chargement...</span>
         </div>
         <div class="user-info-row">
-          <img src="https://i.imgur.com/0W2QZsY.png" class="user-info-icon" alt="Coin" />
+          <img src="./images/coin.png" class="user-info-icon" alt="Coin" loading="lazy" />
           <span id="balance" class="user-info-value">--</span>
         </div>
         <div class="user-info-row">
-          <img src="https://i.imgur.com/Z9ThqLy.png" class="user-info-icon" alt="Calendar" />
+          <img src="./images/calendar.png" class="user-info-icon" alt="Calendar" loading="lazy" />
           <span id="lastClaim" class="user-info-value">--</span>
         </div>
       </div>
@@ -36,15 +39,15 @@
 
     <nav class="bottom-nav">
       <button id="nav-claim" class="nav-btn active">
-        <img src="https://i.imgur.com/l9dfp6U.png" class="nav-icon" alt="Mining" />
+        <img src="./images/icon_claim.png" class="nav-icon" alt="Mining" loading="lazy" />
         <span class="nav-label">Mining</span>
       </button>
       <button id="nav-tasks" class="nav-btn">
-        <img src="https://i.imgur.com/XjK70cN.png" class="nav-icon" alt="Tasks" />
+        <img src="./images/icon_tasks.png" class="nav-icon" alt="Tasks" loading="lazy" />
         <span class="nav-label">Tasks</span>
       </button>
       <button id="nav-referral" class="nav-btn">
-        <img src="https://i.imgur.com/vIkG9q6.png" class="nav-icon" alt="Referral" />
+        <img src="./images/icon_referral.png" class="nav-icon" alt="Referral" loading="lazy" />
         <span class="nav-label">Referral</span>
       </button>
     </nav>
@@ -52,9 +55,9 @@
     <div id="notification" class="notification hidden"></div>
   </div>
 
-  <!-- Scripts -->
-  <script src="TasksPage.js"></script>
-  <script src="ReferralPage.js"></script>
-  <script src="app.js"></script>
+  <!-- Scripts (defer to prevent blocking) -->
+  <script src="TasksPage.js" defer></script>
+  <script src="ReferralPage.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
