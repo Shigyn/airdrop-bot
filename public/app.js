@@ -245,12 +245,12 @@ async function handleClaim() {
     
     // Dictionnaire des messages courts
     const errorMessages = {
-      "NO_ACTIVE_SESSION": "Sess. expirée",
+      "NO_ACTIVE_SESSION": "expirée",
       "DEVICE_MISMATCH": "Appareil bloqué",
       "MIN_TIME_NOT_REACHED": "10min requises",
       "NETWORK_ERROR": "Problème réseau",
-      "SESSION_CHECK_FAILED": "Err. session",
-      "CLAIM_FAILED": "Err. claim"
+      "SESSION_CHECK_FAILED": "session",
+      "CLAIM_FAILED": "claim"
     };
 
     // Message court par défaut (8 caractères max)
