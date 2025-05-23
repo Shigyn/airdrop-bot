@@ -356,17 +356,33 @@ app.get('/api/tasks', async (req, res) => {
   }
 });
 
-app.post('/api/session-check', (req, res) => {
+app.post('/api/check-session', (req, res) => {
   const { userId, deviceId } = req.body;
   
-  // Vérifiez la session dans votre système
-  const sessionValid = activeSessions.has(userId) && 
-                      activeSessions.get(userId).deviceId === deviceId;
+  // 1. Vérifier si la session existe
+  if (!activeSessions.has(userId)) {
+    return res.status(401).json({
+      error: "SESSION_NOT_FOUND",
+      message: "Session introuvable. Démarrez une nouvelle session de minage."
+    });
+  }
 
-  if (!sessionValid) {
+  // 2. Vérifier la correspondance du device
+  const session = activeSessions.get(userId);
+  if (session.deviceId !== deviceId) {
+    return res.status(401).json({
+      error: "DEVICE_MISMATCH",
+      message: "Appareil non autorisé. Utilisez le même navigateur que pour démarrer le minage."
+    });
+  }
+
+  // 3. Vérifier l'expiration (60 minutes max)
+  const sessionDuration = (Date.now() - session.startTime) / (1000 * 60);
+  if (sessionDuration > 60) {
+    activeSessions.delete(userId);
     return res.status(401).json({
       error: "SESSION_EXPIRED",
-      message: "Votre session a expiré. Veuillez redémarrer le minage."
+      message: "Session expirée (limite de 60 minutes atteinte)."
     });
   }
 

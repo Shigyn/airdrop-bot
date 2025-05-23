@@ -184,86 +184,75 @@ async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
   const claimText = document.getElementById('claim-text');
   
-  // Sauvegarder le texte original
+  // Sauvegarder l'état original
+  const originalText = claimText.textContent;
   const originalHTML = btn.innerHTML;
   
   // Mode chargement
   btn.disabled = true;
-  btn.innerHTML = '<div class="loading-spinner-small"></div>';
+  btn.innerHTML = '<div class="claim-spinner"></div>';
 
   try {
-    const backendUrl = window.location.origin;
-    const tg = window.Telegram.WebApp;
-
-    // 1. Vérification de session
-    const sessionCheck = await fetch(`${backendUrl}/api/session-check`, {
+    // 1. Vérification robuste de la session
+    const sessionCheck = await fetch('/api/check-session', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': tg.initData || ''
+        'Telegram-Data': window.Telegram.WebApp.initData || ''
       },
       body: JSON.stringify({
-        userId: tg.initDataUnsafe.user?.id,
-        deviceId: deviceId
+        userId: window.Telegram.WebApp.initDataUnsafe.user?.id,
+        deviceId: deviceId,
+        tokens: tokens.toFixed(2)
       })
     });
 
     if (!sessionCheck.ok) {
       const errorData = await sessionCheck.json();
-      throw new Error(errorData.message || "Session invalide");
+      throw new Error(errorData.message || "Validation de session échouée");
     }
 
     // 2. Envoi du claim
-    const claimResponse = await fetch(`${backendUrl}/api/claim`, {
+    const claimResponse = await fetch('/api/claim', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': tg.initData || ''
+        'Telegram-Data': window.Telegram.WebApp.initData || ''
       },
       body: JSON.stringify({
-        userId: tg.initDataUnsafe.user?.id,
-        tokens: tokens.toFixed(2),
-        username: tg.initDataUnsafe.user?.username || 'Anonyme'
+        userId: window.Telegram.WebApp.initDataUnsafe.user?.id,
+        deviceId: deviceId,
+        tokens: tokens.toFixed(2)
       })
     });
 
     if (!claimResponse.ok) {
       const errorData = await claimResponse.json();
-      throw new Error(errorData.message || "Claim failed");
+      throw new Error(errorData.message || "Échec du claim");
     }
 
-    // 3. Succès - reset
+    // 3. Reset après succès
     tokens = 0;
     sessionStartTime = Date.now();
     updateDisplay();
-    
-    if (tg.showAlert) {
-      tg.showAlert("Tokens claimés avec succès!");
-    }
 
   } catch (error) {
     console.error("Claim Error:", error);
     
-    // Gestion améliorée de l'erreur
+    // Gestion avancée du message d'erreur
     let errorMessage = error.message;
+    const isSessionError = errorMessage.toLowerCase().includes('session');
     
-    // Messages courts pour les erreurs connues
-    if (errorMessage.includes("session") || errorMessage.includes("sess")) {
-      errorMessage = "Session expirée";
-    } else if (errorMessage.includes("device")) {
-      errorMessage = "Appareil non autorisé";
+    // Adaptation du message pour l'affichage
+    if (isSessionError) {
+      errorMessage = "Session expirée - Redémarrez";
+    } else if (errorMessage.length > 20) {
+      errorMessage = errorMessage.substring(0, 17) + "...";
     }
 
     // Affichage dans le bouton
     btn.innerHTML = `
-      <span id="claim-text" style="
-        display: inline-block;
-        max-width: 80%;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-size: 0.9rem;
-      ">
+      <span id="claim-text" class="error-text">
         ERREUR - ${errorMessage}
       </span>
       <div class="error-tooltip">${error.message}</div>
@@ -271,10 +260,10 @@ async function handleClaim() {
     
     btn.disabled = false;
 
-    // Réinitialisation après 5 secondes
+    // Réinitialisation après délai
     setTimeout(() => {
       btn.innerHTML = originalHTML;
-      updateDisplay();
+      claimText.textContent = originalText;
     }, 5000);
   }
 }
