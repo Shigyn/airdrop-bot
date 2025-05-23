@@ -171,11 +171,10 @@ app.post('/claim', async (req, res) => {
   const now = Date.now();
   const elapsedMinutes = (now - session.lastActive) / (1000 * 60);
   const totalUsedMinutes = session.totalMinutes + elapsedMinutes;
-
-  try {
-    // 5. Validation des tokens
+try {
+    )
     const points = Math.floor(parseFloat(tokens));
-    if (isNaN(points) {
+    if (isNaN(points)) { // Parenthèse fermante ajoutée
       return res.status(400).json({
         error: "INVALID_TOKENS",
         message: "Format de tokens invalide"
