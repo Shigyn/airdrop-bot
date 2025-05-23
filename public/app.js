@@ -182,19 +182,38 @@ function updateDisplay() {
 
 async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
-  const originalText = btn.innerHTML;
+  const claimText = document.getElementById('claim-text');
+  
+  // Sauvegarde du texte original
+  const originalText = claimText.textContent;
+  const originalHTML = btn.innerHTML;
   
   // Mode chargement
   btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div>';
+  btn.innerHTML = '<div class="spinner"></div><span>Validation...</span>';
 
   try {
     const backendUrl = window.location.origin;
     const tg = window.Telegram.WebApp;
     const userId = tg.initDataUnsafe.user?.id;
 
-    // 1. Envoi du claim
-    const response = await fetch(`${backendUrl}/claim`, {
+    // 1. Vérification de la session
+    const sessionCheck = await fetch(`${backendUrl}/api/check-session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': tg.initData || ''
+      },
+      body: JSON.stringify({ userId, deviceId })
+    });
+
+    if (!sessionCheck.ok) {
+      const errorData = await sessionCheck.json();
+      throw new Error(errorData.error || "SESSION_CHECK_FAILED");
+    }
+
+    // 2. Envoi du claim
+    const claimResponse = await fetch(`${backendUrl}/api/claim`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -202,41 +221,61 @@ async function handleClaim() {
       },
       body: JSON.stringify({
         userId,
-        tokens: tokens.toFixed(2)
+        tokens: tokens.toFixed(2),
+        username: tg.initDataUnsafe.user?.username || 'Anonyme'
       })
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Claim failed"); // Utiliser error.code plutôt que error.message
+    if (!claimResponse.ok) {
+      const errorData = await claimResponse.json();
+      throw new Error(errorData.error || errorData.message || "CLAIM_FAILED");
     }
 
-    // 2. Reset après succès
+    // 3. Réinitialisation après succès
     tokens = 0;
     sessionStartTime = Date.now();
     updateDisplay();
+    
+    // Feedback visuel
+    btn.innerHTML = '<span>✔️ Success</span>';
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
   } catch (error) {
     console.error("Claim Error:", error);
     
-    // Messages courts prédéfinis
-    const errorMap = {
-      "SESSION_EXPIRED": "Sess exp",
-      "DEVICE_MISMATCH": "Mauvais appareil",
-      "INVALID_TOKENS": "Tokens invalides",
-      "NETWORK_ERROR": "Problème réseau"
+    // Dictionnaire des messages courts
+    const errorMessages = {
+      "NO_ACTIVE_SESSION": "Sess. expirée",
+      "DEVICE_MISMATCH": "Appareil bloqué",
+      "MIN_TIME_NOT_REACHED": "10min requises",
+      "NETWORK_ERROR": "Problème réseau",
+      "SESSION_CHECK_FAILED": "Err. session",
+      "CLAIM_FAILED": "Err. claim"
     };
 
-    const shortError = errorMap[error.message] || "Erreur";
-
-    // Affichage minimal
-    btn.innerHTML = `<span>ERREUR - ${shortError}</span>`;
+    // Message court par défaut (8 caractères max)
+    const shortError = errorMessages[error.message] || "Err. système";
+    
+    // Affichage optimisé
+    btn.innerHTML = `
+      <span style="
+        display: inline-block;
+        max-width: 90px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 0.8rem;
+      ">
+        ⚠️ ${shortError}
+      </span>
+    `;
+    
     btn.disabled = false;
 
-    // Réinitialisation après 3s
+    // Réinitialisation après 3 secondes
     setTimeout(() => {
-      btn.innerHTML = originalText;
-      updateDisplay();
+      btn.innerHTML = originalHTML;
+      claimText.textContent = originalText;
     }, 3000);
   }
 }

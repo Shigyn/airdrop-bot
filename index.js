@@ -104,7 +104,7 @@ app.post('/start-session', (req, res) => {
     // 4. Si limite atteinte
     activeSessions.delete(userId);
     return res.status(403).json({
-      error: "SESSION_LIMIT_REACHED",
+      error: "LIMIT_REACHED",
       message: "Vous avez déjà utilisé vos 60 minutes de minage"
     });
   }
@@ -318,7 +318,7 @@ app.post('/claim', async (req, res) => {
     console.error("Claim error:", error);
     return res.status(500).json({
       error: "SERVER_ERROR",
-      message: "Erreur serveur"
+      message: "SERVER"
     });
   }
 });
@@ -399,7 +399,7 @@ app.post('/api/check-session', (req, res) => {
   if (sessionDuration > 60) {
     activeSessions.delete(userId);
     return res.status(401).json({
-      error: "SESSION_EXPIRED",
+      error: "EXPIRED",
       message: "Session expirée (limite de 60 minutes atteinte)."
     });
   }
