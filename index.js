@@ -146,7 +146,7 @@ app.post('/claim', async (req, res) => {
   if (!userId || !deviceId || !tokens) {
     return res.status(400).json({
       error: "MISSING_DATA",
-      message: "Données requises manquantes"
+      message: "Données manquantes"
     });
   }
 
@@ -154,37 +154,38 @@ app.post('/claim', async (req, res) => {
   const session = activeSessions.get(userId);
   if (!session) {
     return res.status(403).json({
-      error: "NO_ACTIVE_SESSION",
-      message: "Aucune session active. Démarrez d'abord le minage."
+      error: "NO_ACTIVE_SESSION", 
+      message: "Session inactive"
     });
   }
 
-  // 3. Vérification de l'appareil
+  // 3. Vérification appareil
   if (session.deviceId !== deviceId) {
     return res.status(403).json({
       error: "DEVICE_MISMATCH",
-      message: "Appareil non autorisé. Utilisez le même navigateur."
+      message: "Appareil invalide"
     });
   }
 
-  // 4. Calcul du temps de session
+  // 4. Calcul durée session
   const now = Date.now();
   const elapsedMinutes = (now - session.lastActive) / (1000 * 60);
   const totalUsedMinutes = session.totalMinutes + elapsedMinutes;
-try {
-    )
+
+  try {
+    // 5. Validation tokens (partie manquante)
     const points = Math.floor(parseFloat(tokens));
-    if (isNaN(points)) { // Parenthèse fermante ajoutée
+    if (isNaN(points)) {
       return res.status(400).json({
         error: "INVALID_TOKENS",
-        message: "Format de tokens invalide"
+        message: "Tokens invalides"
       });
     }
 
     if (points <= 0) {
       return res.status(400).json({
-        error: "INVALID_TOKEN_AMOUNT",
-        message: "Le montant des tokens doit être positif"
+        error: "INVALID_AMOUNT", 
+        message: "Montant trop bas"
       });
     }
 
@@ -197,7 +198,7 @@ try {
 
     const timestamp = new Date().toISOString();
 
-    // 7. Enregistrement de la transaction
+    // 7. Enregistrement transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
@@ -205,7 +206,7 @@ try {
       resource: {
         values: [[
           timestamp,
-          userId,
+          userId, 
           "AIRDROP",
           points,
           "COMPLETED"
@@ -213,23 +214,22 @@ try {
       }
     });
 
-    // 8. Mise à jour de l'utilisateur
+    // 8. Mise à jour utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
-
     const users = usersData.data.values || [];
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
     let newBalance = points;
 
-    // 9. Gestion utilisateur existant/nouveau
+    // 9. Gestion utilisateur
     if (userIndex >= 0) {
       const currentBalance = parseInt(users[userIndex][3]) || 0;
       const miningSpeed = parseFloat(users[userIndex][6]) || 1;
       newBalance = currentBalance + (points * miningSpeed);
 
-      // Mise à jour du solde
+      // Mise à jour solde
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${userIndex + 2}`,
@@ -237,15 +237,15 @@ try {
         resource: { values: [[newBalance]] }
       });
 
-      // Mise à jour du dernier claim
+      // Mise à jour dernier claim
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!E${userIndex + 2}`,
-        valueInputOption: "USER_ENTERED",
+        valueInputOption: "USER_ENTERED", 
         resource: { values: [[timestamp]] }
       });
 
-      // 10. Programme de parrainage (10%)
+      // 10. Programme parrainage (10%)
       const referralCode = users[userIndex][5];
       if (referralCode) {
         const referrerIndex = users.findIndex(row => row[5] === referralCode);
@@ -296,7 +296,7 @@ try {
       });
     }
 
-    // 11. Mise à jour de la session
+    // 11. Mise à jour session
     activeSessions.set(userId, {
       ...session,
       lastActive: now,
@@ -304,7 +304,7 @@ try {
       tokens: points
     });
 
-    // 12. Réponse de succès
+    // 12. Réponse succès
     return res.json({
       success: true,
       balance: newBalance,
@@ -315,28 +315,10 @@ try {
     });
 
   } catch (error) {
-    console.error("Claim error:", {
-      error: error.message,
-      userId,
-      timestamp: new Date().toISOString()
-    });
-
-    // Gestion des erreurs spécifiques
-    let errorCode = "CLAIM_FAILED";
-    let errorMessage = "Erreur lors du traitement";
-
-    if (error.message.includes("Quota")) {
-      errorCode = "SHEETS_QUOTA_EXCEEDED";
-      errorMessage = "Quota Google Sheets dépassé";
-    } else if (error.message.includes("invalid_grant")) {
-      errorCode = "AUTH_ERROR";
-      errorMessage = "Problème d'authentification Google";
-    }
-
+    console.error("Claim error:", error);
     return res.status(500).json({
-      error: errorCode,
-      message: errorMessage,
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: "SERVER_ERROR",
+      message: "Erreur serveur"
     });
   }
 });

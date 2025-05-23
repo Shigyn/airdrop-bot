@@ -189,39 +189,55 @@ async function handleClaim() {
   btn.innerHTML = '<div class="spinner"></div>';
 
   try {
-    // [...] (votre logique de claim existante)
+    const backendUrl = window.location.origin;
+    const tg = window.Telegram.WebApp;
+    const userId = tg.initDataUnsafe.user?.id;
+
+    // 1. Envoi du claim
+    const response = await fetch(`${backendUrl}/claim`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': tg.initData || ''
+      },
+      body: JSON.stringify({
+        userId,
+        tokens: tokens.toFixed(2)
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Claim failed"); // Utiliser error.code plutôt que error.message
+    }
+
+    // 2. Reset après succès
+    tokens = 0;
+    sessionStartTime = Date.now();
+    updateDisplay();
 
   } catch (error) {
     console.error("Claim Error:", error);
     
-    // Gestion avancée de l'erreur
-    let errorMessage = "Erreur inconnue";
-    
-    if (error.message.includes("session") || error.message.includes("Session")) {
-      errorMessage = "Session expirée - Redémarrez l'application";
-    } else if (error.message.includes("device")) {
-      errorMessage = "Appareil non reconnu";
-    } else {
-      errorMessage = error.message;
-    }
+    // Messages courts prédéfinis
+    const errorMap = {
+      "SESSION_EXPIRED": "Sess exp",
+      "DEVICE_MISMATCH": "Mauvais appareil",
+      "INVALID_TOKENS": "Tokens invalides",
+      "NETWORK_ERROR": "Problème réseau"
+    };
 
-    // Version courte pour le bouton
-    const shortError = errorMessage.length > 15 
-      ? errorMessage.substring(0, 12) + "..." 
-      : errorMessage;
+    const shortError = errorMap[error.message] || "Erreur";
 
-    // Mise à jour de l'interface
-    btn.innerHTML = `
-      <span class="error-text">ERREUR - ${shortError}</span>
-      <div class="error-tooltip">${errorMessage}</div>
-    `;
+    // Affichage minimal
+    btn.innerHTML = `<span>ERREUR - ${shortError}</span>`;
     btn.disabled = false;
 
-    // Réinitialisation après 5s
+    // Réinitialisation après 3s
     setTimeout(() => {
       btn.innerHTML = originalText;
       updateDisplay();
-    }, 5000);
+    }, 3000);
   }
 }
 

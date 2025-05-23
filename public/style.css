@@ -396,3 +396,28 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Garantir l'affichage complet au survol */
+.error-text {
+  display: inline-block;
+  max-width: 80%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.error-text:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ff4444;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  white-space: normal;
+  width: 200px;
+  z-index: 100;
+}
