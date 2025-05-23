@@ -182,100 +182,100 @@ function updateDisplay() {
 
 async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
-  const claimText = document.getElementById('claim-text');
-  
-  // Sauvegarde du texte original
-  const originalText = claimText.textContent;
+  if (!btn) return;
+
+  // Sauvegarde de l'état original
   const originalHTML = btn.innerHTML;
-  
+  const originalDisabled = btn.disabled;
+
   // Mode chargement
   btn.disabled = true;
-  btn.innerHTML = '<div class="spinner"></div><span>Validation...</span>';
+  btn.innerHTML = '<div class="spinner-mini"></div>';
 
   try {
-    const backendUrl = window.location.origin;
     const tg = window.Telegram.WebApp;
-    const userId = tg.initDataUnsafe.user?.id;
+    if (!tg?.initDataUnsafe?.user?.id) throw new Error('NO_USER_DATA');
 
-    // 1. Vérification de la session
-    const sessionCheck = await fetch(`${backendUrl}/api/check-session`, {
+    // 1. Vérification de session
+    const sessionCheck = await fetch('/api/check-session', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': tg.initData || ''
+        'Telegram-Data': tg.initData
       },
-      body: JSON.stringify({ userId, deviceId })
+      body: JSON.stringify({
+        userId: tg.initDataUnsafe.user.id,
+        deviceId
+      })
     });
 
     if (!sessionCheck.ok) {
-      const errorData = await sessionCheck.json();
-      throw new Error(errorData.error || "SESSION_CHECK_FAILED");
+      const errorData = await sessionCheck.json().catch(() => ({}));
+      throw new Error(errorData.error || 'SESSION_CHECK_FAILED');
     }
 
     // 2. Envoi du claim
-    const claimResponse = await fetch(`${backendUrl}/api/claim`, {
+    const claimResponse = await fetch('/claim', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': tg.initData || ''
+        'Telegram-Data': tg.initData
       },
       body: JSON.stringify({
-        userId,
+        userId: tg.initDataUnsafe.user.id,
         tokens: tokens.toFixed(2),
         username: tg.initDataUnsafe.user?.username || 'Anonyme'
       })
     });
 
     if (!claimResponse.ok) {
-      const errorData = await claimResponse.json();
-      throw new Error(errorData.error || errorData.message || "CLAIM_FAILED");
+      const errorData = await claimResponse.json().catch(() => ({}));
+      throw new Error(errorData.error || 'CLAIM_FAILED');
     }
 
     // 3. Réinitialisation après succès
     tokens = 0;
     sessionStartTime = Date.now();
-    updateDisplay();
-    
-    // Feedback visuel
-    btn.innerHTML = '<span>✔️ Success</span>';
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    btn.innerHTML = '<span style="color:#4CAF50">✓ Réussi</span>';
+    setTimeout(updateDisplay, 1500);
 
   } catch (error) {
-    console.error("Claim Error:", error);
+    console.error('Claim Error:', error);
     
-    // Dictionnaire des messages courts
-    const errorMessages = {
-      "NO_ACTIVE_SESSION": "expirée",
-      "DEVICE_MISMATCH": "Appareil bloqué",
-      "MIN_TIME_NOT_REACHED": "10min requises",
-      "NETWORK_ERROR": "Problème réseau",
-      "SESSION_CHECK_FAILED": "session",
-      "CLAIM_FAILED": "claim"
+    // Dictionnaire des erreurs avec messages courts
+    const ERROR_MESSAGES = {
+      'NO_USER_DATA': 'Non connecté',
+      'SESSION_CHECK_FAILED': 'Session invalide',
+      'DEVICE_MISMATCH': 'Appareil invalide',
+      'CLAIM_FAILED': 'Erreur serveur',
+      'NETWORK_ERROR': 'Problème réseau'
     };
 
-    // Message court par défaut (8 caractères max)
-    const shortError = errorMessages[error.message] || "Err. système";
-    
-    // Affichage optimisé
+    // Message court sécurisé (8 caractères max)
+    const errorMsg = ERROR_MESSAGES[error.message] || 'Erreur';
+
+    // Affichage robuste
     btn.innerHTML = `
       <span style="
         display: inline-block;
-        max-width: 90px;
-        white-space: nowrap;
+        max-width: 80px;
         overflow: hidden;
         text-overflow: ellipsis;
+        white-space: nowrap;
         font-size: 0.8rem;
+        color: #FF5252;
       ">
-        ⚠️ ${shortError}
+        ⚠️ ${errorMsg}
       </span>
     `;
     
     btn.disabled = false;
 
-    // Réinitialisation après 3 secondes
+    // Réinitialisation après 3s
     setTimeout(() => {
       btn.innerHTML = originalHTML;
-      claimText.textContent = originalText;
+      btn.disabled = originalDisabled;
+      updateDisplay();
     }, 3000);
   }
 }

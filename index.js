@@ -142,54 +142,47 @@ app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens, username } = req.body;
   const MAX_MINUTES = 60; // Durée maximale de session
 
-  // 1. Validation des données entrantes
+  // 1. Validation des données entrantes (version courte)
   if (!userId || !deviceId || !tokens) {
-    return res.status(400).json({
+    return res.status(400).json({ 
       error: "MISSING_DATA",
-      message: "Données manquantes"
+      message: "Champs manquants" 
     });
   }
 
-  // 2. Vérification de session
+  // 2. Vérification de session (optimisée)
   const session = activeSessions.get(userId);
   if (!session) {
-    return res.status(403).json({
-      error: "NO_ACTIVE_SESSION", 
-      message: "Session inactive"
+    return res.status(403).json({ 
+      error: "NO_SESSION",
+      message: "Session expirée" 
     });
   }
 
-  // 3. Vérification appareil
+  // 3. Vérification appareil (version courte)
   if (session.deviceId !== deviceId) {
-    return res.status(403).json({
-      error: "DEVICE_MISMATCH",
-      message: "Appareil invalide"
+    return res.status(403).json({ 
+      error: "DEVICE_ERR",
+      message: "Appareil invalide" 
     });
   }
 
-  // 4. Calcul durée session
+  // 4. Calcul du temps de session
   const now = Date.now();
   const elapsedMinutes = (now - session.lastActive) / (1000 * 60);
   const totalUsedMinutes = session.totalMinutes + elapsedMinutes;
 
   try {
-    // 5. Validation tokens (partie manquante)
+    // 5. Validation tokens (version robuste)
     const points = Math.floor(parseFloat(tokens));
-    if (isNaN(points)) {
-      return res.status(400).json({
+    if (isNaN(points) || points <= 0) {
+      return res.status(400).json({ 
         error: "INVALID_TOKENS",
-        message: "Tokens invalides"
+        message: "Tokens invalides" 
       });
     }
 
-    if (points <= 0) {
-      return res.status(400).json({
-        error: "INVALID_AMOUNT", 
-        message: "Montant trop bas"
-      });
-    }
-
-    // 6. Initialisation Google Sheets
+    // 6. Initialisation Google Sheets (inchangée)
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -198,105 +191,99 @@ app.post('/claim', async (req, res) => {
 
     const timestamp = new Date().toISOString();
 
-    // 7. Enregistrement transaction
+    // 7. Enregistrement transaction (optimisé)
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
       valueInputOption: "USER_ENTERED",
-      resource: {
-        values: [[
-          timestamp,
-          userId, 
-          "AIRDROP",
-          points,
-          "COMPLETED"
-        ]]
-      }
+      resource: { values: [[
+        timestamp,
+        userId,
+        "AIRDROP", 
+        points,
+        "COMPLETED"
+      ]]}
     });
 
-    // 8. Mise à jour utilisateur
+    // 8. Mise à jour utilisateur (version sécurisée)
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
     const users = usersData.data.values || [];
+    
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
     let newBalance = points;
 
-    // 9. Gestion utilisateur
     if (userIndex >= 0) {
+      // Utilisateur existant
       const currentBalance = parseInt(users[userIndex][3]) || 0;
       const miningSpeed = parseFloat(users[userIndex][6]) || 1;
       newBalance = currentBalance + (points * miningSpeed);
 
-      // Mise à jour solde
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: `Users!D${userIndex + 2}`,
-        valueInputOption: "USER_ENTERED",
-        resource: { values: [[newBalance]] }
-      });
+      // Mise à jour asynchrone en parallèle
+      await Promise.all([
+        sheets.spreadsheets.values.update({
+          spreadsheetId: process.env.GOOGLE_SHEET_ID,
+          range: `Users!D${userIndex + 2}`,
+          valueInputOption: "USER_ENTERED",
+          resource: { values: [[newBalance]] }
+        }),
+        sheets.spreadsheets.values.update({
+          spreadsheetId: process.env.GOOGLE_SHEET_ID,
+          range: `Users!E${userIndex + 2}`,
+          valueInputOption: "USER_ENTERED",
+          resource: { values: [[timestamp]] }
+        })
+      ]);
 
-      // Mise à jour dernier claim
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: `Users!E${userIndex + 2}`,
-        valueInputOption: "USER_ENTERED", 
-        resource: { values: [[timestamp]] }
-      });
-
-      // 10. Programme parrainage (10%)
+      // 9. Programme de parrainage (optimisé)
       const referralCode = users[userIndex][5];
       if (referralCode) {
         const referrerIndex = users.findIndex(row => row[5] === referralCode);
         if (referrerIndex >= 0) {
           const referralReward = Math.floor(points * 0.1);
           const currentReferrerBalance = parseInt(users[referrerIndex][3]) || 0;
-          const newReferrerBalance = currentReferrerBalance + referralReward;
-
+          
           await sheets.spreadsheets.values.update({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
             range: `Users!D${referrerIndex + 2}`,
             valueInputOption: "USER_ENTERED",
-            resource: { values: [[newReferrerBalance]] }
+            resource: { values: [[currentReferrerBalance + referralReward]] }
           });
 
           await sheets.spreadsheets.values.append({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
             range: "Referrals!A2:D",
             valueInputOption: "USER_ENTERED",
-            resource: {
-              values: [[
-                referralCode,
-                referralReward,
-                timestamp,
-                username || "Anonyme"
-              ]]
-            }
+            resource: { values: [[
+              referralCode,
+              referralReward,
+              timestamp,
+              username || "Anonyme"
+            ]]}
           });
         }
       }
     } else {
-      // Nouvel utilisateur
+      // Nouvel utilisateur (version simplifiée)
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: "Users!A2:G",
         valueInputOption: "USER_ENTERED",
-        resource: {
-          values: [[
-            timestamp,
-            username || "Anonyme",
-            userId,
-            newBalance,
-            timestamp,
-            `REF-${Math.random().toString(36).slice(2, 8)}`,
-            1
-          ]]
-        }
+        resource: { values: [[
+          timestamp,
+          username || "Anonyme",
+          userId,
+          newBalance,
+          timestamp,
+          `REF-${Math.random().toString(36).slice(2, 8)}`,
+          1
+        ]]}
       });
     }
 
-    // 11. Mise à jour session
+    // 10. Mise à jour session
     activeSessions.set(userId, {
       ...session,
       lastActive: now,
@@ -304,21 +291,26 @@ app.post('/claim', async (req, res) => {
       tokens: points
     });
 
-    // 12. Réponse succès
+    // 11. Réponse succès (format court)
     return res.json({
-      success: true,
-      balance: newBalance,
-      claimedPoints: points,
-      sessionDuration: totalUsedMinutes.toFixed(2),
-      remainingMinutes: Math.max(0, MAX_MINUTES - totalUsedMinutes).toFixed(2),
-      miningSpeed: userIndex >= 0 ? parseFloat(users[userIndex][6]) || 1 : 1
+      s: true, // success
+      b: newBalance, // balance
+      p: points, // points
+      t: totalUsedMinutes.toFixed(1), // time
+      m: userIndex >= 0 ? parseFloat(users[userIndex][6]) || 1 : 1 // mining speed
     });
 
   } catch (error) {
-    console.error("Claim error:", error);
-    return res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "SERVER"
+    console.error("Claim Error:", {
+      userId,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+
+    // Gestion d'erreur unifiée
+    return res.status(500).json({ 
+      error: "SERVER_ERR",
+      message: "Erreur"
     });
   }
 });
