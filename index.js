@@ -137,7 +137,6 @@ app.post('/update-session', (req, res) => {
 });
 
 // [CLAIM] Enregistrement avec limite de 60 minutes
-// [CLAIM] Version finale avec limite 60min cumulative
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens, username } = req.body;
   const MAX_MINUTES = 60; // Durée maximale autorisée
@@ -193,7 +192,7 @@ app.post('/claim', async (req, res) => {
     const sheets = google.sheets({ version: 'v4', auth });
 
     const timestamp = new Date().toISOString();
-    
+
     // a) Écriture transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -215,13 +214,52 @@ app.post('/claim', async (req, res) => {
 
     if (userIndex >= 0) {
       newBalance = (parseInt(users[userIndex][3]) || 0) + points;
+
+      // Mise à jour solde utilisateur
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${userIndex + 2}`,
         valueInputOption: "USER_ENTERED",
         resource: { values: [[newBalance]] }
       });
+
+      // Gestion parrainage (10%)
+      const referralCode = users[userIndex][5]; // code de parrainage
+      if (referralCode) {
+        // Chercher le parrain correspondant au code
+        const referrerIndex = users.findIndex(row => row[5] === referralCode);
+        if (referrerIndex >= 0) {
+          const currentReferrerBalance = parseInt(users[referrerIndex][3]) || 0;
+          const referralReward = Math.floor(points * 0.1); // 10%
+
+          // Mise à jour solde parrain
+          const newReferrerBalance = currentReferrerBalance + referralReward;
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: process.env.GOOGLE_SHEET_ID,
+            range: `Users!D${referrerIndex + 2}`,
+            valueInputOption: "USER_ENTERED",
+            resource: { values: [[newReferrerBalance]] }
+          });
+
+          // Enregistrer la récompense dans Referrals
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: process.env.GOOGLE_SHEET_ID,
+            range: "Referrals!A2:D",
+            valueInputOption: "USER_ENTERED",
+            resource: {
+              values: [[
+                referralCode,
+                referralReward,
+                new Date().toISOString(),
+                username || "Anonyme"
+              ]]
+            }
+          });
+        }
+      }
+
     } else {
+      // Nouvel utilisateur : ajout dans Users
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: "Users!A2:F",
@@ -265,6 +303,7 @@ app.post('/claim', async (req, res) => {
     });
   }
 });
+
 
 // [TELEGRAM] Webhook
 app.post(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`, webhookCallback);
