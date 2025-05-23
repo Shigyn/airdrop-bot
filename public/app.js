@@ -72,17 +72,16 @@ function chargerSession() {
     if (session) {
       const parsed = JSON.parse(session);
       if (parsed.userId === userId && parsed.deviceId === deviceId) {
-        const elapsed = (Date.now() - parsed.sessionStartTime) / 1000;
-        if (elapsed < 3600) {
-          sessionStartTime = parsed.sessionStartTime;
-          tokens = parsed.tokens;
-          return true;
-        }
+        // Supprimer la vérification du temps écoulé
+        sessionStartTime = parsed.sessionStartTime;
+        tokens = parsed.tokens;
+        return true;  // On considère toujours la session valide
       }
     }
   }
   return false;
 }
+
 
 // ==============================================
 // FONCTIONS PRINCIPALES
@@ -154,29 +153,32 @@ function updateDisplay() {
 
   const now = Date.now();
   const elapsed = (now - sessionStartTime) / 1000;
-  const sessionDuration = 3600; // durée totale session en secondes (1h)
-  const remainingTime = Math.max(0, sessionDuration - elapsed);
+  const sessionDuration = 3600; // 60 minutes
+
+  // Si elapsed >= 60 mn, on reset le timer à 0 et tokens à 0
+  if (elapsed >= sessionDuration) {
+    sessionStartTime = Date.now();  // relance la session
+    tokens = 0;
+  }
+
+  const elapsedAfterReset = (now - sessionStartTime) / 1000;
+  const remainingTime = Math.max(0, sessionDuration - elapsedAfterReset);
 
   tokensDisplay.textContent = tokens.toFixed(2);
 
-  if (elapsed >= sessionDuration) {
-    claimText.textContent = "SESSION EXPIRED";
-    btn.disabled = true;
-    progressBar.style.width = '100%';
-  } else {
-    const percent = (elapsed / sessionDuration) * 100;
-    progressBar.style.width = `${percent}%`;
+  // Met à jour barre et texte countdown
+  const percent = (elapsedAfterReset / sessionDuration) * 100;
+  progressBar.style.width = `${percent}%`;
 
-    const mins = Math.floor(remainingTime / 60);
-    const secs = Math.floor(remainingTime % 60);
+  const mins = Math.floor(remainingTime / 60);
+  const secs = Math.floor(remainingTime % 60);
 
-    // Forcer texte sur 1 ligne avec format mm:ss
-    claimText.style.whiteSpace = 'nowrap';
-    claimText.style.fontSize = '1rem';  // réduire un peu la taille du texte
-    claimText.textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
-    
-    btn.disabled = elapsed < 600;  // active le bouton uniquement après 10 min
-  }
+  claimText.style.whiteSpace = 'nowrap';
+  claimText.style.fontSize = '1rem';
+  claimText.textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+
+  // active le bouton après 10 min
+  btn.disabled = elapsedAfterReset < 600;
 }
 
 
