@@ -344,3 +344,55 @@ body {
   margin-top: 20px;
   cursor: pointer;
 }
+
+/* Style du bouton d'erreur */
+#main-claim-btn {
+  position: relative;
+  overflow: visible;
+}
+
+.error-text {
+  display: inline-block;
+  max-width: 80%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9rem;
+}
+
+.error-tooltip {
+  visibility: hidden;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ff4444;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  width: 250px;
+  z-index: 100;
+  opacity: 0;
+  transition: opacity 0.3s;
+  font-size: 0.8rem;
+  word-wrap: break-word;
+}
+
+#main-claim-btn:hover .error-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

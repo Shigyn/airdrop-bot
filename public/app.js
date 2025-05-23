@@ -184,86 +184,85 @@ async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
   const claimText = document.getElementById('claim-text');
   
-  // Sauvegarder l'état original
-  const originalText = claimText.textContent;
+  // Sauvegarde du texte original
   const originalHTML = btn.innerHTML;
   
   // Mode chargement
   btn.disabled = true;
-  btn.innerHTML = '<div class="claim-spinner"></div>';
+  btn.innerHTML = '<div class="spinner"></div>';
 
   try {
-    // 1. Vérification robuste de la session
-    const sessionCheck = await fetch('/api/check-session', {
+    const backendUrl = window.location.origin;
+    const tg = window.Telegram.WebApp;
+    const userId = tg.initDataUnsafe.user?.id;
+
+    // 1. Vérification de session
+    const sessionResponse = await fetch(`${backendUrl}/api/verify-session`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram.WebApp.initData || ''
+        'Telegram-Data': tg.initData || ''
       },
       body: JSON.stringify({
-        userId: window.Telegram.WebApp.initDataUnsafe.user?.id,
-        deviceId: deviceId,
-        tokens: tokens.toFixed(2)
+        userId,
+        deviceId
       })
     });
 
-    if (!sessionCheck.ok) {
-      const errorData = await sessionCheck.json();
-      throw new Error(errorData.message || "Validation de session échouée");
+    if (!sessionResponse.ok) {
+      const error = await sessionResponse.json();
+      throw new Error(error.message || "Session verification failed");
     }
 
     // 2. Envoi du claim
-    const claimResponse = await fetch('/api/claim', {
+    const claimResponse = await fetch(`${backendUrl}/api/claim`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram.WebApp.initData || ''
+        'Telegram-Data': tg.initData || ''
       },
       body: JSON.stringify({
-        userId: window.Telegram.WebApp.initDataUnsafe.user?.id,
-        deviceId: deviceId,
-        tokens: tokens.toFixed(2)
+        userId,
+        tokens: tokens.toFixed(2),
+        username: tg.initDataUnsafe.user?.username || 'Anonyme'
       })
     });
 
     if (!claimResponse.ok) {
-      const errorData = await claimResponse.json();
-      throw new Error(errorData.message || "Échec du claim");
+      const error = await claimResponse.json();
+      throw new Error(error.message || "Claim failed");
     }
 
-    // 3. Reset après succès
+    // 3. Réinitialisation après succès
     tokens = 0;
     sessionStartTime = Date.now();
     updateDisplay();
 
+    if (tg.showAlert) {
+      tg.showAlert("Claim réussi!");
+    }
+
   } catch (error) {
     console.error("Claim Error:", error);
     
-    // Gestion avancée du message d'erreur
-    let errorMessage = error.message;
-    const isSessionError = errorMessage.toLowerCase().includes('session');
-    
-    // Adaptation du message pour l'affichage
-    if (isSessionError) {
-      errorMessage = "Session expirée - Redémarrez";
-    } else if (errorMessage.length > 20) {
-      errorMessage = errorMessage.substring(0, 17) + "...";
+    // Gestion améliorée de l'erreur
+    let errorMsg = error.message;
+    if (errorMsg.includes("session") || errorMsg.includes("Session")) {
+      errorMsg = "Session invalide. Redémarrez l'app.";
     }
 
-    // Affichage dans le bouton
+    // Affichage dans le bouton avec tooltip
     btn.innerHTML = `
-      <span id="claim-text" class="error-text">
-        ERREUR - ${errorMessage}
-      </span>
+      <span class="error-text">ERREUR - ${errorMsg.substring(0, 15)}${errorMsg.length > 15 ? '...' : ''}</span>
       <div class="error-tooltip">${error.message}</div>
     `;
     
     btn.disabled = false;
 
-    // Réinitialisation après délai
+    // Réinitialisation après 5 secondes
     setTimeout(() => {
       btn.innerHTML = originalHTML;
-      claimText.textContent = originalText;
+      updateDisplay();
     }, 5000);
   }
 }
