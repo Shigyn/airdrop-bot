@@ -307,7 +307,7 @@ app.post('/claim', async (req, res) => {
 
 
 // [BOT] webhook Telegram
-app.use('/bot', webhookCallback(bot));
+app.use('/bot', webhookCallback);
 
 // [STATIC] Fichiers publics
 app.use(express.static(path.join(__dirname, 'public')));
