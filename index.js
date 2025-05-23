@@ -343,6 +343,42 @@ app.get('/api/user/:userId', async (req, res) => {
   }
 });
 
+// Routes pour Tasks et Referral
+app.get('/api/tasks', async (req, res) => {
+  try {
+    // Exemple de données - remplacez par votre logique
+    res.json([
+      { id: 1, name: "Join Telegram", icon: "telegram.png", reward: 10 },
+      { id: 2, name: "Follow Twitter", icon: "twitter.png", reward: 5 }
+    ]);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to load tasks" });
+  }
+});
+
+app.post('/api/complete-task', async (req, res) => {
+  try {
+    // Logique de validation ici
+    res.json({ success: true, reward: req.body.reward });
+  } catch (error) {
+    res.status(400).json({ error: "Task completion failed" });
+  }
+});
+
+app.get('/api/referral-info', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    // Exemple de réponse - adaptez à votre système
+    res.json({
+      code: `REF${userId.slice(0, 5)}`,
+      invitedCount: 3,
+      earnedTokens: 15
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to load referral info" });
+  }
+});
+
 // [BOT] webhook Telegram
 app.use('/bot', webhookCallback);
 

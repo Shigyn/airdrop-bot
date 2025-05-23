@@ -1,40 +1,63 @@
 const TasksPage = {
   showTasksPage: async function() {
-    const content = document.getElementById('content');
-    content.innerHTML = `
-      <div class="tasks-container">
-        <h2>📋 Tasks</h2>
-        <div id="tasks-list">Loading...</div>
-      </div>
-    `;
-    
     try {
-      const response = await fetch('/tasks');
-      if (!response.ok) throw new Error('API error');
+      const response = await fetch('/api/tasks', {
+        headers: {
+          'Telegram-Data': window.Telegram.WebApp.initData || ''
+        }
+      });
+      
       const tasks = await response.json();
       
-      document.getElementById('tasks-list').innerHTML = tasks.map(task => `
-        <div class="task-card ${task.completed ? 'completed' : ''}">
-          <h3>${task.description}</h3>
-          <p>Reward: ${task.reward} tokens</p>
-          <button 
-            class="task-button" 
-            ${task.completed ? 'disabled' : ''}
-            data-task-id="${task.id}"
-          >
-            ${task.completed ? '✅ Completed' : 'Claim Task'}
-          </button>
-        </div>
-      `).join('');
-    } catch (error) {
-      document.getElementById('tasks-list').innerHTML = `
-        <div class="error-message">
-          Failed to load tasks. Try again later.
+      const content = document.getElementById('content');
+      content.innerHTML = `
+        <div class="tasks-container">
+          <h3>Complete Tasks</h3>
+          ${tasks.map(task => `
+            <div class="task-item">
+              <img src="${task.icon}" alt="${task.name}">
+              <span>${task.name}</span>
+              <button class="task-button" data-id="${task.id}">
+                +${task.reward} tokens
+              </button>
+            </div>
+          `).join('')}
         </div>
       `;
-      console.error("Tasks error:", error);
+      
+      // Réattacher les événements
+      document.querySelectorAll('.task-button').forEach(btn => {
+        btn.addEventListener('click', this.handleTaskComplete);
+      });
+    } catch (error) {
+      console.error('Tasks error:', error);
+      document.getElementById('content').innerHTML = `
+        <div class="error-message">
+          Failed to load tasks. Please try again later.
+        </div>
+      `;
+    }
+  },
+
+  handleTaskComplete: async function(e) {
+    const taskId = e.target.getAttribute('data-id');
+    try {
+      const response = await fetch('/api/complete-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Telegram-Data': window.Telegram.WebApp.initData || ''
+        },
+        body: JSON.stringify({ taskId })
+      });
+      
+      const result = await response.json();
+      if (result.success) {
+        window.Telegram.WebApp.showAlert(`Task completed! ${result.reward} tokens earned.`);
+        this.showTasksPage();
+      }
+    } catch (error) {
+      console.error('Task completion error:', error);
     }
   }
 };
-
-window.TasksPage = TasksPage;
