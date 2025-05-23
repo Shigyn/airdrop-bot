@@ -129,21 +129,21 @@ async function demarrerMinage() {
   }
 
   miningInterval = setInterval(() => {
-    const now = Date.now();
-    const elapsed = (now - sessionStartTime) / 1000;
-    tokens = Math.min(elapsed * (1/60), 60);
+  const now = Date.now();
+  const elapsed = (now - sessionStartTime) / 1000;
 
-    updateDisplay();  // Met à jour texte + barre
+  // Appliquer multiplicateur miningSpeed
+  tokens = Math.min(elapsed * (1/60) * Mining_Speed, 60);
 
-    sauvegarderSession();
+  updateDisplay();  // Met à jour texte + barre
+  sauvegarderSession();
 
-    fetch('/update-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, tokens, deviceId })
-    }).catch(console.error);
-  }, 1000);
-}
+  fetch('/update-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, tokens, deviceId })
+  }).catch(console.error);
+}, 1000);
 
 
 function updateDisplay() {
@@ -173,7 +173,7 @@ function updateDisplay() {
     // Forcer texte sur 1 ligne avec format mm:ss
     claimText.style.whiteSpace = 'nowrap';
     claimText.style.fontSize = '1rem';  // réduire un peu la taille du texte
-    claimText.textContent = `Time left: ${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+    claimText.textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
     
     btn.disabled = elapsed < 600;  // active le bouton uniquement après 10 min
   }
@@ -344,31 +344,27 @@ function startMiningButton(button, durationSeconds) {
 // FONCTIONS EXISTANTES
 // ==============================================
 
+let Mining_Speed = 1; // variable globale par défaut
+
 async function loadUserData() {
   try {
     const backendUrl = window.location.origin;
-    console.log(`Tentative de chargement depuis: ${backendUrl}/user/${userId}`);
-    
     const response = await fetch(`${backendUrl}/user/${userId}`, {
-      headers: {
-        'Telegram-Data': tg.initData || 'mock-data'
-      }
+      headers: { 'Telegram-Data': tg.initData || 'mock-data' }
     });
-    
-    console.log("Statut de la réponse:", response.status);
-    
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Erreur HTTP ${response.status}: ${errorText}`);
+      throw new Error(`Erreur HTTP ${response.status}`);
     }
-    
     const data = await response.json();
-    console.log("Données utilisateur reçues:", data);
-    
+
+    // Mise à jour UI
     document.getElementById('username').textContent = data.username || "Anonyme";
     document.getElementById('balance').textContent = data.balance ?? "0";
     document.getElementById('lastClaim').textContent = data.lastClaim ? 
       new Date(data.lastClaim).toLocaleString('fr-FR') : "Jamais";
+
+    // Récupération du multiplicateur mining speed
+    Mining_Speed = data.mining_speed ?? 1;
 
     return data;
   } catch (error) {
@@ -378,6 +374,7 @@ async function loadUserData() {
     throw error;
   }
 }
+
 
 function setupNavigation() {
   const navClaim = document.getElementById('nav-claim');
