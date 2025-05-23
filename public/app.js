@@ -182,12 +182,22 @@ function updateDisplay() {
 
 async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
+  const claimText = document.getElementById('claim-text');
+  
+  // Sauvegarder le texte original
+  const originalText = claimText.textContent;
+  const originalHTML = btn.innerHTML;
+
+  // Passer en mode chargement
   btn.disabled = true;
   btn.innerHTML = '<div class="loading-spinner-small"></div>';
+  btn.style.position = 'relative'; // Pour le tooltip
 
   try {
-    // 1. Synchronisation de session avant le claim
-    const syncResponse = await fetch('/sync-session', {
+    const backendUrl = window.location.origin;
+
+    // 1. Synchronisation de session
+    const syncResponse = await fetch(`${backendUrl}/sync-session`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -201,11 +211,11 @@ async function handleClaim() {
 
     const syncData = await syncResponse.json();
     if (syncData.status === 'DEVICE_MISMATCH') {
-      throw new Error("Session expired. Please restart the app.");
+      throw new Error("Session expirée. Redémarrez l'application.");
     }
 
     // 2. Envoi de la requête de claim
-    const claimResponse = await fetch('/claim', {
+    const claimResponse = await fetch(`${backendUrl}/claim`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -223,7 +233,7 @@ async function handleClaim() {
     const claimData = await claimResponse.json();
     
     if (!claimResponse.ok) {
-      throw new Error(claimData.message || claimData.error || 'Claim failed');
+      throw new Error(claimData.message || claimData.error || 'Échec du claim');
     }
 
     // 3. Réinitialisation après succès
@@ -236,36 +246,56 @@ async function handleClaim() {
     await loadUserData();
     
     // 5. Mise à jour de l'UI
-    btn.innerHTML = '<span id="claim-text">MINING IN PROGRESS</span>';
+    btn.innerHTML = originalHTML;
     updateDisplay();
 
     // 6. Notification de succès
     if (window.Telegram?.WebApp?.showAlert) {
-      window.Telegram.WebApp.showAlert(`Successfully claimed ${claimData.claimed} tokens!`);
+      window.Telegram.WebApp.showAlert(`Claim réussi! ${claimData.claimed} tokens crédités.`);
     }
 
   } catch (error) {
-    console.error("Full claim error:", {
+    console.error("Erreur complète:", {
       error: error.message,
       userId,
       deviceId,
       time: new Date().toISOString()
     });
     
-    // Gestion d'erreur améliorée
+    // Gestion améliorée de l'erreur
     let errorMessage = error.message;
-    if (errorMessage.toLowerCase().includes('device mismatch')) {
-      errorMessage = "Session expired. Please restart the mining.";
-    } else if (errorMessage.toLowerCase().includes('invalid session')) {
-      errorMessage = "Invalid session. Refresh the page.";
+    if (errorMessage.includes('Device mismatch')) {
+      errorMessage = "Session expirée";
+    } else if (errorMessage.includes('network')) {
+      errorMessage = "Problème réseau";
     }
 
+    // Tronquer le message si trop long
+    const displayMessage = errorMessage.length > 15 
+      ? errorMessage.substring(0, 12) + '...' 
+      : errorMessage;
+
+    // Mise à jour du bouton
     btn.disabled = false;
-    btn.innerHTML = `<span id="claim-text">ERREUR - ${errorMessage || 'RETRY'}</span>`;
-    
-    // Réessai automatique après 5 secondes
+    btn.setAttribute('data-tooltip', errorMessage); // Pour affichage complet au survol
+    btn.innerHTML = `
+      <span id="claim-text" style="
+        display: inline-block;
+        max-width: 80%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.9rem;
+      ">
+        ERREUR - ${displayMessage}
+      </span>
+    `;
+
+    // Réinitialisation après 5 secondes
     setTimeout(() => {
-      btn.innerHTML = '<span id="claim-text">TRY AGAIN</span>';
+      btn.removeAttribute('data-tooltip');
+      btn.innerHTML = originalHTML;
+      claimText.textContent = originalText;
     }, 5000);
   }
 }

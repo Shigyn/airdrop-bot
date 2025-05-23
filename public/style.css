@@ -270,3 +270,25 @@ body {
 .mc-button-anim:hover:not(:disabled) {
   background-color: #45a049;
 }
+
+/* Tooltip pour les erreurs */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ff4444;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.8rem;
+  white-space: normal;
+  width: 200px;
+  z-index: 100;
+  margin-bottom: 5px;
+}
