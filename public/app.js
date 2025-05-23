@@ -82,7 +82,6 @@ function chargerSession() {
   return false;
 }
 
-
 // ==============================================
 // FONCTIONS PRINCIPALES
 // ==============================================
@@ -106,8 +105,8 @@ function initTelegramWebApp() {
   }
   console.log('User ID détecté:', userId);
   
-  // Remplacer la ligne deviceId existante par :
-deviceId = `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_');
+  // Générer deviceId unique lié à user et userAgent
+  deviceId = `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_');
 }
 
 async function demarrerMinage() {
@@ -128,22 +127,22 @@ async function demarrerMinage() {
   }
 
   miningInterval = setInterval(() => {
-  const now = Date.now();
-  const elapsed = (now - sessionStartTime) / 1000;
+    const now = Date.now();
+    const elapsed = (now - sessionStartTime) / 1000;
 
-  // Appliquer multiplicateur miningSpeed
-  tokens = Math.min(elapsed * (1/60) * Mining_Speed, 60);
+    // Appliquer multiplicateur miningSpeed
+    tokens = Math.min(elapsed * (1/60) * Mining_Speed, 60);
 
-  updateDisplay();  // Met à jour texte + barre
-  sauvegarderSession();
+    updateDisplay();  // Met à jour texte + barre
+    sauvegarderSession();
 
-  fetch('/update-session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, tokens, deviceId })
-  }).catch(console.error);
-}, 1000);
-
+    fetch('/update-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, tokens, deviceId })
+    }).catch(console.error);
+  }, 1000);
+}
 
 function updateDisplay() {
   const btn = document.getElementById('main-claim-btn');
@@ -181,7 +180,6 @@ function updateDisplay() {
   btn.disabled = elapsedAfterReset < 600;
 }
 
-
 async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
   btn.disabled = true;
@@ -197,7 +195,7 @@ async function handleClaim() {
       },
       body: JSON.stringify({ 
         userId,
-        deviceId: `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_')
+        deviceId
       })
     });
 
@@ -215,7 +213,7 @@ async function handleClaim() {
       },
       body: JSON.stringify({ 
         userId,
-        deviceId: `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_'),
+        deviceId,
         tokens: tokens.toFixed(2),
         username: tg.initDataUnsafe.user?.username || 'Anonyme',
         userAgent: navigator.userAgent
@@ -256,9 +254,9 @@ async function handleClaim() {
     
     // Gestion d'erreur améliorée
     let errorMessage = error.message;
-    if (errorMessage.includes('device mismatch')) {
+    if (errorMessage.toLowerCase().includes('device mismatch')) {
       errorMessage = "Session expired. Please restart the mining.";
-    } else if (errorMessage.includes('invalid session')) {
+    } else if (errorMessage.toLowerCase().includes('invalid session')) {
       errorMessage = "Invalid session. Refresh the page.";
     }
 
@@ -302,13 +300,7 @@ function showClaim() {
 }
 
 function startMiningButton(button, durationSeconds) {
-  const progressBar = button.querySelector('::before'); // pseudo-element, pas accessible en JS, donc on anime via style.width sur un enfant ou via animation CSS
-  const countdown = button.querySelector('.countdown');
-  
-  let startTime = Date.now();
-  let endTime = startTime + durationSeconds * 1000;
-
-  // Au lieu d'animer ::before (impossible en JS), on crée une div progress inside the button:
+  // Fonction inutilisée, mais corrigée si besoin
   let progress = button.querySelector('.progress-bar');
   if (!progress) {
     progress = document.createElement('div');
@@ -323,6 +315,9 @@ function startMiningButton(button, durationSeconds) {
     button.prepend(progress);
   }
 
+  let startTime = Date.now();
+  let endTime = startTime + durationSeconds * 1000;
+
   function update() {
     const now = Date.now();
     const elapsed = now - startTime;
@@ -330,11 +325,12 @@ function startMiningButton(button, durationSeconds) {
     progress.style.width = (percent * 100) + '%';
 
     const remaining = Math.max(0, Math.ceil((endTime - now) / 1000));
-    countdown.textContent = remaining + "s";
+    const countdown = button.querySelector('.countdown');
+    if (countdown) countdown.textContent = remaining + "s";
 
     if (percent < 1) {
       requestAnimationFrame(update);
-    } else {
+    } else if (countdown) {
       countdown.textContent = "Done";
     }
   }
@@ -376,7 +372,6 @@ async function loadUserData() {
     throw error;
   }
 }
-
 
 function setupNavigation() {
   const navClaim = document.getElementById('nav-claim');
