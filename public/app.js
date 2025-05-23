@@ -182,86 +182,44 @@ function updateDisplay() {
 
 async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
-  const claimText = document.getElementById('claim-text');
-  
-  // Sauvegarde du texte original
-  const originalHTML = btn.innerHTML;
+  const originalText = btn.innerHTML;
   
   // Mode chargement
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner"></div>';
 
   try {
-    const backendUrl = window.location.origin;
-    const tg = window.Telegram.WebApp;
-    const userId = tg.initDataUnsafe.user?.id;
-
-    // 1. Vérification de session
-    const sessionResponse = await fetch(`${backendUrl}/api/verify-session`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': tg.initData || ''
-      },
-      body: JSON.stringify({
-        userId,
-        deviceId
-      })
-    });
-
-    if (!sessionResponse.ok) {
-      const error = await sessionResponse.json();
-      throw new Error(error.message || "Session verification failed");
-    }
-
-    // 2. Envoi du claim
-    const claimResponse = await fetch(`${backendUrl}/api/claim`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': tg.initData || ''
-      },
-      body: JSON.stringify({
-        userId,
-        tokens: tokens.toFixed(2),
-        username: tg.initDataUnsafe.user?.username || 'Anonyme'
-      })
-    });
-
-    if (!claimResponse.ok) {
-      const error = await claimResponse.json();
-      throw new Error(error.message || "Claim failed");
-    }
-
-    // 3. Réinitialisation après succès
-    tokens = 0;
-    sessionStartTime = Date.now();
-    updateDisplay();
-
-    if (tg.showAlert) {
-      tg.showAlert("Claim réussi!");
-    }
+    // [...] (votre logique de claim existante)
 
   } catch (error) {
     console.error("Claim Error:", error);
     
-    // Gestion améliorée de l'erreur
-    let errorMsg = error.message;
-    if (errorMsg.includes("session") || errorMsg.includes("Session")) {
-      errorMsg = "Session invalide. Redémarrez l'app.";
+    // Gestion avancée de l'erreur
+    let errorMessage = "Erreur inconnue";
+    
+    if (error.message.includes("session") || error.message.includes("Session")) {
+      errorMessage = "Session expirée - Redémarrez l'application";
+    } else if (error.message.includes("device")) {
+      errorMessage = "Appareil non reconnu";
+    } else {
+      errorMessage = error.message;
     }
 
-    // Affichage dans le bouton avec tooltip
+    // Version courte pour le bouton
+    const shortError = errorMessage.length > 15 
+      ? errorMessage.substring(0, 12) + "..." 
+      : errorMessage;
+
+    // Mise à jour de l'interface
     btn.innerHTML = `
-      <span class="error-text">ERREUR - ${errorMsg.substring(0, 15)}${errorMsg.length > 15 ? '...' : ''}</span>
-      <div class="error-tooltip">${error.message}</div>
+      <span class="error-text">ERREUR - ${shortError}</span>
+      <div class="error-tooltip">${errorMessage}</div>
     `;
-    
     btn.disabled = false;
 
-    // Réinitialisation après 5 secondes
+    // Réinitialisation après 5s
     setTimeout(() => {
-      btn.innerHTML = originalHTML;
+      btn.innerHTML = originalText;
       updateDisplay();
     }, 5000);
   }

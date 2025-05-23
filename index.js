@@ -140,9 +140,17 @@ app.post('/update-session', (req, res) => {
 // [CLAIM] Enregistrement avec limite de 60 minutes
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens, username } = req.body;
-  const MAX_MINUTES = 60; // limite affichée mais non bloquante
+  const MAX_MINUTES = 60; // Durée maximale de session
 
-  // 1. Vérifier session active
+  // 1. Validation des données entrantes
+  if (!userId || !deviceId || !tokens) {
+    return res.status(400).json({
+      error: "MISSING_DATA",
+      message: "Données requises manquantes"
+    });
+  }
+
+  // 2. Vérification de session
   const session = activeSessions.get(userId);
   if (!session) {
     return res.status(403).json({
@@ -151,7 +159,7 @@ app.post('/claim', async (req, res) => {
     });
   }
 
-  // 2. Vérifier appareil
+  // 3. Vérification de l'appareil
   if (session.deviceId !== deviceId) {
     return res.status(403).json({
       error: "DEVICE_MISMATCH",
@@ -159,24 +167,29 @@ app.post('/claim', async (req, res) => {
     });
   }
 
-  // 3. Calcul du temps écoulé
+  // 4. Calcul du temps de session
   const now = Date.now();
   const elapsedMinutes = (now - session.lastActive) / (1000 * 60);
   const totalUsedMinutes = session.totalMinutes + elapsedMinutes;
 
-  // **PLUS DE BLOQUAGE SUR 60 MINUTES**
-
   try {
-    // 4. Validation tokens
+    // 5. Validation des tokens
     const points = Math.floor(parseFloat(tokens));
-    if (isNaN(points) || points <= 0) {
+    if (isNaN(points) {
       return res.status(400).json({
         error: "INVALID_TOKENS",
-        message: "Valeur de tokens invalide"
+        message: "Format de tokens invalide"
       });
     }
 
-    // 5. Setup Google Sheets API
+    if (points <= 0) {
+      return res.status(400).json({
+        error: "INVALID_TOKEN_AMOUNT",
+        message: "Le montant des tokens doit être positif"
+      });
+    }
+
+    // 6. Initialisation Google Sheets
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
@@ -185,31 +198,39 @@ app.post('/claim', async (req, res) => {
 
     const timestamp = new Date().toISOString();
 
-    // a) Enregistrer la transaction
+    // 7. Enregistrement de la transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
       valueInputOption: "USER_ENTERED",
       resource: {
-        values: [[timestamp, userId, "AIRDROP", points, "COMPLETED"]]
+        values: [[
+          timestamp,
+          userId,
+          "AIRDROP",
+          points,
+          "COMPLETED"
+        ]]
       }
     });
 
-    // b) Lire users pour mise à jour (avec Mining_Speed en G)
+    // 8. Mise à jour de l'utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
+
     const users = usersData.data.values || [];
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
     let newBalance = points;
 
+    // 9. Gestion utilisateur existant/nouveau
     if (userIndex >= 0) {
-      // Utilisateur existant : mise à jour solde + mining speed
       const currentBalance = parseInt(users[userIndex][3]) || 0;
-      const miningSpeed = parseFloat(users[userIndex][6]) || 1; // Col G = Mining_Speed
-      newBalance = currentBalance + points * miningSpeed;
+      const miningSpeed = parseFloat(users[userIndex][6]) || 1;
+      newBalance = currentBalance + (points * miningSpeed);
 
+      // Mise à jour du solde
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${userIndex + 2}`,
@@ -217,7 +238,7 @@ app.post('/claim', async (req, res) => {
         resource: { values: [[newBalance]] }
       });
 
-      // Mise à jour Last_Claim_Time (col E)
+      // Mise à jour du dernier claim
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!E${userIndex + 2}`,
@@ -225,16 +246,15 @@ app.post('/claim', async (req, res) => {
         resource: { values: [[timestamp]] }
       });
 
-      // Gestion parrainage 10%
-      const referralCode = users[userIndex][5]; // code parrainage (col F)
+      // 10. Programme de parrainage (10%)
+      const referralCode = users[userIndex][5];
       if (referralCode) {
-        // Trouver le parrain avec ce code
         const referrerIndex = users.findIndex(row => row[5] === referralCode);
         if (referrerIndex >= 0) {
-          const currentReferrerBalance = parseInt(users[referrerIndex][3]) || 0;
           const referralReward = Math.floor(points * 0.1);
-
+          const currentReferrerBalance = parseInt(users[referrerIndex][3]) || 0;
           const newReferrerBalance = currentReferrerBalance + referralReward;
+
           await sheets.spreadsheets.values.update({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
             range: `Users!D${referrerIndex + 2}`,
@@ -242,7 +262,6 @@ app.post('/claim', async (req, res) => {
             resource: { values: [[newReferrerBalance]] }
           });
 
-          // Enregistrer la récompense dans Referrals
           await sheets.spreadsheets.values.append({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
             range: "Referrals!A2:D",
@@ -259,26 +278,26 @@ app.post('/claim', async (req, res) => {
         }
       }
     } else {
-      // Nouvel utilisateur : ajout dans Users avec Mining_Speed = 1 par défaut
+      // Nouvel utilisateur
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: "Users!A2:G",
         valueInputOption: "USER_ENTERED",
         resource: {
           values: [[
-            timestamp,             // Date_Inscription (A)
-            username || "Anonyme", // Username (B)
-            userId,                // user_id (C)
-            newBalance,            // Balance (D)
-            timestamp,             // Last_Claim_Time (E)
-            `REF-${Math.random().toString(36).slice(2, 8)}`, // Referral_Code (F)
-            1                      // Mining_Speed (G)
+            timestamp,
+            username || "Anonyme",
+            userId,
+            newBalance,
+            timestamp,
+            `REF-${Math.random().toString(36).slice(2, 8)}`,
+            1
           ]]
         }
       });
     }
 
-    // 6. Mise à jour session active
+    // 11. Mise à jour de la session
     activeSessions.set(userId, {
       ...session,
       lastActive: now,
@@ -286,20 +305,38 @@ app.post('/claim', async (req, res) => {
       tokens: points
     });
 
-    // 7. Réponse OK
+    // 12. Réponse de succès
     return res.json({
       success: true,
       balance: newBalance,
       claimedPoints: points,
       sessionDuration: totalUsedMinutes.toFixed(2),
-      remainingMinutes: Math.max(0, MAX_MINUTES - totalUsedMinutes).toFixed(2) // indicatif seulement
+      remainingMinutes: Math.max(0, MAX_MINUTES - totalUsedMinutes).toFixed(2),
+      miningSpeed: userIndex >= 0 ? parseFloat(users[userIndex][6]) || 1 : 1
     });
 
   } catch (error) {
-    console.error("Claim error:", error);
+    console.error("Claim error:", {
+      error: error.message,
+      userId,
+      timestamp: new Date().toISOString()
+    });
+
+    // Gestion des erreurs spécifiques
+    let errorCode = "CLAIM_FAILED";
+    let errorMessage = "Erreur lors du traitement";
+
+    if (error.message.includes("Quota")) {
+      errorCode = "SHEETS_QUOTA_EXCEEDED";
+      errorMessage = "Quota Google Sheets dépassé";
+    } else if (error.message.includes("invalid_grant")) {
+      errorCode = "AUTH_ERROR";
+      errorMessage = "Problème d'authentification Google";
+    }
+
     return res.status(500).json({
-      error: "CLAIM_FAILED",
-      message: "Erreur serveur",
+      error: errorCode,
+      message: errorMessage,
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
