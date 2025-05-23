@@ -9,6 +9,7 @@ const { google } = require('googleapis');
 const app = express();
 const PORT = process.env.PORT || 10000;
 const activeSessions = new Map();
+let sheets;
 
 // Middlewares
 app.use(cors({
@@ -31,9 +32,14 @@ app.use((req, res, next) => {
 });
 
 // Initialisation
-let sheetsInitialized = false;
 const initializeApp = async () => {
   try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    sheets = google.sheets({ version: 'v4', auth }); // Initialisation globale
+    
     await initGoogleSheets();
     sheetsInitialized = true;
     console.log('Server ready');
@@ -124,13 +130,7 @@ app.post('/update-session', (req, res) => {
 app.post('/claim', async (req, res) => {
   const { userId, deviceId } = req.body;
   
-  // Debug logging
-  console.log('Session check:', {
-    userId,
-    deviceId,
-    activeSessions: Array.from(activeSessions.keys())
-  });
-
+  // [1] Vérification de session
   const session = activeSessions.get(userId);
   
   if (!session) {
@@ -145,72 +145,114 @@ app.post('/claim', async (req, res) => {
       stored: session.deviceId,
       received: deviceId
     });
+    return res.status(403).json({  // <-- Cette ligne était mal indentée
+      error: "DEVICE_MISMATCH",
+      message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
+    });
+  }  // <-- C'est ici que l'accolade manquante doit être ajoutée
+
+  try {  // <-- Le bloc try/catch commence ici
+    // [2] Validation des tokens
+    const tokens = req.body.tokens;  // <-- 'tokens' était manquant dans la destructuration
+    const points = Math.floor(parseFloat(tokens));
+    // ... reste du code ...
+Corrections simultanées nécessaires :
+
+J'ai ajouté l'accolade fermante manquante (}) pour le bloc de vérification deviceId
+
+J'ai corrigé l'indentation du return dans la vérification deviceId
+
+J'ai ajouté tokens dans la destructuration des paramètres (car il était utilisé mais non défini)
+
+Version corrigée de la signature de la route :
+
+javascript
+app.post('/claim', async (req, res) => {
+  const { userId, deviceId, tokens } = req.body;  // <-- 'tokens' ajouté ici
+  // ...
+});
+Pour vérifier vous-même :
+
+La structure logique devrait être :
+
+Vérification de session → 2 vérifications imbriquées (if !session et if device mismatch) → 2 accolades fermantes
+
+Ensuite seulement le bloc try/catch principal
+
+Cette erreur explique pourquoi le reste de votre route (avec Google Sheets) ne s'exécutait pas correctement. Le moteur JavaScript considérait tout le code après le deviceId check comme faisant partie de ce bloc conditionnel.
+
+renvoi ce bloc corrigé, je vois pas la parenthese manquante :
+    return res.status(403).json({
+      error: "DEVICE_MISMATCH",
+      message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
+    });
   }
-	
+Voici le bloc complètement corrigé avec la bonne structure et les bonnes indentations :
+
+app.post('/claim', async (req, res) => {
+  const { userId, deviceId, tokens, username } = req.body; // Ajout de username
+
+  // 1. Vérification session
+  const session = activeSessions.get(userId);
+  if (!session) {
+    return res.status(403).json({
+      error: "SESSION_NOT_FOUND",
+      message: "Aucune session active. Veuillez démarrer le minage."
+    });
+  }
+
+  // 2. Vérification device
+  if (session.deviceId !== deviceId) {
     return res.status(403).json({
       error: "DEVICE_MISMATCH",
       message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
     });
   }
 
-    // 2. Validation des tokens
+  try {
+    // 3. Validation tokens
     const points = Math.floor(parseFloat(tokens));
     if (isNaN(points) || points <= 0) {
       return res.status(400).json({ 
         error: "INVALID_TOKENS",
-        message: "Token value is invalid"
+        message: "Valeur des tokens invalide"
       });
     }
 
-    // 3. Initialisation Google Sheets
+    // 4. Initialisation Google Sheets
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // 4. Écriture dans la feuille Transactions
+    // 5. Écriture transaction
     const timestamp = new Date().toISOString();
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:E",
       valueInputOption: "USER_ENTERED",
       resource: {
-        values: [[ 
-          timestamp,
-          userId,
-          "AIRDROP",
-          points,
-          "COMPLETED"
-        ]]
+        values: [[timestamp, userId, "AIRDROP", points, "COMPLETED"]]
       }
     });
 
-    // 5. Mise à jour du solde utilisateur
-    const usersRange = await sheets.spreadsheets.values.get({
+    // 6. Mise à jour utilisateur
+    const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:F"
     });
-    const users = usersRange.data.values || [];
-
+    const users = usersData.data.values || [];
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
     let newBalance = points;
 
     if (userIndex >= 0) {
-      const row = userIndex + 2;
-      const currentBalance = parseInt(users[userIndex][3]) || 0;
-      newBalance = currentBalance + points;
-      
+      newBalance = (parseInt(users[userIndex][3]) || 0) + points;
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: `Users!D${row}:E${row}`,
+        range: `Users!D${userIndex + 2}:E${userIndex + 2}`,
         valueInputOption: "USER_ENTERED",
-        resource: { 
-          values: [[ 
-            newBalance, 
-            timestamp 
-          ]] 
-        }
+        resource: { values: [[newBalance, timestamp]] }
       });
     } else {
       await sheets.spreadsheets.values.append({
@@ -230,14 +272,14 @@ app.post('/claim', async (req, res) => {
       });
     }
 
-    // 6. Réinitialisation de la session
+    // 7. Reset session
     activeSessions.set(userId, {
       startTime: Date.now(),
       deviceId: session.deviceId,
       tokens: 0
     });
 
-    // 7. Réponse réussie
+    // 8. Réponse
     res.json({ 
       success: true,
       balance: newBalance,
@@ -246,16 +288,10 @@ app.post('/claim', async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Claim error:", {
-      error: error.message,
-      stack: error.stack,
-      userId: req.body.userId,
-      timestamp: new Date().toISOString()
-    });
-    
+    console.error("Claim error:", error);
     res.status(500).json({ 
       error: "CLAIM_FAILED",
-      message: "Server error during claim processing",
+      message: "Erreur serveur",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
