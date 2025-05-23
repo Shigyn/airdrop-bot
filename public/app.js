@@ -347,12 +347,26 @@ let Mining_Speed = 1; // variable globale par défaut
 async function loadUserData() {
   try {
     const backendUrl = window.location.origin;
-    const response = await fetch(`${backendUrl}/user/${userId}`, {
-      headers: { 'Telegram-Data': tg.initData || 'mock-data' }
+    const response = await fetch(`${backendUrl}/api/user/${userId}`, {  // Notez le /api/ ajouté
+      headers: { 
+        'Content-Type': 'application/json',
+        'Telegram-Data': tg.initData || 'mock-data' 
+      }
     });
+    
     if (!response.ok) {
+      // Si 404, on crée un utilisateur par défaut
+      if (response.status === 404) {
+        return {
+          username: tg.initDataUnsafe.user?.username || "Anonyme",
+          balance: "0",
+          lastClaim: "Jamais",
+          mining_speed: 1
+        };
+      }
       throw new Error(`Erreur HTTP ${response.status}`);
     }
+    
     const data = await response.json();
 
     // Mise à jour UI
@@ -361,15 +375,18 @@ async function loadUserData() {
     document.getElementById('lastClaim').textContent = data.lastClaim ? 
       new Date(data.lastClaim).toLocaleString('fr-FR') : "Jamais";
 
-    // Récupération du multiplicateur mining speed
     Mining_Speed = data.mining_speed ?? 1;
 
     return data;
   } catch (error) {
     console.error("Erreur de chargement:", error);
-    document.getElementById('balance').textContent = "0";
-    document.getElementById('lastClaim').textContent = "Erreur";
-    throw error;
+    // Retourner des valeurs par défaut en cas d'erreur
+    return {
+      username: "Anonyme",
+      balance: "0",
+      lastClaim: "Erreur",
+      mining_speed: 1
+    };
   }
 }
 
@@ -407,20 +424,27 @@ function setupNavigation() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    initTelegramWebApp(); // Initialise userId et deviceId
+    // 1. Initialiser Telegram WebApp
+    initTelegramWebApp();
+    
+    // 2. Afficher l'interface de base
     initParticles();
     setupNavigation();
-    await loadUserData();
-    await demarrerMinage();
-    showClaim();
+    showClaim(); // Afficher l'interface même si le chargement échoue
+    
+    // 3. Charger les données (en arrière-plan)
+    loadUserData().catch(console.error);
+    
+    // 4. Démarrer le minage
+    demarrerMinage().catch(console.error);
+    
   } catch (error) {
     console.error("Erreur d'initialisation:", error);
-    document.body.innerHTML = `
-      <div class="error-container">
-        <h2>Erreur</h2>
-        <p>${error.message}</p>
-        <button onclick="location.reload()">Réessayer</button>
-      </div>
-    `;
+    // Afficher une erreur mais garder l'interface utilisable
+    const notification = document.createElement('div');
+    notification.className = 'error-notification';
+    notification.textContent = `Erreur: ${error.message}`;
+    document.body.appendChild(notification);
+    setTimeout(() => notification.remove(), 5000);
   }
 });

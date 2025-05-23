@@ -305,6 +305,43 @@ app.post('/claim', async (req, res) => {
   }
 });
 
+// [USER] Récupération des données utilisateur
+app.get('/api/user/:userId', async (req, res) => {
+  try {
+    if (!sheetsInitialized) {
+      return res.status(503).json({ error: "Service unavailable" });
+    }
+
+    const userId = req.params.userId;
+    const usersData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:G" // A:Date, B:Username, C:UserID, D:Balance, E:LastClaim, F:Referral, G:MiningSpeed
+    });
+
+    const users = usersData.data.values || [];
+    const user = users.find(row => row[2]?.toString() === userId?.toString());
+
+    if (!user) {
+      return res.status(404).json({ 
+        error: "USER_NOT_FOUND",
+        message: "Utilisateur non enregistré" 
+      });
+    }
+
+    res.json({
+      username: user[1],
+      balance: user[3],
+      lastClaim: user[4],
+      mining_speed: user[6] || 1
+    });
+  } catch (error) {
+    console.error("User data error:", error);
+    res.status(500).json({ 
+      error: "SERVER_ERROR",
+      message: "Erreur serveur" 
+    });
+  }
+});
 
 // [BOT] webhook Telegram
 app.use('/bot', webhookCallback);
