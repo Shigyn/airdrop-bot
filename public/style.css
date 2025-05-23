@@ -34,6 +34,14 @@ body {
   line-height: 1.4;
 }
 
+.user-info-icon, .nav-icon {
+  width: 1em;     /* largeur égale à la taille de la police */
+  height: 1em;    /* hauteur aussi */
+  vertical-align: middle;  /* pour bien aligner avec le texte */
+  object-fit: contain;     /* pour que l'image garde ses proportions */
+  margin-right: 0.5em;     /* espace entre l’icône et le texte */
+}
+
 /* === PIXEL ART ELEMENTS === */
 .pixel-box {
   border: var(--mc-border);
