@@ -182,120 +182,62 @@ function updateDisplay() {
 
 async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
-  const claimText = document.getElementById('claim-text');
-  
-  // Sauvegarder le texte original
-  const originalText = claimText.textContent;
-  const originalHTML = btn.innerHTML;
+  const originalText = btn.innerHTML;
 
-  // Passer en mode chargement
+  // Mode chargement
+  btn.innerHTML = '<div class="spinner"></div>';
   btn.disabled = true;
-  btn.innerHTML = '<div class="loading-spinner-small"></div>';
-  btn.style.position = 'relative'; // Pour le tooltip
 
   try {
-    const backendUrl = window.location.origin;
-
-    // 1. Synchronisation de session
-    const syncResponse = await fetch(`${backendUrl}/sync-session`, {
+    const response = await fetch('/claim', {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram.WebApp.initData || ''
+        'Telegram-Data': window.Telegram.WebApp.initData
       },
-      body: JSON.stringify({ 
-        userId,
-        deviceId
+      body: JSON.stringify({
+        userId: window.Telegram.WebApp.initDataUnsafe.user.id,
+        tokens: tokens.toFixed(2)
       })
     });
 
-    const syncData = await syncResponse.json();
-    if (syncData.status === 'DEVICE_MISMATCH') {
-      throw new Error("Session expirée. Redémarrez l'application.");
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "Claim failed");
     }
 
-    // 2. Envoi de la requête de claim
-    const claimResponse = await fetch(`${backendUrl}/claim`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram.WebApp.initData || ''
-      },
-      body: JSON.stringify({ 
-        userId,
-        deviceId,
-        tokens: tokens.toFixed(2),
-        username: tg.initDataUnsafe.user?.username || 'Anonyme',
-        userAgent: navigator.userAgent
-      })
-    });
-
-    const claimData = await claimResponse.json();
-    
-    if (!claimResponse.ok) {
-      throw new Error(claimData.message || claimData.error || 'Échec du claim');
-    }
-
-    // 3. Réinitialisation après succès
-    localStorage.removeItem('miningSession');
-    sessionStartTime = Date.now();
+    // Success
     tokens = 0;
-    
-    // 4. Redémarrage du minage
-    await demarrerMinage();
-    await loadUserData();
-    
-    // 5. Mise à jour de l'UI
-    btn.innerHTML = originalHTML;
     updateDisplay();
-
-    // 6. Notification de succès
-    if (window.Telegram?.WebApp?.showAlert) {
-      window.Telegram.WebApp.showAlert(`Claim réussi! ${claimData.claimed} tokens crédités.`);
+    if (window.Telegram.WebApp.showAlert) {
+      window.Telegram.WebApp.showAlert("Claim réussi !");
     }
 
   } catch (error) {
-    console.error("Erreur complète:", {
-      error: error.message,
-      userId,
-      deviceId,
-      time: new Date().toISOString()
-    });
+    console.error("Claim error:", error);
     
-    // Gestion améliorée de l'erreur
-    let errorMessage = error.message;
-    if (errorMessage.includes('Device mismatch')) {
-      errorMessage = "Session expirée";
-    } else if (errorMessage.includes('network')) {
-      errorMessage = "Problème réseau";
-    }
-
-    // Tronquer le message si trop long
-    const displayMessage = errorMessage.length > 15 
-      ? errorMessage.substring(0, 12) + '...' 
-      : errorMessage;
-
-    // Mise à jour du bouton
-    btn.disabled = false;
-    btn.setAttribute('data-tooltip', errorMessage); // Pour affichage complet au survol
+    // Affichage complet de l'erreur
+    const errorText = error.message.length > 15 
+      ? error.message.substring(0, 12) + "..." 
+      : error.message;
+    
     btn.innerHTML = `
-      <span id="claim-text" style="
+      <span style="
         display: inline-block;
         max-width: 80%;
+        white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: 0.9rem;
       ">
-        ERREUR - ${displayMessage}
+        ERREUR - ${errorText}
       </span>
+      <div class="tooltip">${error.message}</div>
     `;
-
-    // Réinitialisation après 5 secondes
+    
+    // Réinitialisation après 5s
     setTimeout(() => {
-      btn.removeAttribute('data-tooltip');
-      btn.innerHTML = originalHTML;
-      claimText.textContent = originalText;
+      btn.innerHTML = originalText;
+      btn.disabled = false;
     }, 5000);
   }
 }

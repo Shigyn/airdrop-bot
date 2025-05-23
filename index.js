@@ -365,17 +365,19 @@ app.post('/api/complete-task', async (req, res) => {
   }
 });
 
-app.get('/api/referral-info', async (req, res) => {
+app.get('/api/referrals', async (req, res) => {
   try {
-    const userId = req.query.userId;
-    // Exemple de réponse - adaptez à votre système
+    const userId = req.query.user_id;
+    
+    // Exemple de réponse - à adapter avec votre base de données
     res.json({
-      code: `REF${userId.slice(0, 5)}`,
-      invitedCount: 3,
-      earnedTokens: 15
+      referral_count: 0, // Remplacez par le vrai count
+      earned_tokens: 0,  // Remplacez par les vrais tokens gagnés
+      referrals: []      // Remplacez par la liste des filleuls
     });
+
   } catch (error) {
-    res.status(500).json({ error: "Failed to load referral info" });
+    res.status(500).json({ error: error.message });
   }
 });
 
