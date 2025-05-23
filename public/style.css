@@ -422,20 +422,3 @@ body {
   z-index: 100;
 }
 
-#main-claim-btn {
-  min-width: 120px;
-  overflow: hidden;
-}
-
-#main-claim-btn span {
-  display: inline-block;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.8rem !important;
-}
-
-.spinner {
-  /* [...] gardez votre style existant */
-}
