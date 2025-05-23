@@ -1,239 +1,123 @@
-/* === POLICE MINECRAFT === */
-@font-face {
-  font-family: 'Minecraft';
-  src: url('https://assets.codepen.io/21542/MinecraftBold-nMK1.woff2') format('woff2');
-  font-weight: bold;
-}
+/* === FONT === */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
-@font-face {
-  font-family: 'Minecraft';
-  src: url('https://assets.codepen.io/21542/MinecraftRegular-Bmg3.woff2') format('woff2');
-  font-weight: normal;
-}
-
-/* === VARIABLES DE COULEUR === */
+/* === ROOT === */
 :root {
-  --dirt: #7A5426;
-  --grass: #4A712E;
-  --stone: #7F7F7F;
-  --wood: #8B4513;
-  --coal: #1E1E1E;
-  --gold: #FFD700;
-  --redstone: #FF0000;
-  --water: #3A5FCD;
-  --bg-overlay: rgba(0, 0, 0, 0.3);
-  --border-radius: 8px;
+  --bg: #2e2e2e;
+  --bg-minecraft: url('https://i.imgur.com/0ZPqKqC.png'); /* fond pixel style Minecraft */
+  --card: #3a3a3a;
+  --primary: #4CAF50;
+  --secondary: #2196F3;
+  --text: #ffffff;
+  --radius: 12px;
 }
 
-/* === STYLE GÉNÉRAL === */
-body {
+/* === GLOBAL RESET === */
+* {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+body {
+  background: var(--bg), var(--bg-minecraft);
+  background-size: cover;
+  font-family: 'Press Start 2P', sans-serif;
+  color: var(--text);
   min-height: 100vh;
-  background-color: #6B6B6B;
-  background-image: 
-    url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4AkEEjQZ5Uz5RgAAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRleHNgZWNrZWR3aXRoIEdJTVBkLmUHAAAAJklEQVRYw+3QMQEAAAgDoJnc6FrDOahAdtQJgUAgEAgEAoFAIBAIBAL5bAEhIAQ1Q8Q0JQAAAABJRU5ErkJggg=='),
-    linear-gradient(var(--bg-overlay), var(--bg-overlay));
-  background-repeat: repeat;
-  background-size: auto;
-  color: #E0E0E0;
-  font-family: 'Minecraft', sans-serif;
-  image-rendering: pixelated;
+  display: flex;
+  justify-content: center;
+  align-items: start;
+  padding-top: 40px;
 }
 
-/* === CONTAINERS === */
+/* === CONTAINER === */
 .app-container {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(0,0,0,0.7);
+  border-radius: var(--radius);
   padding: 16px;
+  box-shadow: 0 0 12px #000;
 }
 
+/* === HEADER === */
 .app-header {
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .app-title {
-  font-size: 24px;
-  color: var(--gold);
-  text-shadow: 2px 2px 0 #000;
+  font-size: 1rem;
+  color: var(--primary);
+  margin-bottom: 10px;
 }
 
-/* === CARTE UTILISATEUR === */
+/* === USER INFO === */
 .user-info-card {
-  background-color: var(--wood);
-  border: 4px solid #000;
-  border-radius: var(--border-radius);
+  background: var(--card);
+  border-radius: var(--radius);
   padding: 12px;
-  max-width: 400px;
-  margin: 0 auto 16px;
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.3);
+  margin-top: 8px;
 }
 
 .user-info-row {
   display: flex;
-  align-items: center;
-  margin-bottom: 8px;
+  justify-content: space-between;
+  padding: 4px 0;
 }
 
-.user-info-icon {
-  width: 16px;
-  height: 16px;
-  margin-right: 8px;
-  image-rendering: pixelated;
+/* === MAIN === */
+.main-content {
+  margin: 16px 0;
+  min-height: 100px;
 }
 
-.user-info-value {
-  flex: 1;
-}
-
-/* === BOUTONS === */
-.nav-button,
-.claim-button,
-.task-button {
-  background-color: var(--stone);
-  border: 3px solid #000;
-  border-radius: var(--border-radius);
-  color: white;
-  font-family: 'Minecraft';
-  padding: 8px 16px;
-  cursor: pointer;
-  transition: all 0.1s;
-  image-rendering: pixelated;
-}
-
-.nav-button:hover,
-.claim-button:hover,
-.task-button:hover {
-  background-color: var(--grass);
-  transform: translateY(-2px);
-}
-
-.nav-button:active,
-.claim-button:active,
-.task-button:active {
-  background-color: var(--dirt);
-  transform: translateY(1px);
-}
-
-/* === NAVIGATION BASSE === */
+/* === NAVIGATION === */
 .bottom-nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: #2D2D2D;
-  border-top: 4px solid #000;
-  padding: 8px 0;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  z-index: 1000;
-  box-shadow: 0 -4px 0 rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: space-around;
+  margin-top: 20px;
 }
 
 .nav-btn {
+  background: var(--secondary);
+  color: #fff;
+  padding: 10px;
+  flex: 1;
+  margin: 0 4px;
+  border: none;
+  border-radius: var(--radius);
+  text-align: center;
+  font-size: 0.6rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 8px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all 0.1s;
-  image-rendering: pixelated;
+  transition: background 0.2s;
 }
 
-.nav-btn.active {
-  background-color: #4A4A4A;
-  border: 2px solid #5A5A5A;
-  border-radius: var(--border-radius);
+.nav-btn:hover {
+  background: #1769aa;
 }
 
 .nav-icon {
-  width: 24px;
-  height: 24px;
+  font-size: 1.2rem;
   margin-bottom: 4px;
-  image-rendering: pixelated;
 }
 
-.nav-label {
-  font-family: 'Minecraft';
-  color: white;
-  font-size: 12px;
-  text-shadow: 2px 2px 0 #000;
+.nav-btn.active {
+  background: var(--primary);
 }
 
-/* === ANIMATIONS === */
-@keyframes item-bounce {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-  100% { transform: translateY(0); }
-}
-
-.nav-btn.active .nav-icon {
-  animation: item-bounce 0.3s ease;
-}
-
-/* === CONTAINERS DYNAMIQUES === */
-.dynamic-content {
-  padding: 16px;
-  margin-bottom: 80px; /* Pour éviter que le menu bas ne couvre le contenu */
-}
-
-/* === NOTIFICATIONS === */
+/* === NOTIFICATION === */
 .notification {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: var(--coal);
-  border: 3px solid #000;
-  border-radius: var(--border-radius);
-  padding: 8px 16px;
-  font-family: 'Minecraft';
-  z-index: 1000;
-}
-
-.hidden {
+  margin-top: 20px;
+  padding: 10px;
+  background: #000000cc;
+  border-radius: var(--radius);
   display: none;
 }
 
-/* === BOUTON DÉSACTIVÉ === */
-.claim-button:disabled {
-  background-color: var(--stone) !important;
-  color: #999 !important;
-  cursor: not-allowed;
-}
-
-/* === ANIMATION DE MINING === */
-@keyframes mining {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.mining-animation {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto;
-  background-image: url('data:image/png;base64,...'); /* Remplacez par une image appropriée */
-  background-size: cover;
-  animation: mining 1s linear infinite;
-}
-
-/* === ANIMATION D'ERREUR === */
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
-}
-
-.claim-button.error {
-  background-color: var(--redstone) !important;
-  animation: shake 0.5s linear;
-}
-
-/* === RESPONSIVE === */
-@media (max-width: 768px) {
-  .app-nav {
-    flex-wrap: wrap;
-  }
+.notification.show {
+  display: block;
 }
