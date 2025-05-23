@@ -177,7 +177,7 @@ function updateDisplay() {
   claimText.textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
 
   // active le bouton après 10 min
-  btn.disabled = elapsedAfterReset < 10;
+  btn.disabled = elapsedAfterReset < 600;
 }
 
 async function handleClaim() {
