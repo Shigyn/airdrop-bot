@@ -154,27 +154,31 @@ function updateDisplay() {
 
   const now = Date.now();
   const elapsed = (now - sessionStartTime) / 1000;
-  const remainingTime = Math.max(0, 600 - elapsed);
+  const sessionDuration = 3600; // durée totale session en secondes (1h)
+  const remainingTime = Math.max(0, sessionDuration - elapsed);
 
   tokensDisplay.textContent = tokens.toFixed(2);
 
-  if (elapsed >= 3600) {
+  if (elapsed >= sessionDuration) {
     claimText.textContent = "SESSION EXPIRED";
     btn.disabled = true;
     progressBar.style.width = '100%';
-  } else if (elapsed >= 600) {
-    claimText.textContent = `CLAIM ${tokens.toFixed(2)} TOKENS`;
-    btn.disabled = false;
-    progressBar.style.width = '100%';
   } else {
-    const percent = (elapsed / 600) * 100;
+    const percent = (elapsed / sessionDuration) * 100;
     progressBar.style.width = `${percent}%`;
+
     const mins = Math.floor(remainingTime / 60);
     const secs = Math.floor(remainingTime % 60);
-    claimText.textContent = `MINING IN PROGRESS (${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')})`;
-    btn.disabled = true;
+
+    // Forcer texte sur 1 ligne avec format mm:ss
+    claimText.style.whiteSpace = 'nowrap';
+    claimText.style.fontSize = '1rem';  // réduire un peu la taille du texte
+    claimText.textContent = `Time left: ${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+    
+    btn.disabled = elapsed < 600;  // active le bouton uniquement après 10 min
   }
 }
+
 
 async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
