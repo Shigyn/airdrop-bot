@@ -128,69 +128,7 @@ app.post('/update-session', (req, res) => {
 
 // [CLAIM] Enregistrement
 app.post('/claim', async (req, res) => {
-  const { userId, deviceId } = req.body;
-  
-  // [1] Vérification de session
-  const session = activeSessions.get(userId);
-  
-  if (!session) {
-    return res.status(403).json({
-      error: "SESSION_NOT_FOUND",
-      message: "Aucune session active. Veuillez démarrer le minage."
-    });
-  }
-
-  if (session.deviceId !== deviceId) {
-    console.log('DeviceID mismatch:', {
-      stored: session.deviceId,
-      received: deviceId
-    });
-    return res.status(403).json({  // <-- Cette ligne était mal indentée
-      error: "DEVICE_MISMATCH",
-      message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
-    });
-  }  // <-- C'est ici que l'accolade manquante doit être ajoutée
-
-  try {  // <-- Le bloc try/catch commence ici
-    // [2] Validation des tokens
-    const tokens = req.body.tokens;  // <-- 'tokens' était manquant dans la destructuration
-    const points = Math.floor(parseFloat(tokens));
-    // ... reste du code ...
-Corrections simultanées nécessaires :
-
-J'ai ajouté l'accolade fermante manquante (}) pour le bloc de vérification deviceId
-
-J'ai corrigé l'indentation du return dans la vérification deviceId
-
-J'ai ajouté tokens dans la destructuration des paramètres (car il était utilisé mais non défini)
-
-Version corrigée de la signature de la route :
-
-javascript
-app.post('/claim', async (req, res) => {
-  const { userId, deviceId, tokens } = req.body;  // <-- 'tokens' ajouté ici
-  // ...
-});
-Pour vérifier vous-même :
-
-La structure logique devrait être :
-
-Vérification de session → 2 vérifications imbriquées (if !session et if device mismatch) → 2 accolades fermantes
-
-Ensuite seulement le bloc try/catch principal
-
-Cette erreur explique pourquoi le reste de votre route (avec Google Sheets) ne s'exécutait pas correctement. Le moteur JavaScript considérait tout le code après le deviceId check comme faisant partie de ce bloc conditionnel.
-
-renvoi ce bloc corrigé, je vois pas la parenthese manquante :
-    return res.status(403).json({
-      error: "DEVICE_MISMATCH",
-      message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
-    });
-  }
-Voici le bloc complètement corrigé avec la bonne structure et les bonnes indentations :
-
-app.post('/claim', async (req, res) => {
-  const { userId, deviceId, tokens, username } = req.body; // Ajout de username
+  const { userId, deviceId, tokens, username } = req.body;
 
   // 1. Vérification session
   const session = activeSessions.get(userId);
@@ -203,6 +141,10 @@ app.post('/claim', async (req, res) => {
 
   // 2. Vérification device
   if (session.deviceId !== deviceId) {
+    console.log('DeviceID mismatch:', {
+      stored: session.deviceId,
+      received: deviceId
+    });
     return res.status(403).json({
       error: "DEVICE_MISMATCH",
       message: "Appareil non reconnu. Ouvrez depuis le même navigateur."
