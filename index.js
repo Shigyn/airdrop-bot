@@ -356,6 +356,23 @@ app.get('/api/tasks', async (req, res) => {
   }
 });
 
+app.post('/api/session-check', (req, res) => {
+  const { userId, deviceId } = req.body;
+  
+  // Vérifiez la session dans votre système
+  const sessionValid = activeSessions.has(userId) && 
+                      activeSessions.get(userId).deviceId === deviceId;
+
+  if (!sessionValid) {
+    return res.status(401).json({
+      error: "SESSION_EXPIRED",
+      message: "Votre session a expiré. Veuillez redémarrer le minage."
+    });
+  }
+
+  res.json({ valid: true });
+});
+
 app.post('/api/complete-task', async (req, res) => {
   try {
     // Logique de validation ici

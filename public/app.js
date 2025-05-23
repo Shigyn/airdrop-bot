@@ -182,62 +182,99 @@ function updateDisplay() {
 
 async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
-  const originalText = btn.innerHTML;
-
+  const claimText = document.getElementById('claim-text');
+  
+  // Sauvegarder le texte original
+  const originalHTML = btn.innerHTML;
+  
   // Mode chargement
-  btn.innerHTML = '<div class="spinner"></div>';
   btn.disabled = true;
+  btn.innerHTML = '<div class="loading-spinner-small"></div>';
 
   try {
-    const response = await fetch('/claim', {
+    const backendUrl = window.location.origin;
+    const tg = window.Telegram.WebApp;
+
+    // 1. Vérification de session
+    const sessionCheck = await fetch(`${backendUrl}/api/session-check`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram.WebApp.initData
+        'Telegram-Data': tg.initData || ''
       },
       body: JSON.stringify({
-        userId: window.Telegram.WebApp.initDataUnsafe.user.id,
-        tokens: tokens.toFixed(2)
+        userId: tg.initDataUnsafe.user?.id,
+        deviceId: deviceId
       })
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
+    if (!sessionCheck.ok) {
+      const errorData = await sessionCheck.json();
+      throw new Error(errorData.message || "Session invalide");
+    }
+
+    // 2. Envoi du claim
+    const claimResponse = await fetch(`${backendUrl}/api/claim`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': tg.initData || ''
+      },
+      body: JSON.stringify({
+        userId: tg.initDataUnsafe.user?.id,
+        tokens: tokens.toFixed(2),
+        username: tg.initDataUnsafe.user?.username || 'Anonyme'
+      })
+    });
+
+    if (!claimResponse.ok) {
+      const errorData = await claimResponse.json();
       throw new Error(errorData.message || "Claim failed");
     }
 
-    // Success
+    // 3. Succès - reset
     tokens = 0;
+    sessionStartTime = Date.now();
     updateDisplay();
-    if (window.Telegram.WebApp.showAlert) {
-      window.Telegram.WebApp.showAlert("Claim réussi !");
+    
+    if (tg.showAlert) {
+      tg.showAlert("Tokens claimés avec succès!");
     }
 
   } catch (error) {
-    console.error("Claim error:", error);
+    console.error("Claim Error:", error);
     
-    // Affichage complet de l'erreur
-    const errorText = error.message.length > 15 
-      ? error.message.substring(0, 12) + "..." 
-      : error.message;
+    // Gestion améliorée de l'erreur
+    let errorMessage = error.message;
     
+    // Messages courts pour les erreurs connues
+    if (errorMessage.includes("session") || errorMessage.includes("sess")) {
+      errorMessage = "Session expirée";
+    } else if (errorMessage.includes("device")) {
+      errorMessage = "Appareil non autorisé";
+    }
+
+    // Affichage dans le bouton
     btn.innerHTML = `
-      <span style="
+      <span id="claim-text" style="
         display: inline-block;
         max-width: 80%;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        font-size: 0.9rem;
       ">
-        ERREUR - ${errorText}
+        ERREUR - ${errorMessage}
       </span>
-      <div class="tooltip">${error.message}</div>
+      <div class="error-tooltip">${error.message}</div>
     `;
     
-    // Réinitialisation après 5s
+    btn.disabled = false;
+
+    // Réinitialisation après 5 secondes
     setTimeout(() => {
-      btn.innerHTML = originalText;
-      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+      updateDisplay();
     }, 5000);
   }
 }
