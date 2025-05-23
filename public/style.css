@@ -242,3 +242,20 @@ body {
   user-select: none;
   z-index: 2;
 }
+
+.mc-button-anim {
+  font-family: 'Press Start 2P', cursive;
+  font-weight: bold;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  transition: background-color 0.3s ease;
+}
+
+.mc-button-anim:disabled {
+  background-color: #999 !important;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.mc-button-anim:hover:not(:disabled) {
+  background-color: #45a049;
+}

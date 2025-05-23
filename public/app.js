@@ -117,7 +117,7 @@ async function demarrerMinage() {
   }
 
   const sessionExistante = chargerSession();
-  
+
   if (!sessionExistante) {
     sessionStartTime = Date.now();
     tokens = 0;
@@ -132,10 +132,11 @@ async function demarrerMinage() {
     const now = Date.now();
     const elapsed = (now - sessionStartTime) / 1000;
     tokens = Math.min(elapsed * (1/60), 60);
-    
-    updateDisplay();
+
+    updateDisplay();  // Met à jour texte + barre
+
     sauvegarderSession();
-    
+
     fetch('/update-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -144,11 +145,13 @@ async function demarrerMinage() {
   }, 1000);
 }
 
+
 function updateDisplay() {
   const btn = document.getElementById('main-claim-btn');
   const tokensDisplay = document.getElementById('tokens');
   const claimText = document.getElementById('claim-text');
-  
+  const progressBar = btn.querySelector('.progress-bar');
+
   const now = Date.now();
   const elapsed = (now - sessionStartTime) / 1000;
   const remainingTime = Math.max(0, 600 - elapsed);
@@ -158,12 +161,14 @@ function updateDisplay() {
   if (elapsed >= 3600) {
     claimText.textContent = "SESSION EXPIRED";
     btn.disabled = true;
-  } 
-  else if (elapsed >= 600) {
+    progressBar.style.width = '100%';
+  } else if (elapsed >= 600) {
     claimText.textContent = `CLAIM ${tokens.toFixed(2)} TOKENS`;
     btn.disabled = false;
-  } 
-  else {
+    progressBar.style.width = '100%';
+  } else {
+    const percent = (elapsed / 600) * 100;
+    progressBar.style.width = `${percent}%`;
     const mins = Math.floor(remainingTime / 60);
     const secs = Math.floor(remainingTime % 60);
     claimText.textContent = `MINING IN PROGRESS (${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')})`;
@@ -264,18 +269,29 @@ async function handleClaim() {
 function showClaim() {
   const content = document.getElementById('content');
   content.innerHTML = `
-    <div class="claim-container">
-      <div class="token-display">
-        <span id="tokens">0.00</span>
-        <span class="token-unit">tokens</span>
+    <div class="claim-container" style="text-align:center;">
+      <div class="token-display" style="margin-bottom: 12px;">
+        <span id="tokens" style="font-size: 2rem; font-weight: bold;">0.00</span>
+        <span class="token-unit" style="font-size: 1rem;">tokens</span>
       </div>
-      <button id="main-claim-btn" class="claim-button" disabled>
-        <span id="claim-text">MINING IN PROGRESS (00:10:00)</span>
+      <button id="main-claim-btn" class="mc-button-anim" disabled style="position: relative; overflow: hidden; width: 250px; height: 50px; font-size: 1.2rem; cursor: pointer; border-radius: 8px; border: none; background-color: #4caf50; color: white;">
+        <span id="claim-text" style="position: relative; z-index: 2;">MINING IN PROGRESS</span>
+        <div class="progress-bar" style="
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 0%;
+          background: rgba(255, 255, 255, 0.3);
+          z-index: 1;
+          transition: width 1s linear;
+        "></div>
       </button>
     </div>
   `;
 
-  document.getElementById('main-claim-btn').addEventListener('click', handleClaim);
+  const btn = document.getElementById('main-claim-btn');
+  btn.addEventListener('click', handleClaim);
   updateDisplay();
 }
 
