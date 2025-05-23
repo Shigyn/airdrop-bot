@@ -206,7 +206,7 @@ app.post('/claim', async (req, res) => {
     // b) Lire users pour mise à jour
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:F"
+      range: "Users!A2:G" // j'ai ajouté G pour Mining_Speed
     });
     const users = usersData.data.values || [];
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
@@ -258,19 +258,20 @@ app.post('/claim', async (req, res) => {
       }
 
     } else {
-      // Nouvel utilisateur : ajout dans Users
+      // Nouvel utilisateur : ajout dans Users avec Mining_Speed = 1
       await sheets.spreadsheets.values.append({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Users!A2:F",
+        range: "Users!A2:G",
         valueInputOption: "USER_ENTERED",
         resource: {
           values: [[
-            timestamp,
-            username || "Anonyme",
-            userId,
-            newBalance,
-            timestamp,
-            `REF-${Math.random().toString(36).slice(2, 8)}`
+            timestamp,             // Date_Inscription (A)
+            username || "Anonyme", // Username (B)
+            userId,                // user_id (C)
+            newBalance,            // Balance (D)
+            timestamp,             // Last_Claim_Time (E)
+            `REF-${Math.random().toString(36).slice(2, 8)}`, // Referral_Code (F)
+            1                      // Mining_Speed (G) - fixe à 1
           ]]
         }
       });
