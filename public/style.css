@@ -421,3 +421,69 @@ body {
   width: 200px;
   z-index: 100;
 }
+
+/* Loader et messages d'erreur */
+.loader {
+  text-align: center;
+  padding: 20px;
+  color: #E0E0E0;
+}
+
+.error {
+  color: #FF5252;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Styles pour les tâches */
+.tasks-container {
+  padding: 15px;
+}
+
+.task-item {
+  background: rgba(50, 50, 50, 0.7);
+  border: 2px solid #7C5A3C;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 8px;
+}
+
+.task-button {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+/* Styles pour le parrainage */
+.referral-container {
+  text-align: center;
+  padding: 20px;
+}
+
+.referral-code {
+  background: #333;
+  padding: 15px;
+  margin: 15px 0;
+  font-family: monospace;
+  font-size: 1.2rem;
+  border-radius: 5px;
+  display: inline-block;
+}
+
+.copy-button {
+  background: #2196F3;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.referral-stats {
+  margin-top: 20px;
+}
