@@ -146,51 +146,135 @@ function initTelegramWebApp() {
   console.log("Init réussie - UserID:", userId, "DeviceID:", deviceId);
 }
 
+async function loadUserData() {
+  try {
+    const response = await fetch('/api/user-data', {
+      headers: {
+        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
+      }
+    });
+    
+    if (!response.ok) throw new Error('Failed to load user data');
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    return { mining_speed: 1 }; // Valeur par défaut
+  }
+}
+
 async function demarrerMinage() {
+  // Arrêter tout intervalle existant
   if (miningInterval) {
     clearInterval(miningInterval);
+    miningInterval = null;
   }
 
   try {
-    const sessionResponse = await fetch('/api/verify-session', {
+    // 1. Charger les données utilisateur d'abord
+    const userData = await loadUserData();
+    Mining_Speed = userData.mining_speed || 1;
+    
+    // 2. Vérifier l'état de la session
+    const sessionCheck = await fetch('/api/verify-session', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
+      },
       body: JSON.stringify({ userId, deviceId })
     });
 
-    if (!sessionResponse.ok) {
-      const errorData = await sessionResponse.json();
-      throw new Error(errorData.error || 'SESSION_VERIFICATION_FAILED');
+    if (!sessionCheck.ok) {
+      throw new Error('SESSION_CHECK_FAILED');
     }
 
-    const sessionData = await sessionResponse.json();
+    const sessionData = await sessionCheck.json();
+    
+    // 3. Gérer selon l'état de la session
+    switch (sessionData.status) {
+      case 'SESSION_VALID':
+        // Reprendre session existante
+        sessionStartTime = new Date(sessionData.startTime).getTime();
+        tokens = parseFloat(sessionData.tokens) || 0;
+        break;
+        
+      case 'DEVICE_MISMATCH':
+        // Nouvel appareil - nouvelle session
+        console.warn('Appareil différent détecté, démarrage nouvelle session');
+        await startNewSession();
+        return;
+        
+      case 'NO_SESSION':
+      default:
+        // Démarrer nouvelle session
+        await startNewSession();
+        return;
+    }
 
-    if (sessionData.valid) {
-      const userData = await loadUserData();
-      Mining_Speed = userData.mining_speed || 1;
-
-      miningInterval = setInterval(() => {
+    // 4. Démarrer le minage
+    miningInterval = setInterval(async () => {
+      try {
         const now = Date.now();
-        const elapsed = (now - sessionStartTime) / 1000;
-        const sessionCap = 60 * Mining_Speed;
-        tokens = Math.min(elapsed * (1 / 60) * Mining_Speed, sessionCap);
-
+        const elapsedSeconds = (now - sessionStartTime) / 1000;
+        const maxTokens = 60 * Mining_Speed; // 60 minutes * vitesse
+        
+        // Calculer les tokens (max 1 token/min)
+        tokens = Math.min(elapsedSeconds * (Mining_Speed / 60), maxTokens);
+        
+        // Mettre à jour l'affichage
         updateDisplay();
+        
+        // Sauvegarder localement
         sauvegarderSession();
-
-        fetch('/update-session', {
+        
+        // Synchroniser avec le serveur
+        const syncResponse = await fetch('/update-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, tokens, deviceId })
-        }).catch(console.error);
-      }, 1000);
-    } else {
-      await startNewSession();
-    }
+          body: JSON.stringify({ 
+            userId, 
+            tokens: tokens.toFixed(4), 
+            deviceId 
+          })
+        });
+        
+        if (!syncResponse.ok) {
+          console.error('Échec synchronisation session');
+        }
+      } catch (error) {
+        console.error('Erreur intervalle minage:', error);
+      }
+    }, 1000); // Mise à jour chaque seconde
+
   } catch (error) {
-    console.error('Session error:', error);
-    await startNewSession();
+    console.error('Erreur démarrage minage:', error);
+    
+    // Fallback - démarrer nouvelle session en cas d'erreur
+    try {
+      await startNewSession();
+    } catch (fallbackError) {
+      console.error('Échec démarrage session de secours:', fallbackError);
+      showErrorState();
+    }
   }
+}
+
+// Fonction pour afficher l'état d'erreur
+function showErrorState() {
+  const content = document.getElementById('content');
+  if (!content) return;
+  
+  content.innerHTML = `
+    <div class="error-state" style="text-align: center; padding: 20px;">
+      <h3 style="color: #ff4444;">Erreur de connexion</h3>
+      <p>Impossible de se connecter au serveur</p>
+      <button onclick="window.location.reload()" 
+              style="padding: 10px 20px; background: #ff4444; color: white; border: none; border-radius: 5px;">
+        Réessayer
+      </button>
+    </div>
+  `;
 }
 
 async function startNewSession() {

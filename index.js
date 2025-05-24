@@ -145,6 +145,30 @@ app.post('/update-session', (req, res) => {
   }
 });
 
+// Ajoutez cette route avant le endpoint /claim
+app.get('/api/user-data', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
+
+    const usersData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:G"
+    });
+
+    const user = usersData.data.values?.find(row => row[2] === userId);
+    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
+
+    res.json({
+      mining_speed: parseFloat(user[6]) || 1,
+      balance: parseInt(user[3]) || 0
+    });
+  } catch (err) {
+    console.error('User data error:', err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+});
+
 // [CLAIM] Enregistrement avec limite de 60 minutes
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens, username } = req.body;
