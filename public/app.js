@@ -120,13 +120,27 @@ function initTelegramWebApp() {
     console.error("WebApp Telegram non détecté - Mode test activé");
     tg = {
       WebApp: {
-        initDataUnsafe: { user: { id: "test_user", username: "TestUser" } },
+        initDataUnsafe: { 
+          user: { 
+            id: "test_user", 
+            username: "TestUser",
+            first_name: "Test",
+            last_name: "User"
+          } 
+        },
         expand: () => console.log("Fonction expand appelée"),
         initData: "mock_data"
       }
     };
     userId = "test_user_id";
     deviceId = "test_device_id";
+    
+    // Mettre à jour les infos utilisateur immédiatement
+    updateUserInfo({
+      username: "TestUser",
+      balance: "100",
+      lastClaim: new Date().toLocaleDateString()
+    });
     return;
   }
 
@@ -136,7 +150,9 @@ function initTelegramWebApp() {
   Telegram.WebApp.backgroundColor = "#6B6B6B";
   Telegram.WebApp.headerColor = "#6B6B6B";
 
-  userId = tg.initDataUnsafe?.user?.id?.toString();
+  const user = tg.initDataUnsafe?.user;
+  userId = user?.id?.toString();
+  
   if (!userId) {
     console.warn("User ID non trouvé - Utilisation d'un ID par défaut");
     userId = "default_user_" + Math.random().toString(36).substr(2, 9);
@@ -144,6 +160,51 @@ function initTelegramWebApp() {
 
   deviceId = `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_');
   console.log("Init réussie - UserID:", userId, "DeviceID:", deviceId);
+
+  // Mettre à jour les infos utilisateur
+  updateUserInfo({
+    username: user?.username || `${user?.first_name || ''} ${user?.last_name || ''}`.trim(),
+    balance: "0",
+    lastClaim: "Jamais"
+  });
+}
+
+function initNavigation() {
+  const navButtons = document.querySelectorAll('.nav-btn');
+  
+  navButtons.forEach(button => {
+    button.addEventListener('click', function() {
+      // Retirer la classe active de tous les boutons
+      navButtons.forEach(btn => btn.classList.remove('active'));
+      
+      // Ajouter la classe active au bouton cliqué
+      this.classList.add('active');
+      
+      // Charger le contenu approprié
+      switch(this.id) {
+        case 'nav-claim':
+          showClaim();
+          break;
+        case 'nav-tasks':
+          loadTasks();
+          break;
+        case 'nav-referral':
+          loadReferrals();
+          break;
+      }
+    });
+  });
+}
+
+// Ajoutez cette nouvelle fonction
+function updateUserInfo(data) {
+  const usernameEl = document.getElementById('username');
+  const balanceEl = document.getElementById('balance');
+  const lastClaimEl = document.getElementById('lastClaim');
+  
+  if (usernameEl) usernameEl.textContent = data.username || 'Inconnu';
+  if (balanceEl) balanceEl.textContent = data.balance || '0';
+  if (lastClaimEl) lastClaimEl.textContent = data.lastClaim || 'Jamais';
 }
 
 async function loadUserData() {
@@ -210,6 +271,9 @@ async function loadDashboard() {
 }
 
 async function loadReferrals() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loader">Chargement du parrainage...</div>';
+  
   try {
     const response = await fetch('/api/referrals', {
       method: 'POST',
@@ -220,24 +284,34 @@ async function loadReferrals() {
       body: JSON.stringify({ userId })
     });
     
-    if (!response.ok) throw new Error('Network response was not ok');
+    if (!response.ok) throw new Error('Failed to load referrals');
     
     const data = await response.json();
     
-    document.getElementById('referrals-content').innerHTML = `
-      <div class="referral-card">
-        <h3>Votre code: ${data.referralCode}</h3>
-        <p>${data.referredUsers.length} parrainages</p>
+    content.innerHTML = `
+      <div class="referral-container">
+        <h2>Votre code de parrainage</h2>
+        <div class="referral-code">${data.referralCode}</div>
+        <p>Partagez ce code pour gagner 10% des gains de vos filleuls!</p>
+        <button class="copy-button" onclick="navigator.clipboard.writeText('${data.referralCode}')">
+          Copier le code
+        </button>
+        <div class="referral-stats">
+          <p>Parrainages: ${data.referredUsers?.length || 0}</p>
+          <p>Gains: ${data.referralRewards?.length || 0} tokens</p>
+        </div>
       </div>
     `;
-    
   } catch (error) {
     console.error('Referrals load error:', error);
-    // Afficher un message d'erreur
+    content.innerHTML = '<div class="error">Erreur de chargement du parrainage</div>';
   }
 }
 
 async function loadTasks() {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loader">Chargement des tâches...</div>';
+  
   try {
     const response = await fetch('/api/tasks', {
       headers: {
@@ -245,23 +319,31 @@ async function loadTasks() {
       }
     });
     
+    if (!response.ok) throw new Error('Failed to load tasks');
+    
     const tasks = await response.json();
     
-    let tasksHTML = '';
-    tasks.forEach(task => {
-      tasksHTML += `
-        <div class="task-item">
-          <h4>${task.title}</h4>
-          <p>Récompense: ${task.reward} tokens</p>
-          <button onclick="startTask('${task.id}')">Commencer</button>
-        </div>
-      `;
-    });
+    let html = '<div class="tasks-container">';
+    if (tasks.length > 0) {
+      tasks.forEach(task => {
+        html += `
+          <div class="task-item">
+            <h3>${task.title}</h3>
+            <p>${task.description || ''}</p>
+            <p>Récompense: ${task.reward} tokens</p>
+            <button class="task-button" data-task-id="${task.id}">Commencer</button>
+          </div>
+        `;
+      });
+    } else {
+      html += '<p>Aucune tâche disponible pour le moment</p>';
+    }
+    html += '</div>';
     
-    document.getElementById('tasks-content').innerHTML = tasksHTML || '<p>Aucune tâche disponible</p>';
-    
+    content.innerHTML = html;
   } catch (error) {
     console.error('Tasks load error:', error);
+    content.innerHTML = '<div class="error">Erreur de chargement des tâches</div>';
   }
 }
 
