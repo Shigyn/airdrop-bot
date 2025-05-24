@@ -104,19 +104,63 @@ function initTelegramWebApp() {
   console.log("Init réussie - UserID:", userId, "DeviceID:", deviceId);
 }
 
-function chargerSession() {
+function sauvegarderSession() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('miningSession', JSON.stringify({
+      sessionStartTime,
+      tokens,
+      userId,
+      deviceId,
+      lastSave: Date.now() // Ajout du timestamp de sauvegarde
+    }));
+  }
+}
+
+async function chargerSession() {
   if (typeof localStorage !== 'undefined' && userId) {
     const session = localStorage.getItem('miningSession');
     if (session) {
       const parsed = JSON.parse(session);
+      
+      // Vérification plus robuste de la session
       if (parsed.userId === userId && parsed.deviceId === deviceId) {
-        // Supprimer la vérification du temps écoulé
-        sessionStartTime = parsed.sessionStartTime;
-        tokens = parsed.tokens;
-        return true;  // On considère toujours la session valide
+        
+        // Vérifier avec le backend si la session est toujours valide
+        try {
+          const verification = await fetch('/api/verify-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              userId,
+              deviceId,
+              sessionStartTime: parsed.sessionStartTime
+            })
+          });
+
+          if (verification.ok) {
+            const data = await verification.json();
+            
+            // Restaurer seulement si le backend confirme
+            if (data.valid) {
+              const now = Date.now();
+              const elapsedSeconds = (now - parsed.sessionStartTime) / 1000;
+              
+              // Ne pas dépasser la durée max de session (60 minutes)
+              if (elapsedSeconds <= 3600) {
+                sessionStartTime = parsed.sessionStartTime;
+                tokens = Math.min(parsed.tokens, 60 * Mining_Speed);
+                return true;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Session verification error:', error);
+        }
       }
     }
   }
+  
+  // Si on arrive ici, la session est invalide
   return false;
 }
 
