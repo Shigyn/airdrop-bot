@@ -87,26 +87,36 @@ function chargerSession() {
 // ==============================================
 
 function initTelegramWebApp() {
-  console.log('Initialisation de Telegram WebApp...');
+  console.log("Initialisation de Telegram WebApp...");
   
   if (!window.Telegram?.WebApp) {
-    throw new Error("Ouvrez via l'application Telegram");
+    console.error("WebApp Telegram non détecté - Mode test activé");
+    tg = { 
+      WebApp: {
+        initDataUnsafe: { user: { id: "test_user", username: "TestUser" }},
+        expand: () => console.log("Fonction expand appelée"),
+        initData: "mock_data"
+      }
+    };
+    userId = "test_user_id";
+    deviceId = "test_device_id";
+    return;
   }
 
   tg = window.Telegram.WebApp;
   tg.expand();
   
-  Telegram.WebApp.backgroundColor = "#6B6B6B"; // Gris Minecraft
-  Telegram.WebApp.headerColor = "#6B6B6B";     // Optionnel
+  Telegram.WebApp.backgroundColor = "#6B6B6B";
+  Telegram.WebApp.headerColor = "#6B6B6B";
   
   userId = tg.initDataUnsafe?.user?.id?.toString();
   if (!userId) {
-    throw new Error("User ID non trouvé");
+    console.warn("User ID non trouvé - Utilisation d'un ID par défaut");
+    userId = "default_user_" + Math.random().toString(36).substr(2, 9);
   }
-  console.log('User ID détecté:', userId);
   
-  // Générer deviceId unique lié à user et userAgent
   deviceId = `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_');
+  console.log("Init réussie - UserID:", userId, "DeviceID:", deviceId);
 }
 
 async function demarrerMinage() {
