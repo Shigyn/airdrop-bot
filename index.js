@@ -190,18 +190,18 @@ app.get('/api/tasks', async (req, res) => {
   try {
     const tasksData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Tasks!A2:E" // Colonnes A à E
+      range: "Tasks!A2:E"
     });
 
-    const tasks = tasksData.data.values?.map(row => ({
-      id: row[0],       // Colonne A (ID)
-      title: row[1],    // Colonne B (Description)
-      image: row[2],    // Colonne C (Image)
-      reward: row[3],   // Colonne D (Reward)
-      status: row[4]    // Colonne E (Statut)
-    })).filter(task => task.status === 'ACTIVE'); // Filtrer les tâches actives
+    const tasks = (tasksData.data.values || []).map(row => ({
+      id: row[0],       // ID
+      title: row[1],    // Description
+      image: row[2],    // Image
+      reward: row[3],   // Reward
+      status: row[4]    // Statut
+    })).filter(task => task.status === 'ACTIVE'); // Modifiez ce filtre selon votre besoin
 
-    res.json(tasks || []);
+    res.json(tasks);
   } catch (err) {
     console.error('Tasks error:', err);
     res.status(500).json({ error: "SERVER_ERROR" });
@@ -432,29 +432,47 @@ app.post('/api/referrals', async (req, res) => {
   const { userId } = req.body;
 
   try {
-    // 1. Récupérer le code de parrainage de l'utilisateur
-    const usersData = await sheets.spreadsheets.values.get({
+    // 1. Récupérer les données utilisateur
+    const usersResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
-
-    const user = usersData.data.values?.find(row => row[2]?.toString() === userId.toString());
+    
+    const users = usersResponse.data.values || [];
+    const user = users.find(row => row[2]?.toString() === userId.toString());
+    
     if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
-    const referralCode = user[5]; // Colonne F (Referral_Code)
+    // 2. Générer un code de parrainage s'il n'existe pas
+    let referralCode = user[5]; // Colonne F (Referral_Code)
+    if (!referralCode) {
+      referralCode = `REF-${userId.slice(0, 4)}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+      
+      // Mettre à jour le code dans Google Sheets
+      const userIndex = users.findIndex(row => row[2]?.toString() === userId.toString());
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: `Users!F${userIndex + 2}`,
+        valueInputOption: "USER_ENTERED",
+        resource: { values: [[referralCode]] }
+      });
+    }
 
-    // 2. Récupérer les parrainages associés
-    const referralsData = await sheets.spreadsheets.values.get({
+    // 3. Récupérer les parrainages existants
+    const referralsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Referrals!A2:D"
     });
-
-    const referrals = referralsData.data.values?.filter(row => row[0] === referralCode) || [];
+    
+    const referrals = referralsResponse.data.values || [];
+    const userReferrals = referrals.filter(r => r[0] === referralCode);
 
     res.json({
-      referralCode: referralCode || "N/A",
-      referredUsers: referrals.map(r => r[3]), // Filleul_Username
-      referralRewards: referrals.map(r => parseInt(r[1]) || 0) // Reward
+      success: true,
+      referralCode: referralCode,
+      referralUrl: `https://t.me/CRYPTORATS_bot?start=${referralCode}`,
+      referredCount: userReferrals.length,
+      earned: userReferrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0)
     });
   } catch (err) {
     console.error('Referrals error:', err);

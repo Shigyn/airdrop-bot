@@ -336,25 +336,63 @@ async function loadReferrals() {
     if (!response.ok) throw new Error('Failed to load referrals');
     
     const data = await response.json();
-    
+    console.log('Referrals data:', data); // Debug log
+
     content.innerHTML = `
-      <div class="referral-container">
-        <h2>Votre code de parrainage</h2>
-        <div class="referral-code">${data.referralCode}</div>
-        <p>Partagez ce code pour gagner 10% des gains de vos filleuls!</p>
-        <button class="copy-button" onclick="navigator.clipboard.writeText('${data.referralCode}')">
-          Copier le code
-        </button>
+      <div class="referral-card">
+        <h2>Votre Programme de Parrainage</h2>
+        
+        <div class="referral-section">
+          <h3>Votre Code Unique</h3>
+          <div class="referral-code">${data.referralCode || 'N/A'}</div>
+          <button class="copy-button" onclick="copyToClipboard('${data.referralCode}')">
+            Copier le Code
+          </button>
+        </div>
+        
+        <div class="referral-section">
+          <h3>Lien de Parrainage</h3>
+          <div class="referral-url">${data.referralUrl || 'N/A'}</div>
+          <button class="copy-button" onclick="copyToClipboard('${data.referralUrl}')">
+            Copier le Lien
+          </button>
+        </div>
+        
         <div class="referral-stats">
-          <p>Parrainages: ${data.referredUsers?.length || 0}</p>
-          <p>Gains: ${data.referralRewards?.length || 0} tokens</p>
+          <div class="stat-item">
+            <span class="stat-label">Filleuls</span>
+            <span class="stat-value">${data.referredCount || 0}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Gains Totaux</span>
+            <span class="stat-value">${data.earned || 0} tokens</span>
+          </div>
         </div>
       </div>
     `;
   } catch (error) {
     console.error('Referrals load error:', error);
-    content.innerHTML = '<div class="error">Erreur de chargement du parrainage</div>';
+    content.innerHTML = `
+      <div class="error">
+        Erreur de chargement du parrainage
+        <button onclick="loadReferrals()">Réessayer</button>
+      </div>
+    `;
   }
+}
+
+// Ajoutez cette fonction globale
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text)
+    .then(() => {
+      const notif = document.getElementById('notification');
+      if (notif) {
+        notif.textContent = 'Copié dans le presse-papier!';
+        notif.classList.remove('hidden');
+        setTimeout(() => notif.classList.add('hidden'), 2000);
+      }
+    })
+    .catch(err => console.error('Copy failed:', err));
 }
 
 async function loadTasks() {
@@ -362,47 +400,41 @@ async function loadTasks() {
   content.innerHTML = '<div class="loader">Chargement des tâches...</div>';
   
   try {
-    const response = await fetch('/api/tasks', {
-      headers: {
-        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      }
-    });
+    const response = await fetch('/api/tasks');
+    if (!response.ok) throw new Error('Failed to load tasks');
     
     const tasks = await response.json();
-    
-    let html = '<div class="tasks-grid">';
-    tasks.forEach(task => {
-      html += `
-        <div class="task-item">
-          ${task.image ? `<img src="${task.image}" alt="${task.title}" class="task-image">` : ''}
-          <h3>${task.title}</h3>
-          <p>${task.description || ''}</p>
-          <p class="task-reward">Récompense: ${task.reward} tokens</p>
-          <button class="task-button" data-task-id="${task.id}">
-            Commencer
-          </button>
-        </div>
-      `;
-    });
+    console.log('Tasks loaded:', tasks); // Debug log
+
+    let html = '<div class="tasks-container">';
+    if (tasks && tasks.length > 0) {
+      tasks.forEach(task => {
+        html += `
+          <div class="task-item">
+            <h3>${task.title || 'Tâche sans titre'}</h3>
+            ${task.image ? `<img src="${task.image}" class="task-image">` : ''}
+            <p>Récompense: ${task.reward || '0'} tokens</p>
+            <button class="task-button" data-task-id="${task.id}">
+              Commencer
+            </button>
+          </div>
+        `;
+      });
+    } else {
+      html += '<p class="no-tasks">Aucune tâche disponible pour le moment</p>';
+    }
     html += '</div>';
     
-    content.innerHTML = tasks.length ? html : '<p>Aucune tâche disponible</p>';
+    content.innerHTML = html;
   } catch (error) {
     console.error('Tasks load error:', error);
-    content.innerHTML = '<div class="error">Erreur de chargement des tâches</div>';
+    content.innerHTML = `
+      <div class="error">
+        Erreur de chargement des tâches
+        <button onclick="loadTasks()">Réessayer</button>
+      </div>
+    `;
   }
-}
-
-// Dans app.js - Ajoutez ce gestionnaire de navigation
-function setupNavigation() {
-  const navButtons = document.querySelectorAll('.nav-btn');
-  
-  navButtons.forEach(button => {
-    button.addEventListener('click', (e) => {
-      const target = e.currentTarget.dataset.target;
-      showPage(target);
-    });
-  });
 }
 
 function showPage(pageId) {
