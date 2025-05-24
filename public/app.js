@@ -203,9 +203,58 @@ function updateUserInfo(data) {
   const lastClaimEl = document.getElementById('lastClaim');
   
   if (usernameEl) usernameEl.textContent = data.username || 'Inconnu';
-  if (balanceEl) balanceEl.textContent = data.balance || '0';
-  if (lastClaimEl) lastClaimEl.textContent = data.lastClaim || 'Jamais';
+  if (balanceEl) balanceEl.textContent = data.balance ? `${data.balance} tokens` : '0 token';
+  
+  if (lastClaimEl) {
+    if (data.lastClaim) {
+      const lastClaimDate = new Date(data.lastClaim);
+      lastClaimEl.textContent = lastClaimDate.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } else {
+      lastClaimEl.textContent = 'Jamais';
+    }
+  }
 }
+
+// Modifiez le chargement initial dans DOMContentLoaded
+window.addEventListener('DOMContentLoaded', async () => {
+  initTelegramWebApp();
+  initParticles();
+  initNavigation();
+  
+  if (!userId) {
+    console.warn('Utilisateur non identifié.');
+    return;
+  }
+
+  // Charger les données utilisateur
+  try {
+    const response = await fetch(`/api/user-data?userId=${userId}`);
+    if (response.ok) {
+      const userData = await response.json();
+      updateUserInfo(userData);
+      Mining_Speed = userData.mining_speed || 1;
+    }
+  } catch (error) {
+    console.error('Error loading user data:', error);
+  }
+
+  const sessionLoaded = await chargerSession();
+  if (!sessionLoaded) {
+    try {
+      await demarrerMinage();
+    } catch (e) {
+      console.error('Erreur démarrage minage:', e);
+    }
+  }
+
+  showClaim();
+});
 
 async function loadUserData() {
   try {
@@ -319,28 +368,25 @@ async function loadTasks() {
       }
     });
     
-    if (!response.ok) throw new Error('Failed to load tasks');
-    
     const tasks = await response.json();
     
-    let html = '<div class="tasks-container">';
-    if (tasks.length > 0) {
-      tasks.forEach(task => {
-        html += `
-          <div class="task-item">
-            <h3>${task.title}</h3>
-            <p>${task.description || ''}</p>
-            <p>Récompense: ${task.reward} tokens</p>
-            <button class="task-button" data-task-id="${task.id}">Commencer</button>
-          </div>
-        `;
-      });
-    } else {
-      html += '<p>Aucune tâche disponible pour le moment</p>';
-    }
+    let html = '<div class="tasks-grid">';
+    tasks.forEach(task => {
+      html += `
+        <div class="task-item">
+          ${task.image ? `<img src="${task.image}" alt="${task.title}" class="task-image">` : ''}
+          <h3>${task.title}</h3>
+          <p>${task.description || ''}</p>
+          <p class="task-reward">Récompense: ${task.reward} tokens</p>
+          <button class="task-button" data-task-id="${task.id}">
+            Commencer
+          </button>
+        </div>
+      `;
+    });
     html += '</div>';
     
-    content.innerHTML = html;
+    content.innerHTML = tasks.length ? html : '<p>Aucune tâche disponible</p>';
   } catch (error) {
     console.error('Tasks load error:', error);
     content.innerHTML = '<div class="error">Erreur de chargement des tâches</div>';

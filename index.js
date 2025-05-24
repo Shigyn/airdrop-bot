@@ -153,15 +153,17 @@ app.get('/api/user-data', async (req, res) => {
 
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
+      range: "Users!A2:G" // Colonnes A à G
     });
 
-    const user = usersData.data.values?.find(row => row[2] === userId);
+    const user = usersData.data.values?.find(row => row[2]?.toString() === userId.toString());
     if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
     res.json({
-      mining_speed: parseFloat(user[6]) || 1,
-      balance: parseInt(user[3]) || 0
+      username: user[1], // Colonne B (Username)
+      balance: user[3],  // Colonne D (Balance)
+      lastClaim: user[4], // Colonne E (Last_Claim_Time)
+      mining_speed: parseFloat(user[6]) || 1 // Colonne G (Mining_Speed)
     });
   } catch (err) {
     console.error('User data error:', err);
@@ -186,10 +188,23 @@ app.get('/api/dashboard', async (req, res) => {
 // Endpoint Tasks
 app.get('/api/tasks', async (req, res) => {
   try {
-    const tasks = await readTasks(); // À implémenter
-    res.json(tasks.filter(task => task.isActive));
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    const tasksData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Tasks!A2:E" // Colonnes A à E
+    });
+
+    const tasks = tasksData.data.values?.map(row => ({
+      id: row[0],       // Colonne A (ID)
+      title: row[1],    // Colonne B (Description)
+      image: row[2],    // Colonne C (Image)
+      reward: row[3],   // Colonne D (Reward)
+      status: row[4]    // Colonne E (Statut)
+    })).filter(task => task.status === 'ACTIVE'); // Filtrer les tâches actives
+
+    res.json(tasks || []);
+  } catch (err) {
+    console.error('Tasks error:', err);
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
 
@@ -417,38 +432,33 @@ app.post('/api/referrals', async (req, res) => {
   const { userId } = req.body;
 
   try {
+    // 1. Récupérer le code de parrainage de l'utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
 
+    const user = usersData.data.values?.find(row => row[2]?.toString() === userId.toString());
+    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
+
+    const referralCode = user[5]; // Colonne F (Referral_Code)
+
+    // 2. Récupérer les parrainages associés
     const referralsData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Referrals!A2:D"
     });
 
-    const users = usersData.data.values || [];
-    const referrals = referralsData.data.values || [];
-
-    const user = users.find(row => row[2] === userId);
-    if (!user) {
-      return res.status(404).json({ error: "USER_NOT_FOUND" });
-    }
-
-    const referralCode = user[5];
-    const referredUsers = users.filter(row => row[5] === referralCode);
+    const referrals = referralsData.data.values?.filter(row => row[0] === referralCode) || [];
 
     res.json({
-      referralCode,
-      referrals: referredUsers,
-      referralRewards: referrals.filter(r => r[0] === referralCode)
+      referralCode: referralCode || "N/A",
+      referredUsers: referrals.map(r => r[3]), // Filleul_Username
+      referralRewards: referrals.map(r => parseInt(r[1]) || 0) // Reward
     });
   } catch (err) {
     console.error('Referrals error:', err);
-    res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "Erreur lors de la récupération des parrainages"
-    });
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
 
