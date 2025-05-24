@@ -423,7 +423,6 @@ app.post('/api/check-session', (req, res) => {
 app.post('/api/verify-session', (req, res) => {
   const { userId, deviceId } = req.body;
   
-  // 1. Vérifier si la session existe
   if (!activeSessions.has(userId)) {
     return res.status(401).json({
       error: "SESSION_NOT_FOUND",
@@ -431,25 +430,27 @@ app.post('/api/verify-session', (req, res) => {
     });
   }
 
-  // 2. Vérifier la correspondance du device
   const session = activeSessions.get(userId);
+  const now = Date.now();
+  const sessionAge = (now - session.startTime) / (1000 * 60);
+
   if (session.deviceId !== deviceId) {
     return res.status(401).json({
       error: "DEVICE_MISMATCH",
-      message: "Appareil non autorisé. Utilisez le même navigateur/mobile."
+      message: "Appareil non autorisé."
     });
   }
 
-  // 3. Vérifier si la session est expirée (60 minutes max)
-  const sessionAge = (Date.now() - session.startTime) / (1000 * 60);
   if (sessionAge > 60) {
     activeSessions.delete(userId);
     return res.status(401).json({
       error: "SESSION_EXPIRED",
-      message: "Session expirée (60 minutes maximum). Redémarrez le minage."
+      message: "Session expirée (60 minutes maximum)."
     });
   }
 
+  // Mettre à jour le lastActive
+  session.lastActive = now;
   res.json({ valid: true });
 });
 

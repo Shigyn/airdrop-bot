@@ -5,6 +5,7 @@ let miningInterval;
 let sessionStartTime = Date.now();
 let tokens = 0;
 let deviceId; // Changé de const à let pour permettre la modification
+let Mining_Speed = 1; // variable globale par défaut
 
 // ==============================================
 // SYSTEME DE PARTICULES COSMIQUES
@@ -124,36 +125,178 @@ async function demarrerMinage() {
     clearInterval(miningInterval);
   }
 
-  const sessionExistante = chargerSession();
-
-  if (!sessionExistante) {
-    sessionStartTime = Date.now();
-    tokens = 0;
-    await fetch('/start-session', {
+  try {
+    // Vérifier d'abord la session côté serveur
+    const sessionResponse = await fetch('/api/verify-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, deviceId })
-    }).catch(console.error);
+    });
+
+    if (!sessionResponse.ok) {
+      const errorData = await sessionResponse.json();
+      throw new Error(errorData.error || 'SESSION_VERIFICATION_FAILED');
+    }
+
+    const sessionData = await sessionResponse.json();
+    
+    if (sessionData.valid) {
+      // Si session valide, récupérer les données utilisateur pour avoir le bon Mining_Speed
+      const userData = await loadUserData();
+      Mining_Speed = userData.mining_speed || 1;
+      
+      miningInterval = setInterval(() => {
+        const now = Date.now();
+        const elapsed = (now - sessionStartTime) / 1000;
+        const sessionCap = 60 * Mining_Speed;
+        tokens = Math.min(elapsed * (1/60) * Mining_Speed, sessionCap);
+
+        updateDisplay();
+        sauvegarderSession();
+
+        fetch('/update-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, tokens, deviceId })
+        }).catch(console.error);
+      }, 1000);
+    } else {
+      // Si session invalide, en démarrer une nouvelle
+      await startNewSession();
+    }
+  } catch (error) {
+    console.error('Session error:', error);
+    await startNewSession();
   }
+}
 
-  miningInterval = setInterval(() => {
-    const now = Date.now();
-    const elapsed = (now - sessionStartTime) / 1000;
+async function startNewSession() {
+  sessionStartTime = Date.now();
+  tokens = 0;
+  
+  const response = await fetch('/start-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, deviceId })
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to start new session');
+  }
+  
+  // Relancer le minage après avoir démarré une nouvelle session
+  demarrerMinage();
+}
 
-    // Appliquer multiplicateur miningSpeed
-    const sessionCap = 60 * Mining_Speed;
-tokens = Math.min(elapsed * (1/60) * Mining_Speed, sessionCap);
+// Modifier la fonction handleClaim
+async function handleClaim() {
+  const btn = document.getElementById('main-claim-btn');
+  if (!btn) return;
 
+  const originalHTML = btn.innerHTML;
+  const originalDisabled = btn.disabled;
 
-    updateDisplay();  // Met à jour texte + barre
-    sauvegarderSession();
+  btn.disabled = true;
+  btn.innerHTML = '<div class="spinner-mini"></div>';
 
-    fetch('/update-session', {
+  try {
+    // 1. Vérification de session
+    const sessionCheck = await fetch('/api/verify-session', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, tokens, deviceId })
-    }).catch(console.error);
-  }, 1000);
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
+      },
+      body: JSON.stringify({
+        userId,
+        deviceId
+      })
+    });
+
+    if (!sessionCheck.ok) {
+      const errorData = await sessionCheck.json();
+      throw new Error(errorData.error || 'SESSION_VERIFICATION_FAILED');
+    }
+
+    // 2. Envoi du claim
+    const claimResponse = await fetch('/claim', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
+      },
+      body: JSON.stringify({
+        userId,
+        tokens: tokens.toFixed(2),
+        username: window.Telegram?.WebApp?.initDataUnsafe?.user?.username || 'Anonyme',
+        deviceId // Ajouter deviceId ici
+      })
+    });
+
+    if (!claimResponse.ok) {
+      const errorData = await claimResponse.json();
+      throw new Error(errorData.error || 'CLAIM_FAILED');
+    }
+
+    const result = await claimResponse.json();
+    
+    // 3. Réinitialisation après succès
+    tokens = 0;
+    sessionStartTime = Date.now();
+    Mining_Speed = result.m || 1; // Mettre à jour le mining speed
+    
+    btn.innerHTML = '<span style="color:#4CAF50">✓ Réussi</span>';
+    setTimeout(() => {
+      btn.innerHTML = originalHTML;
+      btn.disabled = originalDisabled;
+      updateDisplay();
+    }, 1500);
+
+    // Mettre à jour le solde affiché
+    if (result.b) {
+      document.getElementById('balance').textContent = result.b;
+    }
+
+  } catch (error) {
+    console.error('Claim Error:', error);
+    
+    const ERROR_MESSAGES = {
+      'NO_USER_DATA': 'Non connecté',
+      'SESSION_VERIFICATION_FAILED': 'Session invalide',
+      'DEVICE_MISMATCH': 'Appareil invalide',
+      'CLAIM_FAILED': 'Erreur serveur',
+      'NETWORK_ERROR': 'Problème réseau',
+      'LIMIT_REACHED': 'Limite atteinte'
+    };
+
+    const errorMsg = ERROR_MESSAGES[error.message] || 'Erreur';
+
+    btn.innerHTML = `
+      <span style="
+        display: inline-block;
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.8rem;
+        color: #FF5252;
+      ">
+        ⚠️ ${errorMsg}
+      </span>
+    `;
+    
+    setTimeout(() => {
+      btn.innerHTML = originalHTML;
+      btn.disabled = originalDisabled;
+      updateDisplay();
+      
+      // Si erreur de session, redémarrer une nouvelle session
+      if (error.message === 'SESSION_VERIFICATION_FAILED' || 
+          error.message === 'DEVICE_MISMATCH') {
+        startNewSession();
+      }
+    }, 3000);
+  }
 }
 
 function updateDisplay() {
@@ -190,106 +333,6 @@ function updateDisplay() {
 
   // active le bouton après 10 min
   btn.disabled = elapsedAfterReset < 600;
-}
-
-async function handleClaim() {
-  const btn = document.getElementById('main-claim-btn');
-  if (!btn) return;
-
-  // Sauvegarde de l'état original
-  const originalHTML = btn.innerHTML;
-  const originalDisabled = btn.disabled;
-
-  // Mode chargement
-  btn.disabled = true;
-  btn.innerHTML = '<div class="spinner-mini"></div>';
-
-  try {
-    const tg = window.Telegram.WebApp;
-    if (!tg?.initDataUnsafe?.user?.id) throw new Error('NO_USER_DATA');
-
-    // 1. Vérification de session
-    const sessionCheck = await fetch('/api/check-session', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': tg.initData
-      },
-      body: JSON.stringify({
-        userId: tg.initDataUnsafe.user.id,
-        deviceId
-      })
-    });
-
-    if (!sessionCheck.ok) {
-      const errorData = await sessionCheck.json().catch(() => ({}));
-      throw new Error(errorData.error || 'SESSION_CHECK_FAILED');
-    }
-
-    // 2. Envoi du claim
-    const claimResponse = await fetch('/claim', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': tg.initData
-      },
-      body: JSON.stringify({
-        userId: tg.initDataUnsafe.user.id,
-        tokens: tokens.toFixed(2),
-        username: tg.initDataUnsafe.user?.username || 'Anonyme'
-      })
-    });
-
-    if (!claimResponse.ok) {
-      const errorData = await claimResponse.json().catch(() => ({}));
-      throw new Error(errorData.error || 'CLAIM_FAILED');
-    }
-
-    // 3. Réinitialisation après succès
-    tokens = 0;
-    sessionStartTime = Date.now();
-    btn.innerHTML = '<span style="color:#4CAF50">✓ Réussi</span>';
-    setTimeout(updateDisplay, 1500);
-
-  } catch (error) {
-    console.error('Claim Error:', error);
-    
-    // Dictionnaire des erreurs avec messages courts
-    const ERROR_MESSAGES = {
-      'NO_USER_DATA': 'Non connecté',
-      'SESSION_CHECK_FAILED': 'Session invalide',
-      'DEVICE_MISMATCH': 'Appareil invalide',
-      'CLAIM_FAILED': 'Erreur serveur',
-      'NETWORK_ERROR': 'Problème réseau'
-    };
-
-    // Message court sécurisé (8 caractères max)
-    const errorMsg = ERROR_MESSAGES[error.message] || 'Erreur';
-
-    // Affichage robuste
-    btn.innerHTML = `
-      <span style="
-        display: inline-block;
-        max-width: 80px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: 0.8rem;
-        color: #FF5252;
-      ">
-        ⚠️ ${errorMsg}
-      </span>
-    `;
-    
-    btn.disabled = false;
-
-    // Réinitialisation après 3s
-    setTimeout(() => {
-      btn.innerHTML = originalHTML;
-      btn.disabled = originalDisabled;
-      updateDisplay();
-    }, 3000);
-  }
 }
 
 function showClaim() {
@@ -363,8 +406,6 @@ function startMiningButton(button, durationSeconds) {
 // ==============================================
 // FONCTIONS EXISTANTES
 // ==============================================
-
-let Mining_Speed = 1; // variable globale par défaut
 
 async function loadUserData() {
   try {
