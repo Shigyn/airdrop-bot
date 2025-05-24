@@ -356,13 +356,31 @@ app.get('/api/user/:userId', async (req, res) => {
 // Routes pour Tasks et Referral
 app.get('/api/tasks', async (req, res) => {
   try {
-    // Exemple de données - remplacez par votre logique
-    res.json([
-      { id: 1, name: "Join Telegram", icon: "telegram.png", reward: 10 },
-      { id: 2, name: "Follow Twitter", icon: "twitter.png", reward: 5 }
-    ]);
+    if (!sheetsInitialized) {
+      return res.status(503).json({ error: "Service unavailable" });
+    }
+
+    // Lire les tâches depuis la feuille "Tasks"
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Tasks!A2:E" // A:ID, B:Nom, C:Icone, D:Récompense, E:Status
+    });
+
+    const tasks = (response.data.values || []).map(row => ({
+      id: row[0],
+      name: row[1],
+      icon: `/public/images/${row[2]}`,
+      reward: row[3],
+      status: row[4] || 'inactive'
+    }));
+
+    res.json(tasks);
   } catch (error) {
-    res.status(500).json({ error: "Failed to load tasks" });
+    console.error("Tasks error:", error);
+    res.status(500).json({ 
+      error: "TASKS_LOAD_FAILED",
+      message: "Erreur de chargement des tâches" 
+    });
   }
 });
 

@@ -428,6 +428,45 @@ function setupNavigation() {
   }
 }
 
+const TasksPage = {
+  async showTasksPage() {
+    try {
+      const response = await fetch('/api/tasks');
+      const tasks = await response.json();
+      
+      // Afficher les tâches dynamiquement
+      const content = document.getElementById('content');
+      content.innerHTML = `
+        <div class="tasks-container">
+          ${tasks.map(task => `
+            <div class="task-card ${task.status}">
+              <img src="/icons/${task.icon}" alt="${task.name}">
+              <h3>${task.name}</h3>
+              <p>Récompense: ${task.reward} tokens</p>
+              <button onclick="TasksPage.completeTask('${task.id}')" 
+                ${task.status === 'completed' ? 'disabled' : ''}>
+                ${task.status === 'completed' ? '✓ Fait' : 'Compléter'}
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    } catch (error) {
+      console.error("Tasks error:", error);
+    }
+  },
+
+  async completeTask(taskId) {
+    // Envoyer la complétion au backend
+    await fetch('/api/complete-task', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId, userId })
+    });
+    this.showTasksPage(); // Recharger
+  }
+};
+
 // ==============================================
 // INITIALISATION
 // ==============================================
