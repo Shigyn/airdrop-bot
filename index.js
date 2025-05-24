@@ -443,22 +443,11 @@ app.post('/api/referrals', async (req, res) => {
     
     if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
-    // 2. Générer un code de parrainage s'il n'existe pas
-    let referralCode = user[5]; // Colonne F (Referral_Code)
-    if (!referralCode) {
-      referralCode = `REF-${userId.slice(0, 4)}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-      
-      // Mettre à jour le code dans Google Sheets
-      const userIndex = users.findIndex(row => row[2]?.toString() === userId.toString());
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: `Users!F${userIndex + 2}`,
-        valueInputOption: "USER_ENTERED",
-        resource: { values: [[referralCode]] }
-      });
-    }
+    // 2. Utiliser directement l'user_id comme référence
+    const referralCode = user[2]; // user_id comme code de parrainage
+    const referralUrl = `https://t.me/CRYPTORATS_bot?start=${referralCode}`;
 
-    // 3. Récupérer les parrainages existants
+    // 3. Récupérer les parrainages existants (filtrés par user_id)
     const referralsResponse = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Referrals!A2:D"
@@ -470,9 +459,9 @@ app.post('/api/referrals', async (req, res) => {
     res.json({
       success: true,
       referralCode: referralCode,
-      referralUrl: `https://t.me/CRYPTORATS_bot?start=${referralCode}`,
+      referralUrl: referralUrl,
       referredCount: userReferrals.length,
-      earned: userReferrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0)
+      earned: userReferrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0, 0)
     });
   } catch (err) {
     console.error('Referrals error:', err);

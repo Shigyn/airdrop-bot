@@ -336,24 +336,23 @@ async function loadReferrals() {
     if (!response.ok) throw new Error('Failed to load referrals');
     
     const data = await response.json();
-    console.log('Referrals data:', data); // Debug log
 
     content.innerHTML = `
       <div class="referral-card">
-        <h2>Votre Programme de Parrainage</h2>
+        <h2>Programme de Parrainage</h2>
         
         <div class="referral-section">
-          <h3>Votre Code Unique</h3>
-          <div class="referral-code">${data.referralCode || 'N/A'}</div>
-          <button class="copy-button" onclick="copyToClipboard('${data.referralCode}')">
-            Copier le Code
+          <h3>Votre Identifiant Parrain</h3>
+          <div class="referral-code">${userId}</div>
+          <button class="copy-button" onclick="copyToClipboard('${userId}')">
+            Copier l'ID
           </button>
         </div>
         
         <div class="referral-section">
           <h3>Lien de Parrainage</h3>
-          <div class="referral-url">${data.referralUrl || 'N/A'}</div>
-          <button class="copy-button" onclick="copyToClipboard('${data.referralUrl}')">
+          <div class="referral-url">https://t.me/CRYPTORATS_bot?start=${userId}</div>
+          <button class="copy-button" onclick="copyToClipboard('https://t.me/CRYPTORATS_bot?start=${userId}')">
             Copier le Lien
           </button>
         </div>
@@ -364,9 +363,18 @@ async function loadReferrals() {
             <span class="stat-value">${data.referredCount || 0}</span>
           </div>
           <div class="stat-item">
-            <span class="stat-label">Gains Totaux</span>
+            <span class="stat-label">Gains</span>
             <span class="stat-value">${data.earned || 0} tokens</span>
           </div>
+        </div>
+        
+        <div class="referral-instructions">
+          <h3>Comment ça marche ?</h3>
+          <ol>
+            <li>Partagez votre lien de parrainage</li>
+            <li>Vos filleuls doivent cliquer et démarrer le bot</li>
+            <li>Vous gagnez 10% de leurs récompenses</li>
+          </ol>
         </div>
       </div>
     `;

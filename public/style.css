@@ -557,3 +557,19 @@ body {
   font-weight: bold;
   color: #4CAF50;
 }
+
+.referral-instructions {
+  margin-top: 25px;
+  padding: 15px;
+  background: rgba(50, 50, 50, 0.2);
+  border-radius: 8px;
+}
+
+.referral-instructions ol {
+  padding-left: 20px;
+  margin-top: 10px;
+}
+
+.referral-instructions li {
+  margin-bottom: 8px;
+}
