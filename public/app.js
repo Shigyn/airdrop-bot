@@ -675,10 +675,21 @@ function showClaim() {
 window.addEventListener('DOMContentLoaded', async () => {
   initTelegramWebApp();
   initParticles();
-
+  initNavigation(); // <-- Ajoutez cette ligne
+  
   if (!userId) {
     console.warn('Utilisateur non identifié.');
     return;
+  }
+
+  // Chargez les données utilisateur
+  try {
+    const userData = await loadUserData();
+    if (userData.balance) {
+      document.getElementById('balance').textContent = userData.balance;
+    }
+  } catch (error) {
+    console.error('Error loading user data:', error);
   }
 
   const sessionLoaded = await chargerSession();
