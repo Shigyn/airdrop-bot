@@ -66,22 +66,6 @@ function sauvegarderSession() {
   }
 }
 
-function chargerSession() {
-  if (typeof localStorage !== 'undefined' && userId) {
-    const session = localStorage.getItem('miningSession');
-    if (session) {
-      const parsed = JSON.parse(session);
-      if (parsed.userId === userId && parsed.deviceId === deviceId) {
-        // Supprimer la vérification du temps écoulé
-        sessionStartTime = parsed.sessionStartTime;
-        tokens = parsed.tokens;
-        return true;  // On considère toujours la session valide
-      }
-    }
-  }
-  return false;
-}
-
 // ==============================================
 // FONCTIONS PRINCIPALES
 // ==============================================
@@ -119,6 +103,22 @@ function initTelegramWebApp() {
   console.log("Init réussie - UserID:", userId, "DeviceID:", deviceId);
 }
 
+function chargerSession() {
+  if (typeof localStorage !== 'undefined' && userId) {
+    const session = localStorage.getItem('miningSession');
+    if (session) {
+      const parsed = JSON.parse(session);
+      if (parsed.userId === userId && parsed.deviceId === deviceId) {
+        // Supprimer la vérification du temps écoulé
+        sessionStartTime = parsed.sessionStartTime;
+        tokens = parsed.tokens;
+        return true;  // On considère toujours la session valide
+      }
+    }
+  }
+  return false;
+}
+
 async function demarrerMinage() {
   if (miningInterval) {
     clearInterval(miningInterval);
@@ -141,7 +141,9 @@ async function demarrerMinage() {
     const elapsed = (now - sessionStartTime) / 1000;
 
     // Appliquer multiplicateur miningSpeed
-    tokens = Math.min(elapsed * (1/60) * Mining_Speed, 60);
+    const sessionCap = 60 * Mining_Speed;
+tokens = Math.min(elapsed * (1/60) * Mining_Speed, sessionCap);
+
 
     updateDisplay();  // Met à jour texte + barre
     sauvegarderSession();
