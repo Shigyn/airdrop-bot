@@ -169,6 +169,30 @@ app.get('/api/user-data', async (req, res) => {
   }
 });
 
+// Endpoint Dashboard
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    const userData = await getUserData(userId); // À implémenter
+    res.json({
+      balance: userData.balance,
+      miningSpeed: userData.mining_speed
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint Tasks
+app.get('/api/tasks', async (req, res) => {
+  try {
+    const tasks = await readTasks(); // À implémenter
+    res.json(tasks.filter(task => task.isActive));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // [CLAIM] Enregistrement avec limite de 60 minutes
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens, username } = req.body;

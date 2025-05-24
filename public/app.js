@@ -163,6 +163,108 @@ async function loadUserData() {
   }
 }
 
+async function loadDashboard() {
+  const dashboardElement = document.getElementById('dashboard-content');
+  
+  try {
+    // Afficher le loader
+    dashboardElement.innerHTML = '<div class="loader">Chargement...</div>';
+    
+    // 1. Charger les données utilisateur
+    const userData = await fetch('/api/user-data', {
+      headers: {
+        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
+      }
+    });
+    
+    if (!userData.ok) throw new Error('Failed to load user data');
+    
+    // 2. Charger les données du dashboard
+    const dashboardData = await fetch('/api/dashboard', {
+      headers: {
+        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
+      }
+    });
+    
+    if (!dashboardData.ok) throw new Error('Failed to load dashboard');
+    
+    // 3. Afficher les données
+    const data = await dashboardData.json();
+    dashboardElement.innerHTML = `
+      <div class="balance-card">
+        <h3>Votre solde</h3>
+        <p>${data.balance} tokens</p>
+      </div>
+      <!-- Autres éléments du dashboard -->
+    `;
+    
+  } catch (error) {
+    dashboardElement.innerHTML = `
+      <div class="error">
+        Erreur de chargement: ${error.message}
+        <button onclick="loadDashboard()">Réessayer</button>
+      </div>
+    `;
+    console.error('Dashboard load error:', error);
+  }
+}
+
+async function loadReferrals() {
+  try {
+    const response = await fetch('/api/referrals', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
+      },
+      body: JSON.stringify({ userId })
+    });
+    
+    if (!response.ok) throw new Error('Network response was not ok');
+    
+    const data = await response.json();
+    
+    document.getElementById('referrals-content').innerHTML = `
+      <div class="referral-card">
+        <h3>Votre code: ${data.referralCode}</h3>
+        <p>${data.referredUsers.length} parrainages</p>
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error('Referrals load error:', error);
+    // Afficher un message d'erreur
+  }
+}
+
+async function loadTasks() {
+  try {
+    const response = await fetch('/api/tasks', {
+      headers: {
+        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
+      }
+    });
+    
+    const tasks = await response.json();
+    
+    let tasksHTML = '';
+    tasks.forEach(task => {
+      tasksHTML += `
+        <div class="task-item">
+          <h4>${task.title}</h4>
+          <p>Récompense: ${task.reward} tokens</p>
+          <button onclick="startTask('${task.id}')">Commencer</button>
+        </div>
+      `;
+    });
+    
+    document.getElementById('tasks-content').innerHTML = tasksHTML || '<p>Aucune tâche disponible</p>';
+    
+  } catch (error) {
+    console.error('Tasks load error:', error);
+  }
+}
+
 async function demarrerMinage() {
   // Arrêter tout intervalle existant
   if (miningInterval) {
