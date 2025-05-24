@@ -17,7 +17,7 @@ app.use(cors({
   origin: [
     'https://airdrop-bot-soy1.onrender.com',
     'https://web.telegram.org',
-    'https://t.me/CRYPTORATS_bot' // Ajoute ton URL Telegram WebApp
+    'https://t.me/CRYPTORATS_bot' // Assure-toi que c'est bien la bonne URL Telegram WebApp
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Telegram-Data', 'Authorization'],
@@ -27,10 +27,15 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Middleware de log (éviter de logger des données sensibles en prod)
 app.use((req, res, next) => {
+  const safeBody = { ...req.body };
+  if (safeBody.tokens) safeBody.tokens = "***";
+  if (safeBody.Authorization) safeBody.Authorization = "***";
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
     headers: req.headers,
-    body: req.body
+    body: safeBody
   });
   next();
 });
@@ -43,7 +48,7 @@ const initializeApp = async () => {
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
     sheets = google.sheets({ version: 'v4', auth }); // Initialisation globale
-    
+
     await initGoogleSheets();
     sheetsInitialized = true;
     console.log('Server ready');
@@ -66,7 +71,7 @@ app.post('/sync-session', (req, res) => {
   }
 
   if (session.deviceId !== deviceId) {
-    return res.json({ 
+    return res.json({
       status: 'DEVICE_MISMATCH',
       sessionStart: session.startTime
     });
@@ -74,7 +79,7 @@ app.post('/sync-session', (req, res) => {
 
   // Mettre à jour le timestamp
   session.lastActive = new Date();
-  res.json({ 
+  res.json({
     status: 'SYNCED',
     sessionStart: session.startTime,
     tokens: session.tokens
@@ -120,7 +125,7 @@ app.post('/start-session', (req, res) => {
     totalMinutes: 0       // Compteur de temps effectif
   });
 
-  res.json({ 
+  res.json({
     status: "SESSION_STARTED",
     startTime: now,
     remainingMinutes: MAX_MINUTES
@@ -130,7 +135,7 @@ app.post('/start-session', (req, res) => {
 app.post('/update-session', (req, res) => {
   const { userId, tokens, deviceId } = req.body;
   const session = activeSessions.get(userId);
-  
+
   if (session && session.deviceId === deviceId) {
     session.tokens = parseFloat(tokens);
     session.lastActive = new Date();
@@ -147,26 +152,26 @@ app.post('/claim', async (req, res) => {
 
   // 1. Validation des données entrantes (version courte)
   if (!userId || !deviceId || !tokens) {
-    return res.status(400).json({ 
+    return res.status(400).json({
       error: "MISSING_DATA",
-      message: "Champs manquants" 
+      message: "Champs manquants"
     });
   }
 
   // 2. Vérification de session (optimisée)
   const session = activeSessions.get(userId);
   if (!session) {
-    return res.status(403).json({ 
+    return res.status(403).json({
       error: "NO_SESSION",
-      message: "Session expirée" 
+      message: "Session expirée"
     });
   }
 
   // 3. Vérification appareil (version courte)
   if (session.deviceId !== deviceId) {
-    return res.status(403).json({ 
+    return res.status(403).json({
       error: "DEVICE_ERR",
-      message: "Appareil invalide" 
+      message: "Appareil invalide"
     });
   }
 
@@ -179,19 +184,13 @@ app.post('/claim', async (req, res) => {
     // 5. Validation tokens (version robuste)
     const points = Math.floor(parseFloat(tokens));
     if (isNaN(points) || points <= 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "INVALID_TOKENS",
-        message: "Tokens invalides" 
+        message: "Tokens invalides"
       });
     }
 
-    // 6. Initialisation Google Sheets (inchangée)
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-    const sheets = google.sheets({ version: 'v4', auth });
-
+    // 6. Utiliser l'instance globale sheets au lieu de réinitialiser
     const timestamp = new Date().toISOString();
 
     // 7. Enregistrement transaction (optimisé)
@@ -202,10 +201,10 @@ app.post('/claim', async (req, res) => {
       resource: { values: [[
         timestamp,
         userId,
-        "AIRDROP", 
+        "AIRDROP",
         points,
         "COMPLETED"
-      ]]}
+      ]] }
     });
 
     // 8. Mise à jour utilisateur (version sécurisée)
@@ -214,7 +213,7 @@ app.post('/claim', async (req, res) => {
       range: "Users!A2:G"
     });
     const users = usersData.data.values || [];
-    
+
     const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
     let newBalance = points;
 
@@ -247,7 +246,7 @@ app.post('/claim', async (req, res) => {
         if (referrerIndex >= 0) {
           const referralReward = Math.floor(points * 0.1);
           const currentReferrerBalance = parseInt(users[referrerIndex][3]) || 0;
-          
+
           await sheets.spreadsheets.values.update({
             spreadsheetId: process.env.GOOGLE_SHEET_ID,
             range: `Users!D${referrerIndex + 2}`,
@@ -264,7 +263,7 @@ app.post('/claim', async (req, res) => {
               referralReward,
               timestamp,
               username || "Anonyme"
-            ]]}
+            ]] }
           });
         }
       }
@@ -282,7 +281,7 @@ app.post('/claim', async (req, res) => {
           timestamp,
           `REF-${Math.random().toString(36).slice(2, 8)}`,
           1
-        ]]}
+        ]] }
       });
     }
 
@@ -291,236 +290,126 @@ app.post('/claim', async (req, res) => {
       ...session,
       lastActive: now,
       totalMinutes: totalUsedMinutes,
-      tokens: points
+      tokens: newBalance
     });
 
-    // 11. Réponse succès (format court)
-    return res.json({
-      s: true, // success
-      b: newBalance, // balance
-      p: points, // points
-      t: totalUsedMinutes.toFixed(1), // time
-      m: userIndex >= 0 ? parseFloat(users[userIndex][6]) || 1 : 1 // mining speed
-    });
-
-  } catch (error) {
-    console.error("Claim Error:", {
-      userId,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    });
-
-    // Gestion d'erreur unifiée
-    return res.status(500).json({ 
-      error: "SERVER_ERR",
-      message: "Erreur"
-    });
-  }
-});
-
-// [USER] Récupération des données utilisateur
-app.get('/api/user/:userId', async (req, res) => {
-  try {
-    if (!sheetsInitialized) {
-      return res.status(503).json({ error: "Service unavailable" });
-    }
-
-    const userId = req.params.userId;
-    const usersData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G" // A:Date, B:Username, C:UserID, D:Balance, E:LastClaim, F:Referral, G:MiningSpeed
-    });
-
-    const users = usersData.data.values || [];
-    const user = users.find(row => row[2]?.toString() === userId?.toString());
-
-    if (!user) {
-      return res.status(404).json({ 
-        error: "USER_NOT_FOUND",
-        message: "Utilisateur non enregistré" 
+    // 11. Vérification limite durée
+    if (totalUsedMinutes >= MAX_MINUTES) {
+      activeSessions.delete(userId);
+      return res.json({
+        status: "LIMIT_REACHED",
+        message: "Vous avez atteint la limite de minage de 60 minutes",
+        tokens: newBalance
       });
     }
 
+    // 12. Réponse OK
     res.json({
-      username: user[1],
-      balance: user[3],
-      lastClaim: user[4],
-      mining_speed: user[6] || 1
+      status: "OK",
+      message: "Récompense ajoutée",
+      tokens: newBalance
     });
-  } catch (error) {
-    console.error("User data error:", error);
-    res.status(500).json({ 
+  } catch (err) {
+    console.error('Claim error:', err);
+    res.status(500).json({
       error: "SERVER_ERROR",
-      message: "Erreur serveur" 
+      message: "Erreur lors du traitement de la réclamation"
     });
   }
 });
 
-// Routes pour Tasks et Referral
-app.get('/api/tasks', async (req, res) => {
-  try {
-    if (!sheetsInitialized) {
-      return res.status(503).json({ error: "Service unavailable" });
-    }
-
-    // Lire les tâches depuis la feuille "Tasks"
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Tasks!A2:E" // A:ID, B:Nom, C:Icone, D:Récompense, E:Status
-    });
-
-    const tasks = (response.data.values || []).map(row => ({
-      id: row[0],
-      name: row[1],
-      icon: `/images/${row[2]}`,
-      reward: row[3],
-      status: row[4] || 'inactive'
-    }));
-
-    res.json(tasks);
-  } catch (error) {
-    console.error("Tasks error:", error);
-    res.status(500).json({ 
-      error: "TASKS_LOAD_FAILED",
-      message: "Erreur de chargement des tâches" 
-    });
-  }
-});
-
+// Vérification session (simplifiée)
 app.post('/api/check-session', (req, res) => {
   const { userId, deviceId } = req.body;
-  
-  // 1. Vérifier si la session existe
-  if (!activeSessions.has(userId)) {
-    return res.status(401).json({
-      error: "SESSION_NOT_FOUND",
-      message: "Session introuvable. Démarrez une nouvelle session de minage."
-    });
-  }
-
-  // 2. Vérifier la correspondance du device
   const session = activeSessions.get(userId);
+
+  if (!session) {
+    return res.json({ status: "NO_SESSION" });
+  }
+
   if (session.deviceId !== deviceId) {
-    return res.status(401).json({
-      error: "DEVICE_MISMATCH",
-      message: "Appareil non autorisé. Utilisez le même navigateur que pour démarrer le minage."
+    return res.json({
+      status: "DEVICE_ERR",
+      startTime: session.startTime
     });
   }
 
-  // 3. Vérifier l'expiration (60 minutes max)
-  const sessionDuration = (Date.now() - session.startTime) / (1000 * 60);
-  if (sessionDuration > 60) {
-    activeSessions.delete(userId);
-    return res.status(401).json({
-      error: "EXPIRED",
-      message: "Session expirée (limite de 60 minutes atteinte)."
-    });
-  }
-
-  res.json({ valid: true });
+  res.json({
+    status: "SESSION_ACTIVE",
+    startTime: session.startTime,
+    tokens: session.tokens || 0
+  });
 });
 
+// Vérification session (alternative)
 app.post('/api/verify-session', (req, res) => {
   const { userId, deviceId } = req.body;
-  
-  if (!activeSessions.has(userId)) {
-    return res.status(401).json({
-      error: "SESSION_NOT_FOUND",
-      message: "Session introuvable. Veuillez redémarrer le minage."
-    });
-  }
-
   const session = activeSessions.get(userId);
-  const now = Date.now();
-  const sessionAge = (now - session.startTime) / (1000 * 60);
+
+  if (!session) {
+    return res.json({ status: "NO_SESSION" });
+  }
 
   if (session.deviceId !== deviceId) {
-    return res.status(401).json({
-      error: "DEVICE_MISMATCH",
-      message: "Appareil non autorisé."
+    return res.json({
+      status: "DEVICE_MISMATCH",
+      startTime: session.startTime
     });
   }
 
-  if (sessionAge > 60) {
-    activeSessions.delete(userId);
-    return res.status(401).json({
-      error: "SESSION_EXPIRED",
-      message: "Session expirée (60 minutes maximum)."
-    });
-  }
-
-  // Mettre à jour le lastActive
-  session.lastActive = now;
-  res.json({ valid: true });
+  res.json({
+    status: "SESSION_VALID",
+    startTime: session.startTime,
+    tokens: session.tokens || 0
+  });
 });
 
-app.post('/api/complete-task', async (req, res) => {
+// Endpoint referrals
+app.post('/api/referrals', async (req, res) => {
+  const { userId } = req.body;
+
   try {
-    // Logique de validation ici
-    res.json({ success: true, reward: req.body.reward });
-  } catch (error) {
-    res.status(400).json({ error: "Task completion failed" });
-  }
-});
-
-app.get('/api/referrals', async (req, res) => {
-  try {
-    if (!sheetsInitialized) {
-      return res.status(503).json({ error: "Service unavailable" });
-    }
-
-    const userId = req.query.user_id;
-    if (!userId) {
-      return res.status(400).json({ error: "USER_ID_REQUIRED" });
-    }
-
-    // 1. Trouver le code de parrainage de l'utilisateur
-    const usersResponse = await sheets.spreadsheets.values.get({
+    const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G" // Colonne F = ReferralCode
+      range: "Users!A2:G"
     });
 
-    const user = (usersResponse.data.values || []).find(row => row[2] === userId);
+    const referralsData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Referrals!A2:D"
+    });
+
+    const users = usersData.data.values || [];
+    const referrals = referralsData.data.values || [];
+
+    const user = users.find(row => row[2] === userId);
     if (!user) {
       return res.status(404).json({ error: "USER_NOT_FOUND" });
     }
 
     const referralCode = user[5];
-
-    // 2. Récupérer les filleuls
-    const referralsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Referrals!A2:D" // A:Code, B:Montant, C:Date, D:Username
-    });
-
-    const referrals = (referralsResponse.data.values || [])
-      .filter(row => row[0] === referralCode)
-      .map(row => ({
-        username: row[3],
-        amount: row[1],
-        date: row[2]
-      }));
+    const referredUsers = users.filter(row => row[5] === referralCode);
 
     res.json({
-      referral_count: referrals.length,
-      earned_tokens: referrals.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0),
-      referrals
+      referralCode,
+      referrals: referredUsers,
+      referralRewards: referrals.filter(r => r[0] === referralCode)
     });
-
-  } catch (error) {
-    console.error("Referrals error:", error);
-    res.status(500).json({ error: "SERVER_ERROR" });
+  } catch (err) {
+    console.error('Referrals error:', err);
+    res.status(500).json({
+      error: "SERVER_ERROR",
+      message: "Erreur lors de la récupération des parrainages"
+    });
   }
 });
 
-// [BOT] webhook Telegram
-app.use('/bot', webhookCallback);
+// Webhook bot
+app.use(bot.webhookCallback('/bot'));
 
-// [STATIC] Fichiers publics
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// Lancer tout
+// Start server
 initializeApp();

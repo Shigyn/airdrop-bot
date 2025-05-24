@@ -16,49 +16,41 @@
 /* === GLOBAL RESET === */
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+  margin: 0; padding: 0;
   image-rendering: pixelated;
 }
 
 body {
-  background-color: var(--bg-dark);
-  background-image: 
-    linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)),
-    url('./images/bg_minecraft.png'); /* texture Minecraft locale */
-  background-size: cover;
+  background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)),
+              url('./images/bg_minecraft.png') no-repeat center/cover;
   font-family: 'Press Start 2P', cursive;
   color: var(--mc-text);
   min-height: 100vh;
   padding: 16px;
   line-height: 1.4;
+  background-color: var(--bg-dark);
 }
 
+/* ICONS */
 .user-info-icon, .nav-icon {
-  width: 1em;     /* largeur égale à la taille de la police */
-  height: 1em;    /* hauteur aussi */
-  vertical-align: middle;  /* pour bien aligner avec le texte */
-  object-fit: contain;     /* pour que l'image garde ses proportions */
-  margin-right: 0.5em;     /* espace entre l’icône et le texte */
+  width: 1em; height: 1em;
+  vertical-align: middle;
+  object-fit: contain;
+  margin-right: 0.5em;
 }
 
 /* === PIXEL ART ELEMENTS === */
 .pixel-box {
   border: var(--mc-border);
-  box-shadow: 
+  box-shadow:
     var(--pixel-size) var(--pixel-size) 0 #00000033,
     inset 0 0 0 var(--pixel-size) #ffffff0d;
   position: relative;
 }
-
 .pixel-box::after {
   content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: 
+  position: absolute; inset: 0;
+  background:
     linear-gradient(135deg, #ffffff08 25%, transparent 25%) -50px 0,
     linear-gradient(225deg, #ffffff08 25%, transparent 25%) -50px 0,
     linear-gradient(315deg, #ffffff08 25%, transparent 25%),
@@ -69,23 +61,21 @@ body {
 /* === APP CONTAINER === */
 .app-container {
   max-width: 100%;
-  background-color: transparent; /* Fond transparent */
+  background: transparent;
   border: none;
-  padding: 12px;
-  padding-bottom: 60px; /* Espace pour le menu fixé */
+  padding: 12px 12px 60px;
   margin: 0 auto;
   border-radius: 12px;
 }
 
 /* === HEADER === */
 .app-header {
-  background-color: var(--mc-stone);
+  background: var(--mc-stone);
   border: var(--mc-border);
   padding: 12px;
   margin-bottom: 16px;
   text-align: center;
 }
-
 .app-title {
   color: var(--mc-grass);
   font-size: 1.2rem;
@@ -94,46 +84,95 @@ body {
 }
 
 /* === BUTTONS === */
-.mc-button {
-  display: inline-block;
-  background-color: var(--mc-grass);
-  color: #fff;
-  border: var(--mc-border);
-  padding: 10px 16px;
+.mc-button, .mc-button-anim {
   font-family: inherit;
-  font-size: 0.8rem;
   cursor: pointer;
+  border: var(--mc-border);
+  color: #fff;
   text-align: center;
-  transition: all 0.1s;
+  transition: all 0.1s ease;
   position: relative;
+  user-select: none;
+  display: inline-block;
+  white-space: nowrap;
 }
-
+.mc-button {
+  background-color: var(--mc-grass);
+  padding: 10px 16px;
+  font-size: 0.8rem;
+}
+.mc-button-blue {
+  background-color: var(--mc-water);
+}
 .mc-button:active {
   transform: translate(2px, 2px);
   box-shadow: none;
 }
 
-.mc-button-blue {
-  background-color: var(--mc-water);
+/* Animated button */
+.mc-button-anim {
+  font-family: 'Press Start 2P', cursive;
+  font-weight: bold;
+  font-size: 1rem;
+  width: 250px; height: 50px;
+  border-radius: 8px;
+  background-color: var(--mc-grass);
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  overflow: hidden;
+  border: none;
+  color: white;
+  transition: background-color 0.3s ease;
+  padding: 12px 20px;
+}
+.mc-button-anim:hover:not(:disabled) {
+  background-color: #45a049;
+}
+.mc-button-anim:disabled {
+  background-color: #999 !important;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Progress bar inside animated button */
+.mc-button-anim::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 0%;
+  background: rgba(255, 255, 255, 0.3);
+  z-index: 0;
+  transition: width 1s linear;
+}
+.mc-button-anim > span {
+  position: relative;
+  z-index: 1;
+}
+.mc-button-anim .countdown {
+  position: absolute;
+  right: 10px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  font-family: monospace;
+  color: white;
+  user-select: none;
+  z-index: 2;
 }
 
 /* === USER CARD === */
 .user-card {
-  background-color: var(--mc-stone);
+  background: var(--mc-stone);
   border: var(--mc-border);
   padding: 12px;
   margin-bottom: 16px;
 }
-
 .user-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
-
 .stat-item {
-  background-color: #00000055;
+  background: #00000055;
   padding: 8px;
   border: 2px solid #000;
 }
@@ -144,7 +183,6 @@ body {
   gap: 8px;
   margin-top: 20px;
 }
-
 .nav-btn {
   flex: 1;
   padding: 10px;
@@ -154,7 +192,6 @@ body {
   align-items: center;
   justify-content: center;
 }
-
 .nav-btn img {
   width: 32px;
   height: 32px;
@@ -164,123 +201,38 @@ body {
 
 /* === RESPONSIVE === */
 @media (max-width: 480px) {
-  .app-title {
-    font-size: 1rem;
-  }
-
-  .mc-button {
-    padding: 8px 12px;
-    font-size: 0.7rem;
-  }
-
-  .user-stats {
-    grid-template-columns: 1fr;
-  }
+  .app-title { font-size: 1rem; }
+  .mc-button { padding: 8px 12px; font-size: 0.7rem; }
+  .user-stats { grid-template-columns: 1fr; }
 }
 
+/* === HIDDEN ELEMENT === */
 .hidden {
   display: none !important;
 }
 
+/* === BOTTOM NAVIGATION === */
 .bottom-nav {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  max-width: 480px; /* correspond à la largeur max de ton container */
-  background-color: transparent; /* pour enlever le fond marron */
+  bottom: 0; left: 0;
+  width: 100%; max-width: 480px;
+  background: transparent;
   display: flex;
   justify-content: space-around;
   padding: 8px 0;
+  border-top: 1px solid #555;
   box-sizing: border-box;
-  border-top: 1px solid #555; /* optionnel: une petite séparation */
-  z-index: 1000; /* pour qu'il soit au-dessus */
+  z-index: 1000;
 }
 
-/* Bouton animé avec barre de progression et compteur */
-.mc-button-anim {
-  position: relative;
-  display: inline-block;
-  background-color: var(--mc-grass);
-  color: white;
-  border: var(--mc-border);
-  padding: 12px 20px;
-  font-family: inherit;
-  font-size: 1rem;
-  cursor: pointer;
-  overflow: hidden;
-  border-radius: 12px;
-  user-select: none;
-}
-
-/* Barre de progression animée */
-.mc-button-anim::before {
-  content: "";
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  width: 0%;
-  background: rgba(255, 255, 255, 0.3);
-  z-index: 0;
-  transition: width 1s linear;
-}
-
-/* Texte du bouton au-dessus de la barre */
-.mc-button-anim > span {
-  position: relative;
-  z-index: 1;
-}
-
-/* Compteur de temps sur le bouton */
-.mc-button-anim .countdown {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.75rem;
-  font-family: monospace;
-  color: white;
-  user-select: none;
-  z-index: 2;
-}
-
-.mc-button-anim {
-  font-family: 'Press Start 2P', cursive;
-  font-weight: bold;
-  font-size: 1rem;          /* taille réduite */
-  white-space: nowrap;      /* pas de retour à la ligne */
-  width: 250px;
-  height: 50px;
-  cursor: pointer;
-  border-radius: 8px;
-  border: none;
-  background-color: #4caf50;
-  color: white;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-  transition: background-color 0.3s ease;
-}
-
-.mc-button-anim:disabled {
-  background-color: #999 !important;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.mc-button-anim:hover:not(:disabled) {
-  background-color: #45a049;
-}
-
-/* Tooltip pour les erreurs */
+/* === TOOLTIP === */
 [data-tooltip] {
   position: relative;
 }
-
 [data-tooltip]:hover::after {
   content: attr(data-tooltip);
   position: absolute;
-  bottom: 100%;
-  left: 50%;
+  bottom: 100%; left: 50%;
   transform: translateX(-50%);
   background: #ff4444;
   color: white;
@@ -289,29 +241,19 @@ body {
   font-size: 0.8rem;
   white-space: normal;
   width: 200px;
-  z-index: 100;
   margin-bottom: 5px;
+  z-index: 100;
 }
 
-/* Tasks Page */
-.tasks-container {
-  padding: 15px;
-}
-
+/* === TASKS PAGE === */
+.tasks-container { padding: 15px; }
 .task-item {
-  display: flex;
-  align-items: center;
-  padding: 10px;
-  margin: 10px 0;
+  display: flex; align-items: center;
+  padding: 10px; margin: 10px 0;
   background: #2c3e50;
   border-radius: 8px;
 }
-
-.task-item img {
-  width: 30px;
-  margin-right: 10px;
-}
-
+.task-item img { width: 30px; margin-right: 10px; }
 .task-button {
   margin-left: auto;
   background: #27ae60;
@@ -321,12 +263,11 @@ body {
   cursor: pointer;
 }
 
-/* Referral Page */
+/* === REFERRAL PAGE === */
 .referral-container {
   text-align: center;
   padding: 20px;
 }
-
 .referral-code {
   font-size: 1.5rem;
   margin: 15px 0;
@@ -334,7 +275,6 @@ body {
   background: #34495e;
   border-radius: 8px;
 }
-
 .copy-button {
   background: #2980b9;
   color: white;
@@ -345,26 +285,37 @@ body {
   cursor: pointer;
 }
 
-/* Style du bouton d'erreur */
+/* === ERROR MESSAGES === */
 #main-claim-btn {
   position: relative;
   overflow: visible;
 }
-
 .error-text {
   display: inline-block;
   max-width: 80%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  position: relative;
   font-size: 0.9rem;
 }
-
+.error-text:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%; left: 50%;
+  transform: translateX(-50%);
+  background: #ff4444;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 5px;
+  white-space: normal;
+  width: 200px;
+  z-index: 100;
+}
 .error-tooltip {
   visibility: hidden;
   position: absolute;
-  bottom: 100%;
-  left: 50%;
+  bottom: 100%; left: 50%;
   transform: translateX(-50%);
   background: #ff4444;
   color: white;
@@ -377,47 +328,20 @@ body {
   font-size: 0.8rem;
   word-wrap: break-word;
 }
-
 #main-claim-btn:hover .error-tooltip {
   visibility: visible;
   opacity: 1;
 }
 
+/* === SPINNER === */
 .spinner {
-  width: 20px;
-  height: 20px;
+  width: 20px; height: 20px;
   border: 3px solid rgba(255,255,255,0.3);
   border-top-color: white;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto;
 }
-
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-/* Garantir l'affichage complet au survol */
-.error-text {
-  display: inline-block;
-  max-width: 80%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  position: relative;
-}
-
-.error-text:hover::after {
-  content: attr(title);
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #ff4444;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 5px;
-  white-space: normal;
-  width: 200px;
-  z-index: 100;
 }
