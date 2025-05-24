@@ -104,55 +104,114 @@ function initTelegramWebApp() {
   console.log("Init réussie - UserID:", userId, "DeviceID:", deviceId);
 }
 
-// ===== [SESSION INFINIE] =====
-let sessionStartTime = Date.now();
-let tokens = 0;
-let maxReached = false; // Nouvel état
-
-async function demarrerMinage() {
-  if (miningInterval) clearInterval(miningInterval);
-
-  miningInterval = setInterval(() => {
-    const now = Date.now();
-    const elapsed = (now - sessionStartTime) / 1000;
-    
-    if (!maxReached) {
-      // Calcul normal jusqu'au max
-      tokens = Math.min(elapsed * (1/60) * Mining_Speed, 60 * Mining_Speed);
-      
-      // Bloquer quand le max est atteint
-      if (tokens >= 60 * Mining_Speed) {
-        maxReached = true;
-      }
-    }
-
-    updateDisplay();
-    sauvegarderSession();
-  }, 1000);
+function sauvegarderSession() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('miningSession', JSON.stringify({
+      sessionStartTime,
+      tokens,
+      userId,
+      deviceId,
+      lastSave: Date.now() // Ajout du timestamp de sauvegarde
+    }));
+  }
 }
 
-function chargerSession() {
-  if (typeof localStorage !== 'undefined') {
+async function chargerSession() {
+  if (typeof localStorage !== 'undefined' && userId) {
     const session = localStorage.getItem('miningSession');
     if (session) {
       const parsed = JSON.parse(session);
-      sessionStartTime = parsed.sessionStartTime || Date.now();
-      tokens = parsed.tokens || 0;
-      maxReached = parsed.maxReached || false;
-      return true;
+      
+      // Vérification plus robuste de la session
+      if (parsed.userId === userId && parsed.deviceId === deviceId) {
+        
+        // Vérifier avec le backend si la session est toujours valide
+        try {
+          const verification = await fetch('/api/verify-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              userId,
+              deviceId,
+              sessionStartTime: parsed.sessionStartTime
+            })
+          });
+
+          if (verification.ok) {
+            const data = await verification.json();
+            
+            // Restaurer seulement si le backend confirme
+            if (data.valid) {
+              const now = Date.now();
+              const elapsedSeconds = (now - parsed.sessionStartTime) / 1000;
+              
+              // Ne pas dépasser la durée max de session (60 minutes)
+              if (elapsedSeconds <= 3600) {
+                sessionStartTime = parsed.sessionStartTime;
+                tokens = Math.min(parsed.tokens, 60 * Mining_Speed);
+                return true;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Session verification error:', error);
+        }
+      }
     }
   }
+  
+  // Si on arrive ici, la session est invalide
   return false;
 }
 
-function sauvegarderSession() {
-  localStorage.setItem('miningSession', JSON.stringify({
-    sessionStartTime,
-    tokens,
-    maxReached,
-    userId,
-    deviceId
-  }));
+async function demarrerMinage() {
+  if (miningInterval) {
+    clearInterval(miningInterval);
+  }
+
+  try {
+    // Vérifier d'abord la session côté serveur
+    const sessionResponse = await fetch('/api/verify-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, deviceId })
+    });
+
+    if (!sessionResponse.ok) {
+      const errorData = await sessionResponse.json();
+      throw new Error(errorData.error || 'SESSION_VERIFICATION_FAILED');
+    }
+
+    const sessionData = await sessionResponse.json();
+    
+    if (sessionData.valid) {
+      // Si session valide, récupérer les données utilisateur pour avoir le bon Mining_Speed
+      const userData = await loadUserData();
+      Mining_Speed = userData.mining_speed || 1;
+      
+      miningInterval = setInterval(() => {
+        const now = Date.now();
+        const elapsed = (now - sessionStartTime) / 1000;
+        const sessionCap = 60 * Mining_Speed;
+        tokens = Math.min(elapsed * (1/60) * Mining_Speed, sessionCap);
+
+        updateDisplay();
+        sauvegarderSession();
+
+        fetch('/update-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, tokens, deviceId })
+        }).catch(console.error);
+      }, 1000);
+    } else {
+      // Si session invalide, en démarrer une nouvelle
+      await startNewSession();
+    }
+  } catch (error) {
+    console.error('Session error:', error);
+    await startNewSession();
+  }
 }
 
 async function startNewSession() {
