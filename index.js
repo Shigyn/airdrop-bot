@@ -16,12 +16,15 @@ let sheetsInitialized = false; // ajouté pour la santé du service
 app.use(cors({
   origin: [
     'https://airdrop-bot-soy1.onrender.com',
-    'https://web.telegram.org'
+    'https://web.telegram.org',
+    'https://t.me/CRYPTORATS_bot' // Ajoute ton URL Telegram WebApp
   ],
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Telegram-Data'],
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Telegram-Data', 'Authorization'],
+  credentials: true,
+  exposedHeaders: ['Content-Length', 'X-Request-Id']
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
@@ -369,7 +372,7 @@ app.get('/api/tasks', async (req, res) => {
     const tasks = (response.data.values || []).map(row => ({
       id: row[0],
       name: row[1],
-      icon: `/public/images/${row[2]}`,
+      icon: `/images/${row[2]}`,
       reward: row[3],
       status: row[4] || 'inactive'
     }));
@@ -461,17 +464,51 @@ app.post('/api/complete-task', async (req, res) => {
 
 app.get('/api/referrals', async (req, res) => {
   try {
+    if (!sheetsInitialized) {
+      return res.status(503).json({ error: "Service unavailable" });
+    }
+
     const userId = req.query.user_id;
-    
-    // Exemple de réponse - à adapter avec votre base de données
+    if (!userId) {
+      return res.status(400).json({ error: "USER_ID_REQUIRED" });
+    }
+
+    // 1. Trouver le code de parrainage de l'utilisateur
+    const usersResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:G" // Colonne F = ReferralCode
+    });
+
+    const user = (usersResponse.data.values || []).find(row => row[2] === userId);
+    if (!user) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const referralCode = user[5];
+
+    // 2. Récupérer les filleuls
+    const referralsResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Referrals!A2:D" // A:Code, B:Montant, C:Date, D:Username
+    });
+
+    const referrals = (referralsResponse.data.values || [])
+      .filter(row => row[0] === referralCode)
+      .map(row => ({
+        username: row[3],
+        amount: row[1],
+        date: row[2]
+      }));
+
     res.json({
-      referral_count: 0, // Remplacez par le vrai count
-      earned_tokens: 0,  // Remplacez par les vrais tokens gagnés
-      referrals: []      // Remplacez par la liste des filleuls
+      referral_count: referrals.length,
+      earned_tokens: referrals.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0),
+      referrals
     });
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Referrals error:", error);
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
 

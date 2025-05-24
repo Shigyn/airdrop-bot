@@ -430,17 +430,28 @@ function setupNavigation() {
 
 const TasksPage = {
   async showTasksPage() {
+    const content = document.getElementById('content');
+    content.innerHTML = '<div class="loader">Chargement...</div>';
+
     try {
       const response = await fetch('/api/tasks');
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
       const tasks = await response.json();
       
-      // Afficher les tâches dynamiquement
-      const content = document.getElementById('content');
+      if (!tasks || !tasks.length) {
+        content.innerHTML = '<div class="no-tasks">Aucune tâche disponible</div>';
+        return;
+      }
+
       content.innerHTML = `
         <div class="tasks-container">
           ${tasks.map(task => `
             <div class="task-card ${task.status}">
-              <img src="/icons/${task.icon}" alt="${task.name}">
+              <img src="${task.icon}" alt="${task.name}" onerror="this.src='/images/default-task.png'">
               <h3>${task.name}</h3>
               <p>Récompense: ${task.reward} tokens</p>
               <button onclick="TasksPage.completeTask('${task.id}')" 
@@ -453,6 +464,11 @@ const TasksPage = {
       `;
     } catch (error) {
       console.error("Tasks error:", error);
+      content.innerHTML = `
+        <div class="error">
+          Erreur de chargement. <button onclick="TasksPage.showTasksPage()">Réessayer</button>
+        </div>
+      `;
     }
   },
 
