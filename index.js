@@ -132,16 +132,48 @@ app.post('/start-session', (req, res) => {
   });
 });
 
-app.post('/update-session', (req, res) => {
+app.post('/update-session', async (req, res) => {
   const { userId, tokens, deviceId } = req.body;
-  const session = activeSessions.get(userId);
+  
+  try {
+    // Vérifier que tous les champs sont présents
+    if (!userId || !tokens || !deviceId) {
+      return res.status(400).json({ error: "Missing parameters" });
+    }
 
-  if (session && session.deviceId === deviceId) {
+    const session = activeSessions.get(userId);
+    
+    if (!session) {
+      return res.status(404).json({ error: "Session not found" });
+    }
+
+    if (session.deviceId !== deviceId) {
+      return res.status(403).json({ error: "Device mismatch" });
+    }
+
+    // Mettre à jour la session
     session.tokens = parseFloat(tokens);
     session.lastActive = new Date();
+    
+    // Sauvegarder dans Google Sheets
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Sessions!A2:D",
+      valueInputOption: "USER_ENTERED",
+      resource: {
+        values: [[
+          userId,
+          tokens,
+          new Date().toISOString(),
+          deviceId
+        ]]
+      }
+    });
+
     res.json({ success: true });
-  } else {
-    res.status(400).json({ error: "Invalid session" });
+  } catch (error) {
+    console.error('Update session error:', error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -190,21 +222,21 @@ app.get('/api/tasks', async (req, res) => {
   try {
     const tasksData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Tasks!A2:E"
+      range: "Tasks!A2:E" // ID, Description, Image, Reward, Statut
     });
 
     const tasks = (tasksData.data.values || []).map(row => ({
-      id: row[0],       // ID
-      title: row[1],    // Description
-      image: row[2],    // Image
-      reward: row[3],   // Reward
-      status: row[4]    // Statut
-    })).filter(task => task.status === 'ACTIVE'); // Modifiez ce filtre selon votre besoin
+      id: row[0],
+      title: row[1],
+      image: row[2],
+      reward: row[3],
+      status: row[4]
+    })).filter(task => task.status === 'ACTIVE'); // Filtrer seulement les tâches actives
 
     res.json(tasks);
   } catch (err) {
     console.error('Tasks error:', err);
-    res.status(500).json({ error: "SERVER_ERROR" });
+    res.status(500).json({ error: "Failed to load tasks" });
   }
 });
 
@@ -432,40 +464,34 @@ app.post('/api/referrals', async (req, res) => {
   const { userId } = req.body;
 
   try {
-    // 1. Récupérer les données utilisateur
-    const usersResponse = await sheets.spreadsheets.values.get({
+    // 1. Récupérer l'utilisateur
+    const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
+      range: "Users!A2:G" // Colonnes jusqu'à Referral_Code
     });
-    
-    const users = usersResponse.data.values || [];
-    const user = users.find(row => row[2]?.toString() === userId.toString());
-    
-    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
-    // 2. Utiliser directement l'user_id comme référence
-    const referralCode = user[2]; // user_id comme code de parrainage
-    const referralUrl = `https://t.me/CRYPTORATS_bot?start=${referralCode}`;
+    const user = usersData.data.values?.find(row => row[2] === userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
 
-    // 3. Récupérer les parrainages existants (filtrés par user_id)
-    const referralsResponse = await sheets.spreadsheets.values.get({
+    // 2. Créer le lien de parrainage
+    const referralUrl = `https://t.me/${process.env.BOT_USERNAME}?start=ref_${userId}`;
+
+    // 3. Récupérer les stats de parrainage
+    const referralsData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Referrals!A2:D"
     });
-    
-    const referrals = referralsResponse.data.values || [];
-    const userReferrals = referrals.filter(r => r[0] === referralCode);
+
+    const referrals = referralsData.data.values?.filter(row => row[0] === userId) || [];
 
     res.json({
-      success: true,
-      referralCode: referralCode,
       referralUrl: referralUrl,
-      referredCount: userReferrals.length,
-      earned: userReferrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0, 0)
+      totalReferrals: referrals.length,
+      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0, 0)
     });
   } catch (err) {
     console.error('Referrals error:', err);
-    res.status(500).json({ error: "SERVER_ERROR" });
+    res.status(500).json({ error: "Failed to load referrals" });
   }
 });
 
