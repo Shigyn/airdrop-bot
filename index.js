@@ -467,7 +467,7 @@ app.post('/api/referrals', async (req, res) => {
     // 1. Récupérer l'utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G" // Colonnes jusqu'à Referral_Code
+      range: "Users!A2:G"
     });
 
     const user = usersData.data.values?.find(row => row[2] === userId);
@@ -487,7 +487,7 @@ app.post('/api/referrals', async (req, res) => {
     res.json({
       referralUrl: referralUrl,
       totalReferrals: referrals.length,
-      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0, 0)
+      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0) // Correction ici
     });
   } catch (err) {
     console.error('Referrals error:', err);
