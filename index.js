@@ -331,25 +331,6 @@ app.post('/claim', async (req, res) => {
   }
 });
 
-async function getUserData(userId) {
-  const usersData = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: "Users!A2:G"
-  });
-
-  const users = usersData.data.values || [];
-  const index = users.findIndex(row => row[2]?.toString() === userId.toString());
-  
-  if (index === -1) return null;
-
-  return {
-    rowIndex: index + 2,
-    balance: parseInt(users[index][3]) || 0,
-    referralCode: users[index][5],
-    miningSpeed: parseFloat(users[index][6]) || 1
-  };
-}
-
 // Webhook bot
 app.use(bot.webhookCallback('/bot'));
 
