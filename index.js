@@ -245,46 +245,68 @@ app.post('/claim', async (req, res) => {
   const { userId, deviceId, tokens: tokensToClaim, username, miningTime } = req.body;
   const MAX_MINUTES = 60;
 
-  // Validation
-  if (!userId || !deviceId || !tokensToClaim) {
-    return res.status(400).json({ error: "MISSING_DATA" });
+  // 1. Validation des données
+  if (!userId || !deviceId || !tokensToClaim || !miningTime) {
+    return res.status(400).json({ error: "MISSING_DATA", message: "Données manquantes" });
   }
 
   try {
-    // Vérifier le temps miné (sécurité anti-triche)
-    const claimedMinutes = parseFloat(miningTime);
-    if (claimedMinutes > MAX_MINUTES) {
-      return res.status(400).json({ error: "INVALID_CLAIM_TIME" });
+    // 2. Vérification de la session
+    const session = activeSessions.get(userId);
+    if (!session) {
+      return res.status(403).json({ error: "NO_SESSION", message: "Session expirée" });
     }
 
-    // Enregistrer la transaction
+    if (session.deviceId !== deviceId) {
+      return res.status(403).json({ error: "DEVICE_MISMATCH", message: "Appareil non autorisé" });
+    }
+
+    // 3. Vérification anti-triche
+    const claimedMinutes = parseFloat(miningTime);
+    if (claimedMinutes > MAX_MINUTES || isNaN(claimedMinutes)) {
+      return res.status(400).json({ error: "INVALID_CLAIM", message: "Temps de minage invalide" });
+    }
+
+    // 4. Formatage des données pour Sheets
+    const timestamp = new Date().toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+
+    // 5. Enregistrement dans Transactions (format: User_ID | Points | Type | Timestamp)
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Transactions!A2:E",
+      range: "Transactions!A2:D",
       valueInputOption: "USER_ENTERED",
-      resource: { 
+      resource: {
         values: [[
-          new Date().toISOString(), // Timestamp
-          userId,                  // User ID
-          "CLAIM",                 // Type
-          tokensToClaim,           // Amount
-          "COMPLETED"              // Status
-        ]] 
+          userId.toString(),       // Colonne A: User_ID
+          parseInt(tokensToClaim), // Colonne B: Points
+          "CLAIM",                // Colonne C: Type
+          timestamp               // Colonne D: Timestamp
+        ]]
       }
     });
 
-    // Mettre à jour la balance utilisateur
+    // 6. Mise à jour du solde utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
 
     const users = usersData.data.values || [];
-    const userIndex = users.findIndex(row => row[2] === userId.toString());
+    const userIndex = users.findIndex(row => row[2]?.toString() === userId.toString());
 
     let newBalance = parseInt(tokensToClaim);
+    let miningSpeed = 1;
+
     if (userIndex >= 0) {
       const currentBalance = parseInt(users[userIndex][3]) || 0;
+      miningSpeed = parseFloat(users[userIndex][6]) || 1;
       newBalance = currentBalance + parseInt(tokensToClaim);
 
       await sheets.spreadsheets.values.update({
@@ -293,99 +315,80 @@ app.post('/claim', async (req, res) => {
         valueInputOption: "USER_ENTERED",
         resource: { values: [[newBalance]] }
       });
+
+      // 7. Programme de parrainage
+      const referralCode = users[userIndex][5];
+      if (referralCode) {
+        const referrer = users.find(row => row[5] === referralCode);
+        if (referrer) {
+          const referrerIndex = users.indexOf(referrer);
+          const referralReward = Math.floor(tokensToClaim * 0.1);
+          const referrerBalance = parseInt(referrer[3]) || 0;
+
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: process.env.GOOGLE_SHEET_ID,
+            range: `Users!D${referrerIndex + 2}`,
+            valueInputOption: "USER_ENTERED",
+            resource: { values: [[referrerBalance + referralReward]] }
+          });
+
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: process.env.GOOGLE_SHEET_ID,
+            range: "Referrals!A2:D",
+            valueInputOption: "USER_ENTERED",
+            resource: {
+              values: [[
+                referralCode,
+                referralReward,
+                timestamp,
+                username || "Anonyme"
+              ]]
+            }
+          });
+        }
+      }
+    } else {
+      // Nouvel utilisateur
+      const referralCode = `REF-${Math.random().toString(36).slice(2, 8)}`;
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: "Users!A2:G",
+        valueInputOption: "USER_ENTERED",
+        resource: {
+          values: [[
+            timestamp,
+            username || "Anonyme",
+            userId,
+            newBalance,
+            timestamp,
+            referralCode,
+            1 // Mining_Speed par défaut
+          ]]
+        }
+      });
     }
 
+    // 8. Mise à jour de la session
+    activeSessions.set(userId, {
+      ...session,
+      lastActive: Date.now(),
+      tokens: 0
+    });
+
+    // 9. Réponse
     res.json({
       status: "OK",
       balance: newBalance,
-      mining_speed: users[userIndex]?.[6] || 1
+      mining_speed: miningSpeed,
+      message: `${tokensToClaim} tokens ajoutés`
     });
 
   } catch (err) {
     console.error('Claim error:', err);
-    res.status(500).json({ error: "SERVER_ERROR" });
-  }
-});
-
-// Vérification session (simplifiée)
-app.post('/api/check-session', (req, res) => {
-  const { userId, deviceId } = req.body;
-  const session = activeSessions.get(userId);
-
-  if (!session) {
-    return res.json({ status: "NO_SESSION" });
-  }
-
-  if (session.deviceId !== deviceId) {
-    return res.json({
-      status: "DEVICE_ERR",
-      startTime: session.startTime
+    res.status(500).json({ 
+      error: "SERVER_ERROR",
+      message: "Erreur lors du traitement"
     });
-  }
-
-  res.json({
-    status: "SESSION_ACTIVE",
-    startTime: session.startTime,
-    tokens: session.tokens || 0
-  });
-});
-
-// Vérification session (alternative)
-app.post('/api/verify-session', (req, res) => {
-  const { userId, deviceId } = req.body;
-  const session = activeSessions.get(userId);
-
-  if (!session) {
-    return res.json({ status: "NO_SESSION" });
-  }
-
-  if (session.deviceId !== deviceId) {
-    return res.json({
-      status: "DEVICE_MISMATCH",
-      startTime: session.startTime
-    });
-  }
-
-  res.json({
-    status: "SESSION_VALID",
-    startTime: session.startTime,
-    tokens: session.tokens || 0
-  });
-});
-
-// Endpoint referrals
-app.post('/api/referrals', async (req, res) => {
-  const { userId } = req.body;
-
-  try {
-    // 1. Récupérer l'utilisateur
-    const usersData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
-    });
-
-    const user = usersData.data.values?.find(row => row[2] === userId);
-    if (!user) return res.status(404).json({ error: "User not found" });
-
-    // 2. Créer le lien de parrainage
-    const referralUrl = `https://t.me/${process.env.BOT_USERNAME}?start=ref_${userId}`;
-
-    // 3. Récupérer les stats de parrainage
-    const referralsData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Referrals!A2:D"
-    });
-
-    const referrals = referralsData.data.values?.filter(row => row[0] === userId) || [];
-
-    res.json({
-      referralUrl: referralUrl,
-      totalReferrals: referrals.length,
-      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0) // Correction ici
-    });
-  } catch (err) {
-    console.error('Referrals error:', err);
-    res.status(500).json({ error: "Failed to load referrals" });
   }
 });
 
