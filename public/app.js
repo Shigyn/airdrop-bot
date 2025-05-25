@@ -598,14 +598,20 @@ async function handleClaim() {
   const btn = document.getElementById('main-claim-btn');
   if (!btn) return;
 
-  const originalHTML = btn.innerHTML;
-  const originalDisabled = btn.disabled;
-
   btn.disabled = true;
+  const originalHTML = btn.innerHTML;
   btn.innerHTML = '<div class="spinner-mini"></div>';
 
   try {
-    // 1. Vérification de la session
+    // Calculer le temps miné en minutes
+    const now = Date.now();
+    const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
+    const tokensToClaim = Math.floor(elapsedMinutes * Mining_Speed);
+
+    if (tokensToClaim <= 0) {
+      throw new Error('NOTHING_TO_CLAIM');
+    }
+
     const sessionCheck = await fetch('/api/verify-session', {
       method: 'POST',
       headers: {
@@ -616,16 +622,9 @@ async function handleClaim() {
     });
 
     if (!sessionCheck.ok) {
-      const errorData = await sessionCheck.json();
-      throw new Error(errorData.error || 'SESSION_VERIFICATION_FAILED');
+      throw new Error('SESSION_VERIFICATION_FAILED');
     }
 
-    // 2. Calcul du montant à claimer basé sur le temps miné
-    const now = Date.now();
-    const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
-    const tokensToClaim = Math.floor(elapsedMinutes * Mining_Speed);
-
-    // 3. Envoi de la requête de claim
     const claimResponse = await fetch('/claim', {
       method: 'POST',
       headers: {
@@ -634,9 +633,10 @@ async function handleClaim() {
       },
       body: JSON.stringify({
         userId,
-        tokens: tokensToClaim, // Envoi du montant calculé
+        tokens: tokensToClaim, // Envoyer le montant calculé
         username: window.Telegram?.WebApp?.initDataUnsafe?.user?.username || 'Anonyme',
-        deviceId
+        deviceId,
+        miningTime: elapsedMinutes // Envoyer le temps miné pour vérification
       })
     });
 
@@ -647,102 +647,64 @@ async function handleClaim() {
 
     const result = await claimResponse.json();
 
-    // 4. Réinitialisation après claim réussi
+    // Réinitialiser après claim réussi
     tokens = 0;
-    sessionStartTime = Date.now();
-    Mining_Speed = result.mining_speed || Mining_Speed; // Mise à jour de la vitesse si nécessaire
+    sessionStartTime = now;
+    if (result.mining_speed) Mining_Speed = result.mining_speed;
 
-    // 5. Mise à jour de l'UI
-    btn.innerHTML = '<span style="color:#4CAF50">✓ Réussi (+' + tokensToClaim + ')</span>';
-    
-    // Mise à jour du solde affiché
+    // Mettre à jour l'affichage
+    btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
     if (result.balance) {
       document.getElementById('balance').textContent = result.balance;
     }
 
-    // 6. Réinitialisation du bouton après 1.5s
     setTimeout(() => {
       btn.innerHTML = originalHTML;
-      btn.disabled = originalDisabled;
+      btn.disabled = false;
       updateDisplay();
-    }, 1500);
+    }, 2000);
 
   } catch (error) {
-    console.error('Claim Error:', error);
-
-    // Messages d'erreur personnalisés
-    const ERROR_MESSAGES = {
-      'NO_USER_DATA': 'Non connecté',
+    console.error('Claim error:', error);
+    
+    const errorMap = {
+      'NOTHING_TO_CLAIM': 'Rien à claimer',
       'SESSION_VERIFICATION_FAILED': 'Session invalide',
       'DEVICE_MISMATCH': 'Appareil invalide',
-      'CLAIM_FAILED': 'Erreur serveur',
-      'NETWORK_ERROR': 'Problème réseau',
-      'LIMIT_REACHED': 'Limite atteinte',
-      'INVALID_TOKENS': 'Montant invalide'
+      'CLAIM_FAILED': 'Erreur serveur'
     };
 
-    const errorMsg = ERROR_MESSAGES[error.message] || 'Erreur';
-
-    // Affichage de l'erreur
-    btn.innerHTML = `
-      <span style="
-        display: inline-block;
-        max-width: 80px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-size: 0.8rem;
-        color: #FF5252;
-      ">
-        ⚠️ ${errorMsg}
-      </span>
-    `;
-
-    // Réinitialisation après 3s
+    btn.innerHTML = `<span style="color:#FF5252">⚠️ ${errorMap[error.message] || 'Erreur'}</span>`;
+    
     setTimeout(() => {
       btn.innerHTML = originalHTML;
-      btn.disabled = originalDisabled;
+      btn.disabled = false;
       updateDisplay();
-
-      // Nouvelle session si problème de device ou session
-      if (error.message === 'SESSION_VERIFICATION_FAILED' || error.message === 'DEVICE_MISMATCH') {
-        startNewSession();
-      }
     }, 3000);
   }
 }
 
 function updateDisplay() {
-  const btn = document.getElementById('main-claim-btn');
-  const tokensDisplay = document.getElementById('tokens');
-  const claimText = document.getElementById('claim-text');
-  const progressBar = btn.querySelector('.progress-bar');
-
   const now = Date.now();
-  const elapsed = (now - sessionStartTime) / 1000;
-  const sessionDuration = 3600; // 60 minutes
-
-  if (elapsed >= sessionDuration) {
-    sessionStartTime = Date.now();
-    tokens = 0;
-  }
-
-  const elapsedAfterReset = (now - sessionStartTime) / 1000;
-  const remainingTime = Math.max(0, sessionDuration - elapsedAfterReset);
-
-  tokensDisplay.textContent = tokens.toFixed(2);
-
-  const percent = (elapsedAfterReset / sessionDuration) * 100;
-  progressBar.style.width = `${percent}%`;
-
-  const mins = Math.floor(remainingTime / 60);
-  const secs = Math.floor(remainingTime % 60);
-
-  claimText.style.whiteSpace = 'nowrap';
-  claimText.style.fontSize = '1rem';
-  claimText.textContent = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
-
-  btn.disabled = elapsedAfterReset < 600;
+  const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
+  const tokensEarned = elapsedMinutes * Mining_Speed;
+  
+  document.getElementById('tokens').textContent = tokensEarned.toFixed(2);
+  
+  // Mettre à jour le temps restant
+  const remainingMinutes = Math.max(0, 60 - elapsedMinutes);
+  const mins = Math.floor(remainingMinutes);
+  const secs = Math.floor((remainingMinutes - mins) * 60);
+  
+  document.getElementById('claim-text').textContent = 
+    `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+  
+  // Mettre à jour la barre de progression
+  const progressPercent = (elapsedMinutes / 60) * 100;
+  document.querySelector('.progress-bar').style.width = `${progressPercent}%`;
+  
+  // Activer/désactiver le bouton
+  document.getElementById('main-claim-btn').disabled = elapsedMinutes < 1;
 }
 
 function showClaim() {

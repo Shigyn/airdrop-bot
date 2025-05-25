@@ -242,174 +242,68 @@ app.get('/api/tasks', async (req, res) => {
 
 // [CLAIM] Enregistrement avec limite de 60 minutes
 app.post('/claim', async (req, res) => {
-  const { userId, deviceId, tokens, username } = req.body;
-  const MAX_MINUTES = 60; // Durée maximale de session
+  const { userId, deviceId, tokens: tokensToClaim, username, miningTime } = req.body;
+  const MAX_MINUTES = 60;
 
-  // 1. Validation des données entrantes (version courte)
-  if (!userId || !deviceId || !tokens) {
-    return res.status(400).json({
-      error: "MISSING_DATA",
-      message: "Champs manquants"
-    });
+  // Validation
+  if (!userId || !deviceId || !tokensToClaim) {
+    return res.status(400).json({ error: "MISSING_DATA" });
   }
-
-  // 2. Vérification de session (optimisée)
-  const session = activeSessions.get(userId);
-  if (!session) {
-    return res.status(403).json({
-      error: "NO_SESSION",
-      message: "Session expirée"
-    });
-  }
-
-  // 3. Vérification appareil (version courte)
-  if (session.deviceId !== deviceId) {
-    return res.status(403).json({
-      error: "DEVICE_ERR",
-      message: "Appareil invalide"
-    });
-  }
-
-  // 4. Calcul du temps de session
-  const now = Date.now();
-  const elapsedMinutes = (now - session.lastActive) / (1000 * 60);
-  const totalUsedMinutes = session.totalMinutes + elapsedMinutes;
 
   try {
-    // 5. Validation tokens (version robuste)
-    const points = Math.floor(parseFloat(tokens));
-    if (isNaN(points) || points <= 0) {
-      return res.status(400).json({
-        error: "INVALID_TOKENS",
-        message: "Tokens invalides"
-      });
+    // Vérifier le temps miné (sécurité anti-triche)
+    const claimedMinutes = parseFloat(miningTime);
+    if (claimedMinutes > MAX_MINUTES) {
+      return res.status(400).json({ error: "INVALID_CLAIM_TIME" });
     }
 
-    // 6. Utiliser l'instance globale sheets au lieu de réinitialiser
-    const timestamp = new Date().toISOString();
+    // Enregistrer la transaction
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Transactions!A2:E",
+      valueInputOption: "USER_ENTERED",
+      resource: { 
+        values: [[
+          new Date().toISOString(), // Timestamp
+          userId,                  // User ID
+          "CLAIM",                 // Type
+          tokensToClaim,           // Amount
+          "COMPLETED"              // Status
+        ]] 
+      }
+    });
 
-    // 7. Enregistrement transaction (optimisé)
-await sheets.spreadsheets.values.append({
-  spreadsheetId: process.env.GOOGLE_SHEET_ID,
-  range: "Transactions!A2:E",
-  valueInputOption: "USER_ENTERED",
-  resource: { values: [[
-    new Date().toISOString(), // Timestamp (col A)
-    userId,                  // User_ID (col B)
-    "CLAIM",                 // Type (col C)
-    points,                  // Points (col D)
-    "COMPLETED"              // Statut (col E)
-  ]] }
-});
-
-    // 8. Mise à jour utilisateur (version sécurisée)
+    // Mettre à jour la balance utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
+
     const users = usersData.data.values || [];
+    const userIndex = users.findIndex(row => row[2] === userId.toString());
 
-    const userIndex = users.findIndex(row => row[2]?.toString() === userId?.toString());
-    let newBalance = points;
-
+    let newBalance = parseInt(tokensToClaim);
     if (userIndex >= 0) {
-      // Utilisateur existant
       const currentBalance = parseInt(users[userIndex][3]) || 0;
-      const miningSpeed = parseFloat(users[userIndex][6]) || 1;
-      newBalance = currentBalance + (points * miningSpeed);
+      newBalance = currentBalance + parseInt(tokensToClaim);
 
-      // Mise à jour asynchrone en parallèle
-      await Promise.all([
-        sheets.spreadsheets.values.update({
-          spreadsheetId: process.env.GOOGLE_SHEET_ID,
-          range: `Users!D${userIndex + 2}`,
-          valueInputOption: "USER_ENTERED",
-          resource: { values: [[newBalance]] }
-        }),
-        sheets.spreadsheets.values.update({
-          spreadsheetId: process.env.GOOGLE_SHEET_ID,
-          range: `Users!E${userIndex + 2}`,
-          valueInputOption: "USER_ENTERED",
-          resource: { values: [[timestamp]] }
-        })
-      ]);
-
-      // 9. Programme de parrainage (optimisé)
-      const referralCode = users[userIndex][5];
-      if (referralCode) {
-        const referrerIndex = users.findIndex(row => row[5] === referralCode);
-        if (referrerIndex >= 0) {
-          const referralReward = Math.floor(points * 0.1);
-          const currentReferrerBalance = parseInt(users[referrerIndex][3]) || 0;
-
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: process.env.GOOGLE_SHEET_ID,
-            range: `Users!D${referrerIndex + 2}`,
-            valueInputOption: "USER_ENTERED",
-            resource: { values: [[currentReferrerBalance + referralReward]] }
-          });
-
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: process.env.GOOGLE_SHEET_ID,
-            range: "Referrals!A2:D",
-            valueInputOption: "USER_ENTERED",
-            resource: { values: [[
-              referralCode,
-              referralReward,
-              timestamp,
-              username || "Anonyme"
-            ]] }
-          });
-        }
-      }
-    } else {
-      // Nouvel utilisateur (version simplifiée)
-      await sheets.spreadsheets.values.append({
+      await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Users!A2:G",
+        range: `Users!D${userIndex + 2}`, // Colonne Balance
         valueInputOption: "USER_ENTERED",
-        resource: { values: [[
-          timestamp,
-          username || "Anonyme",
-          userId,
-          newBalance,
-          timestamp,
-          `REF-${Math.random().toString(36).slice(2, 8)}`,
-          1
-        ]] }
+        resource: { values: [[newBalance]] }
       });
     }
 
-    // 10. Mise à jour session
-    activeSessions.set(userId, {
-      ...session,
-      lastActive: now,
-      totalMinutes: totalUsedMinutes,
-      tokens: newBalance
-    });
-
-    // 11. Vérification limite durée
-    if (totalUsedMinutes >= MAX_MINUTES) {
-      activeSessions.delete(userId);
-      return res.json({
-        status: "LIMIT_REACHED",
-        message: "Vous avez atteint la limite de minage de 60 minutes",
-        tokens: newBalance
-      });
-    }
-
-    // 12. Réponse OK
     res.json({
       status: "OK",
-      message: "Récompense ajoutée",
-      tokens: newBalance
+      balance: newBalance,
+      mining_speed: users[userIndex]?.[6] || 1
     });
+
   } catch (err) {
     console.error('Claim error:', err);
-    res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "Erreur lors du traitement de la réclamation"
-    });
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
 
