@@ -91,7 +91,7 @@ function initTelegramWebApp() {
         }
       }
     };
-    userId = "test_user";
+    userId = "test_user_id";
     deviceId = "test_device_id";
     updateUserInfo({ username: "TestUser", balance: "100" });
     return;
@@ -124,22 +124,12 @@ function initNavigation() {
 }
 
 function updateUserInfo(data) {
-  // Affiche username et balance, créer l'élément username si besoin
-  let usernameEl = document.getElementById('username');
-  if (!usernameEl) {
-    usernameEl = document.createElement('div');
-    usernameEl.id = 'username';
-    usernameEl.style.fontWeight = 'bold';
-    usernameEl.style.marginBottom = '8px';
-    const container = document.getElementById('user-info') || document.body;
-    container.prepend(usernameEl);
-  }
-  usernameEl.textContent = data.username || "Utilisateur";
-
   const balanceEl = document.getElementById('balance');
   if (balanceEl) balanceEl.textContent = `${data.balance || 0} tokens`;
 
-  balance = Number(data.balance) || 0;
+  // Affichage mining speed si élément existe
+  const speedEl = document.getElementById('mining-speed');
+  if (speedEl) speedEl.textContent = `Vitesse de minage: x${Mining_Speed}`;
 }
 
 // ==============================================
@@ -152,27 +142,35 @@ async function demarrerMinage() {
   try {
     const userData = await loadUserData();
     Mining_Speed = userData.mining_speed || 1;
+    updateUserInfo({}); // mettre à jour affichage vitesse
     
+    let lastUpdate = Date.now();
+
     miningInterval = setInterval(() => {
       const now = Date.now();
-      const elapsedSeconds = (now - sessionStartTime) / 1000;
-      const elapsedMinutes = elapsedSeconds / 60;
-      
-      // Calcul tokens minés, max 60 tokens * Mining_Speed (1 token/min max)
-      tokens = Math.min(Math.floor(elapsedMinutes) * Mining_Speed, 60 * Mining_Speed);
-      
+      const elapsedMs = now - lastUpdate;
+      lastUpdate = now;
+
+      // Ajout tokens proportionnel au temps écoulé et à la vitesse
+      tokens += (elapsedMs / 60000) * Mining_Speed; // tokens par minute converti à tokens par ms * elapsedMs
+
+      // Plafonner à 60 tokens max
+      if (tokens > 60 * Mining_Speed) tokens = 60 * Mining_Speed;
+
       updateDisplay();
       sauvegarderSession();
       
-      // Synchronisation toutes les 30 secondes
+      // Synchronisation avec le serveur toutes les 30 secondes
+      // On synchronise quand le nombre de secondes modulo 30 est proche de 0 (avec une marge de 1s)
+      const elapsedSeconds = (now - sessionStartTime) / 1000;
       if (Math.floor(elapsedSeconds) % 30 === 0) {
         fetch('/update-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, tokens, deviceId })
+          body: JSON.stringify({ userId, tokens: Math.floor(tokens), deviceId })
         }).catch(console.error);
       }
-    }, 1000);
+    }, 1000); // update chaque seconde
     
   } catch (error) {
     console.error('Erreur démarrage minage:', error);
@@ -213,7 +211,7 @@ async function handleClaim() {
 
   try {
     const elapsedMinutes = (Date.now() - sessionStartTime) / (1000 * 60);
-    const tokensToClaim = Math.floor(elapsedMinutes * Mining_Speed);
+    const tokensToClaim = Math.floor(tokens);
 
     if (tokensToClaim < 1) throw new Error('NOTHING_TO_CLAIM');
 
@@ -239,14 +237,13 @@ async function handleClaim() {
 
     const result = await response.json();
     
-    // Reset après claim
+    // Réinitialisation après claim
     tokens = 0;
     sessionStartTime = Date.now();
     
-    // Mise à jour balance UI
+    // Mise à jour UI
     if (result.balance) {
-      document.getElementById('balance').textContent = `${result.balance} tokens`;
-      balance = Number(result.balance);
+      document.getElementById('balance').textContent = result.balance;
     }
     
     btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
@@ -269,27 +266,33 @@ async function handleClaim() {
 function updateDisplay() {
   const now = Date.now();
   const elapsedSeconds = (now - sessionStartTime) / 1000;
-  const remainingSeconds = Math.max(0, 3600 - elapsedSeconds); // 60 minutes
-  
-  // Format MM:SS
+  const maxTime = 3600; // 1h en secondes
+  const remainingSeconds = Math.max(0, maxTime - elapsedSeconds);
+
+  // Formatage du temps MM:SS
   const mins = Math.floor(remainingSeconds / 60);
   const secs = Math.floor(remainingSeconds % 60);
-  const timeString = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
-  
-  // Update UI
+  const timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+  // Mise à jour de l'UI
   const tokensEl = document.getElementById('tokens');
   if (tokensEl) tokensEl.textContent = tokens.toFixed(2);
-  const claimText = document.getElementById('claim-text');
-  if (claimText) claimText.textContent = timeString;
-  
+
+  const claimTextEl = document.getElementById('claim-text');
+  if (claimTextEl) claimTextEl.textContent = timeString;
+
+  // Barre de progression
+  const progressPercent = (elapsedSeconds / maxTime) * 100;
   const progressBar = document.querySelector('.progress-bar');
-  if (progressBar) {
-    const progressPercent = (elapsedSeconds / 3600) * 100;
-    progressBar.style.width = `${Math.min(100, progressPercent)}%`;
-  }
-  
-  const claimBtn = document.getElementById('main-claim-btn');
-  if (claimBtn) claimBtn.disabled = tokens < 1 || remainingSeconds <= 0;
+  if (progressBar) progressBar.style.width = `${Math.min(100, progressPercent)}%`;
+
+  // Activation du bouton : activé si tokens >= 1 (et session pas expirée)
+  const btn = document.getElementById('main-claim-btn');
+  if (btn) btn.disabled = tokens < 1 || remainingSeconds <= 0;
+
+  // Mise à jour vitesse minage visible si élément existe
+  const speedEl = document.getElementById('mining-speed');
+  if (speedEl) speedEl.textContent = `Vitesse de minage: x${Mining_Speed}`;
 }
 
 // ==============================================
@@ -304,6 +307,7 @@ function showClaim() {
         <span id="tokens">0.00</span>
         <span class="token-unit">tokens</span>
       </div>
+      <div id="mining-speed" style="margin-bottom:10px; font-weight:bold; color:#2196F3;">Vitesse de minage: x${Mining_Speed}</div>
       <button id="main-claim-btn" class="mc-button-anim" disabled>
         <span id="claim-text">00:00</span>
         <div class="progress-bar"></div>
@@ -416,16 +420,6 @@ async function loadUserData() {
   }
 }
 
-function showErrorState() {
-  const content = document.getElementById('content');
-  content.innerHTML = `
-    <div class="error">
-      <p>Une erreur est survenue, veuillez réessayer.</p>
-      <button onclick="startNewSession()">Réessayer</button>
-    </div>
-  `;
-}
-
 // ==============================================
 // INITIALISATION
 // ==============================================
@@ -438,9 +432,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (userId) {
     try {
       const userData = await loadUserData();
-      updateUserInfo(userData);
       Mining_Speed = userData.mining_speed || 1;
-      
+      updateUserInfo(userData);
+
       if (!(await chargerSession())) {
         await startNewSession();
       } else {
@@ -448,7 +442,6 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
     } catch (error) {
       console.error('Initialization error:', error);
-      showErrorState();
     }
   }
 
