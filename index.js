@@ -203,7 +203,7 @@ app.post('/api/referrals', async (req, res) => {
     res.json({
       referralUrl: `https://t.me/${process.env.BOT_USERNAME}?start=ref_${userId}`,
       totalReferrals: referrals.length,
-      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0, 0),
+      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0),
       referralCode: user.referralCode
     });
 
