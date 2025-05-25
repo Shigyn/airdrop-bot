@@ -282,7 +282,6 @@ app.get('/api/tasks', async (req, res) => {
 });
 
 // [CLAIM] Enregistrement avec limite de 60 minutes
-// Endpoint /claim corrigé
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, miningTime } = req.body;
 
@@ -292,32 +291,39 @@ app.post('/claim', async (req, res) => {
   }
 
   try {
-    // Récupération de la session active
     const session = activeSessions.get(userId);
-    if (!session) {
-      return res.status(404).json({ error: "SESSION_NOT_FOUND" });
+    if (!session || session.deviceId !== deviceId) {
+      return res.status(403).json({ error: "Invalid or expired session" });
     }
 
-    if (session.deviceId !== deviceId) {
-      return res.status(403).json({ error: "DEVICE_MISMATCH" });
-    }
+    // Récupération des données utilisateur
+    const usersData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:G"
+    });
 
-    const elapsedMinutes = (Date.now() - session.startTime) / (1000 * 60);
-    if (elapsedMinutes > 60) {
-      activeSessions.delete(userId);
-      return res.status(403).json({ error: "LIMIT_REACHED", message: "Vous avez dépassé la limite de 60 minutes" });
-    }
+    const userRow = usersData.data.values.findIndex(row => row[2] === userId);
+    if (userRow === -1) return res.status(404).json({ error: "User not found" });
 
-    // Récupérer les infos utilisateur (inclut mining_speed)
-    const user = await getUserData(userId);
-    if (!user) {
-      return res.status(404).json({ error: "USER_NOT_FOUND" });
-    }
+    const user = usersData.data.values[userRow];
+    const miningSpeed = parseFloat(user[6]) || 1;
 
-    const miningSpeed = parseFloat(user.mining_speed) || 1;
-    const earnedTokens = Math.floor(miningTime * miningSpeed);
+    // Appliquer limite à 60 minutes
+    const effectiveMinutes = Math.min(parseInt(miningTime), 60);
+    const tokensToClaim = effectiveMinutes * miningSpeed;
 
-    // Enregistrement de la transaction
+    // Mettre à jour solde
+    const currentBalance = parseInt(user[3]) || 0;
+    const newBalance = currentBalance + tokensToClaim;
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `Users!D${userRow + 2}`, // Colonne D = solde
+      valueInputOption: "USER_ENTERED",
+      resource: { values: [[newBalance]] }
+    });
+
+    // Enregistrement transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:D",
@@ -325,41 +331,29 @@ app.post('/claim', async (req, res) => {
       resource: {
         values: [[
           userId,
-          earnedTokens,
+          tokensToClaim,
           "CLAIM",
           new Date().toLocaleString('fr-FR')
         ]]
       }
     });
 
-    // Mise à jour du solde
-    const users = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
+    // Supprimer la session car déjà utilisée
+    activeSessions.delete(userId);
+
+    return res.json({
+      status: "OK",
+      claimed: tokensToClaim,
+      balance: newBalance,
+      message: `Vous avez revendiqué ${tokensToClaim} tokens pour ${effectiveMinutes} minutes`
     });
-
-    const userRow = users.data.values?.findIndex(row => row[2] === userId);
-    if (userRow >= 0) {
-      const currentBalance = parseInt(users.data.values[userRow][3]) || 0;
-      const newBalance = currentBalance + earnedTokens;
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: `Users!D${userRow + 2}`,
-        valueInputOption: "USER_ENTERED",
-        resource: { values: [[newBalance]] }
-      });
-
-      return res.json({ status: "OK", balance: newBalance, claimed: earnedTokens });
-    }
-
-    return res.status(404).json({ error: "USER_NOT_FOUND" });
 
   } catch (err) {
     console.error('Claim error:', err);
     return res.status(500).json({ error: "Server error" });
   }
 });
+
 
 
 // Webhook bot
