@@ -141,12 +141,24 @@ async function demarrerMinage() {
     
     miningInterval = setInterval(() => {
       const now = Date.now();
-      const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
-      tokens = Math.min(elapsedMinutes * Mining_Speed, 60 * Mining_Speed);
+      const elapsedSeconds = (now - sessionStartTime) / 1000;
+      const elapsedMinutes = elapsedSeconds / 60;
+      
+      // Calcul précis pour 1 token/minute
+      tokens = Math.min(Math.floor(elapsedMinutes) * Mining_Speed, 60 * Mining_Speed);
       
       updateDisplay();
       sauvegarderSession();
-    }, 1000);
+      
+      // Synchronisation avec le serveur toutes les 30 secondes
+      if (elapsedSeconds % 30 === 0) {
+        fetch('/update-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, tokens, deviceId })
+        }).catch(console.error);
+      }
+    }, 1000); // Vérifie chaque seconde
     
   } catch (error) {
     console.error('Erreur démarrage minage:', error);
@@ -154,9 +166,23 @@ async function demarrerMinage() {
 }
 
 async function startNewSession() {
-  sessionStartTime = Date.now();
-  tokens = 0;
-  await demarrerMinage();
+  try {
+    const response = await fetch('/start-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, deviceId })
+    });
+
+    if (!response.ok) throw new Error('Failed to start session');
+
+    sessionStartTime = Date.now();
+    tokens = 0;
+    await demarrerMinage();
+    
+  } catch (error) {
+    console.error('Session error:', error);
+    showErrorState();
+  }
 }
 
 // ==============================================
@@ -192,25 +218,32 @@ async function handleClaim() {
       })
     });
 
-    if (!response.ok) throw new Error('CLAIM_FAILED');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'CLAIM_FAILED');
+    }
 
     const result = await response.json();
     
+    // Réinitialisation après claim
     tokens = 0;
     sessionStartTime = Date.now();
+    
+    // Mise à jour UI
     if (result.balance) {
       document.getElementById('balance').textContent = result.balance;
     }
-
-    btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens</span>`;
+    
+    btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
     setTimeout(() => {
       btn.innerHTML = originalHTML;
       btn.disabled = false;
+      updateDisplay();
     }, 2000);
 
   } catch (error) {
     console.error('Claim error:', error);
-    btn.innerHTML = `<span style="color:#FF5252">⚠️ ${error.message === 'NOTHING_TO_CLAIM' ? 'Min 1 token' : 'Erreur'}</span>`;
+    btn.innerHTML = `<span style="color:#FF5252">⚠️ ${error.message === 'NOTHING_TO_CLAIM' ? 'Min 1 token requis' : 'Erreur'}</span>`;
     setTimeout(() => {
       btn.innerHTML = originalHTML;
       btn.disabled = false;
@@ -219,17 +252,25 @@ async function handleClaim() {
 }
 
 function updateDisplay() {
-  const elapsedMinutes = (Date.now() - sessionStartTime) / (1000 * 60);
-  const remainingMinutes = Math.max(0, 60 - elapsedMinutes);
+  const now = Date.now();
+  const elapsedSeconds = (now - sessionStartTime) / 1000;
+  const remainingSeconds = Math.max(0, 3600 - elapsedSeconds); // 60 minutes en secondes
   
+  // Formatage du temps MM:SS
+  const mins = Math.floor(remainingSeconds / 60);
+  const secs = Math.floor(remainingSeconds % 60);
+  const timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  
+  // Mise à jour de l'UI
   document.getElementById('tokens').textContent = tokens.toFixed(2);
+  document.getElementById('claim-text').textContent = timeString;
   
-  const mins = Math.floor(remainingMinutes);
-  const secs = Math.floor(remainingMinutes % 60 * 60);
-  document.getElementById('claim-text').textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+  // Barre de progression
+  const progressPercent = (elapsedSeconds / 3600) * 100;
+  document.querySelector('.progress-bar').style.width = `${Math.min(100, progressPercent)}%`;
   
-  document.querySelector('.progress-bar').style.width = `${(elapsedMinutes / 60) * 100}%`;
-  document.getElementById('main-claim-btn').disabled = tokens < 1;
+  // Activation du bouton
+  document.getElementById('main-claim-btn').disabled = tokens < 1 || remainingSeconds <= 0;
 }
 
 // ==============================================
