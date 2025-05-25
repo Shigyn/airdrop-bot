@@ -342,17 +342,9 @@ async function loadReferrals() {
         <h2>Programme de Parrainage</h2>
         
         <div class="referral-section">
-          <h3>Votre Identifiant Parrain</h3>
-          <div class="referral-code">${userId}</div>
-          <button class="copy-button" onclick="copyToClipboard('${userId}')">
-            Copier l'ID
-          </button>
-        </div>
-        
-        <div class="referral-section">
           <h3>Lien de Parrainage</h3>
-          <div class="referral-url">https://t.me/CRYPTORATS_bot?start=${userId}</div>
-          <button class="copy-button" onclick="copyToClipboard('https://t.me/CRYPTORATS_bot?start=${userId}')">
+          <div class="referral-url">${data.referralUrl}</div>
+          <button class="copy-button" onclick="copyToClipboard('${data.referralUrl}')">
             Copier le Lien
           </button>
         </div>
@@ -360,11 +352,11 @@ async function loadReferrals() {
         <div class="referral-stats">
           <div class="stat-item">
             <span class="stat-label">Filleuls</span>
-            <span class="stat-value">${data.referredCount || 0}</span>
+            <span class="stat-value">${data.totalReferrals || 0}</span>
           </div>
           <div class="stat-item">
             <span class="stat-label">Gains</span>
-            <span class="stat-value">${data.earned || 0} tokens</span>
+            <span class="stat-value">${data.totalEarned || 0} tokens</span>
           </div>
         </div>
         
@@ -613,6 +605,7 @@ async function handleClaim() {
   btn.innerHTML = '<div class="spinner-mini"></div>';
 
   try {
+    // 1. Vérification de la session
     const sessionCheck = await fetch('/api/verify-session', {
       method: 'POST',
       headers: {
@@ -627,6 +620,12 @@ async function handleClaim() {
       throw new Error(errorData.error || 'SESSION_VERIFICATION_FAILED');
     }
 
+    // 2. Calcul du montant à claimer basé sur le temps miné
+    const now = Date.now();
+    const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
+    const tokensToClaim = Math.floor(elapsedMinutes * Mining_Speed);
+
+    // 3. Envoi de la requête de claim
     const claimResponse = await fetch('/claim', {
       method: 'POST',
       headers: {
@@ -635,7 +634,7 @@ async function handleClaim() {
       },
       body: JSON.stringify({
         userId,
-        tokens: tokens.toFixed(2),
+        tokens: tokensToClaim, // Envoi du montant calculé
         username: window.Telegram?.WebApp?.initDataUnsafe?.user?.username || 'Anonyme',
         deviceId
       })
@@ -648,34 +647,43 @@ async function handleClaim() {
 
     const result = await claimResponse.json();
 
+    // 4. Réinitialisation après claim réussi
     tokens = 0;
     sessionStartTime = Date.now();
-    Mining_Speed = result.m || 1;
+    Mining_Speed = result.mining_speed || Mining_Speed; // Mise à jour de la vitesse si nécessaire
 
-    btn.innerHTML = '<span style="color:#4CAF50">✓ Réussi</span>';
+    // 5. Mise à jour de l'UI
+    btn.innerHTML = '<span style="color:#4CAF50">✓ Réussi (+' + tokensToClaim + ')</span>';
+    
+    // Mise à jour du solde affiché
+    if (result.balance) {
+      document.getElementById('balance').textContent = result.balance;
+    }
+
+    // 6. Réinitialisation du bouton après 1.5s
     setTimeout(() => {
       btn.innerHTML = originalHTML;
       btn.disabled = originalDisabled;
       updateDisplay();
     }, 1500);
 
-    if (result.b) {
-      document.getElementById('balance').textContent = result.b;
-    }
   } catch (error) {
     console.error('Claim Error:', error);
 
+    // Messages d'erreur personnalisés
     const ERROR_MESSAGES = {
       'NO_USER_DATA': 'Non connecté',
       'SESSION_VERIFICATION_FAILED': 'Session invalide',
       'DEVICE_MISMATCH': 'Appareil invalide',
       'CLAIM_FAILED': 'Erreur serveur',
       'NETWORK_ERROR': 'Problème réseau',
-      'LIMIT_REACHED': 'Limite atteinte'
+      'LIMIT_REACHED': 'Limite atteinte',
+      'INVALID_TOKENS': 'Montant invalide'
     };
 
     const errorMsg = ERROR_MESSAGES[error.message] || 'Erreur';
 
+    // Affichage de l'erreur
     btn.innerHTML = `
       <span style="
         display: inline-block;
@@ -690,11 +698,13 @@ async function handleClaim() {
       </span>
     `;
 
+    // Réinitialisation après 3s
     setTimeout(() => {
       btn.innerHTML = originalHTML;
       btn.disabled = originalDisabled;
       updateDisplay();
 
+      // Nouvelle session si problème de device ou session
       if (error.message === 'SESSION_VERIFICATION_FAILED' || error.message === 'DEVICE_MISMATCH') {
         startNewSession();
       }

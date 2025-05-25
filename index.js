@@ -289,18 +289,18 @@ app.post('/claim', async (req, res) => {
     const timestamp = new Date().toISOString();
 
     // 7. Enregistrement transaction (optimisé)
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Transactions!A2:E",
-      valueInputOption: "USER_ENTERED",
-      resource: { values: [[
-        timestamp,
-        userId,
-        "AIRDROP",
-        points,
-        "COMPLETED"
-      ]] }
-    });
+await sheets.spreadsheets.values.append({
+  spreadsheetId: process.env.GOOGLE_SHEET_ID,
+  range: "Transactions!A2:E",
+  valueInputOption: "USER_ENTERED",
+  resource: { values: [[
+    new Date().toISOString(), // Timestamp (col A)
+    userId,                  // User_ID (col B)
+    "CLAIM",                 // Type (col C)
+    points,                  // Points (col D)
+    "COMPLETED"              // Statut (col E)
+  ]] }
+});
 
     // 8. Mise à jour utilisateur (version sécurisée)
     const usersData = await sheets.spreadsheets.values.get({
