@@ -83,9 +83,10 @@ async function initTelegramWebApp() {
   window.Telegram.WebApp.ready();
 
   const user = window.Telegram.WebApp.initDataUnsafe?.user || {};
+  userId = user.id || null;  // <-- Assignation de userId ici
   Mining_Speed = 1; // peut être calculé dynamiquement ici
 
-  // Met à jour le header
+  // Met à jour le header avec un placeholder initial
   updateUserInfo({
     username: user.username || "Utilisateur",
     balance: "0"
@@ -107,9 +108,36 @@ async function initTelegramWebApp() {
   demarrerMinage();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+
+window.addEventListener('DOMContentLoaded', async () => {
   initTelegramWebApp();
+  initParticles();
+  initNavigation();
+  
+  if (userId) {
+    try {
+      const userData = await loadUserData();
+      Mining_Speed = userData.mining_speed || 1;
+
+      // Met à jour l'UI avec username et balance depuis userData
+      updateUserInfo({
+        username: userData.username || "Utilisateur",
+        balance: (userData.balance !== undefined) ? userData.balance.toString() : "0"
+      });
+
+      if (!(await chargerSession())) {
+        await startNewSession();
+      } else {
+        await demarrerMinage();
+      }
+    } catch (error) {
+      console.error('Initialization error:', error);
+    }
+  }
+
+  showClaim();
 });
+
 
 function initNavigation() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
