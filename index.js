@@ -178,6 +178,44 @@ app.post('/update-session', async (req, res) => {
 });
 
 // Ajoutez cette route avant le endpoint /claim
+app.post('/api/referrals', async (req, res) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: "USER_ID_REQUIRED" });
+  }
+
+  try {
+    // Récupération données utilisateur
+    const user = await getUserData(userId);
+    if (!user) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    // Récupération parrainages
+    const referralsData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Referrals!A2:D"
+    });
+
+    const referrals = referralsData.data.values?.filter(row => row[0] === user.referralCode) || [];
+
+    res.json({
+      referralUrl: `https://t.me/${process.env.BOT_USERNAME}?start=ref_${userId}`,
+      totalReferrals: referrals.length,
+      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0, 0),
+      referralCode: user.referralCode
+    });
+
+  } catch (err) {
+    console.error('Referrals error:', err);
+    res.status(500).json({ 
+      error: "LOAD_FAILED",
+      message: "Échec du chargement" 
+    });
+  }
+});
+
 app.get('/api/user-data', async (req, res) => {
   try {
     const userId = req.query.userId;
@@ -242,155 +280,94 @@ app.get('/api/tasks', async (req, res) => {
 
 // [CLAIM] Enregistrement avec limite de 60 minutes
 app.post('/claim', async (req, res) => {
-  const { userId, deviceId, tokens: tokensToClaim, username, miningTime } = req.body;
-  const MAX_MINUTES = 60;
+  const { userId, deviceId, tokens: tokensToClaim, username } = req.body;
 
-  // 1. Validation des données
-  if (!userId || !deviceId || !tokensToClaim || !miningTime) {
-    return res.status(400).json({ error: "MISSING_DATA", message: "Données manquantes" });
+  // Validation renforcée
+  if (!userId || !deviceId || isNaN(tokensToClaim)) {
+    return res.status(400).json({ 
+      error: "INVALID_DATA",
+      message: "Données invalides" 
+    });
   }
 
   try {
-    // 2. Vérification de la session
+    // Vérification de session
     const session = activeSessions.get(userId);
-    if (!session) {
-      return res.status(403).json({ error: "NO_SESSION", message: "Session expirée" });
+    if (!session || session.deviceId !== deviceId) {
+      return res.status(403).json({
+        error: "INVALID_SESSION",
+        message: "Session invalide"
+      });
     }
 
-    if (session.deviceId !== deviceId) {
-      return res.status(403).json({ error: "DEVICE_MISMATCH", message: "Appareil non autorisé" });
-    }
-
-    // 3. Vérification anti-triche
-    const claimedMinutes = parseFloat(miningTime);
-    if (claimedMinutes > MAX_MINUTES || isNaN(claimedMinutes)) {
-      return res.status(400).json({ error: "INVALID_CLAIM", message: "Temps de minage invalide" });
-    }
-
-    // 4. Formatage des données pour Sheets
+    // Formatage pour Sheets
     const timestamp = new Date().toLocaleString('fr-FR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+      minute: '2-digit'
     });
 
-    // 5. Enregistrement dans Transactions (format: User_ID | Points | Type | Timestamp)
+    // Enregistrement transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:D",
       valueInputOption: "USER_ENTERED",
       resource: {
         values: [[
-          userId.toString(),       // Colonne A: User_ID
-          parseInt(tokensToClaim), // Colonne B: Points
-          "CLAIM",                // Colonne C: Type
-          timestamp               // Colonne D: Timestamp
+          userId.toString(),
+          parseInt(tokensToClaim),
+          "CLAIM",
+          timestamp
         ]]
       }
     });
 
-    // 6. Mise à jour du solde utilisateur
-    const usersData = await sheets.spreadsheets.values.get({
+    // Mise à jour balance
+    const users = await getUserData(userId);
+    const newBalance = (users.balance || 0) + parseInt(tokensToClaim);
+
+    await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
+      range: `Users!D${users.rowIndex}`,
+      valueInputOption: "USER_ENTERED",
+      resource: { values: [[newBalance]] }
     });
 
-    const users = usersData.data.values || [];
-    const userIndex = users.findIndex(row => row[2]?.toString() === userId.toString());
-
-    let newBalance = parseInt(tokensToClaim);
-    let miningSpeed = 1;
-
-    if (userIndex >= 0) {
-      const currentBalance = parseInt(users[userIndex][3]) || 0;
-      miningSpeed = parseFloat(users[userIndex][6]) || 1;
-      newBalance = currentBalance + parseInt(tokensToClaim);
-
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: `Users!D${userIndex + 2}`, // Colonne Balance
-        valueInputOption: "USER_ENTERED",
-        resource: { values: [[newBalance]] }
-      });
-
-      // 7. Programme de parrainage
-      const referralCode = users[userIndex][5];
-      if (referralCode) {
-        const referrer = users.find(row => row[5] === referralCode);
-        if (referrer) {
-          const referrerIndex = users.indexOf(referrer);
-          const referralReward = Math.floor(tokensToClaim * 0.1);
-          const referrerBalance = parseInt(referrer[3]) || 0;
-
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: process.env.GOOGLE_SHEET_ID,
-            range: `Users!D${referrerIndex + 2}`,
-            valueInputOption: "USER_ENTERED",
-            resource: { values: [[referrerBalance + referralReward]] }
-          });
-
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: process.env.GOOGLE_SHEET_ID,
-            range: "Referrals!A2:D",
-            valueInputOption: "USER_ENTERED",
-            resource: {
-              values: [[
-                referralCode,
-                referralReward,
-                timestamp,
-                username || "Anonyme"
-              ]]
-            }
-          });
-        }
-      }
-    } else {
-      // Nouvel utilisateur
-      const referralCode = `REF-${Math.random().toString(36).slice(2, 8)}`;
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Users!A2:G",
-        valueInputOption: "USER_ENTERED",
-        resource: {
-          values: [[
-            timestamp,
-            username || "Anonyme",
-            userId,
-            newBalance,
-            timestamp,
-            referralCode,
-            1 // Mining_Speed par défaut
-          ]]
-        }
-      });
-    }
-
-    // 8. Mise à jour de la session
-    activeSessions.set(userId, {
-      ...session,
-      lastActive: Date.now(),
-      tokens: 0
-    });
-
-    // 9. Réponse
+    // Réponse simplifiée
     res.json({
       status: "OK",
-      balance: newBalance,
-      mining_speed: miningSpeed,
-      message: `${tokensToClaim} tokens ajoutés`
+      balance: newBalance
     });
 
   } catch (err) {
     console.error('Claim error:', err);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "SERVER_ERROR",
-      message: "Erreur lors du traitement"
+      message: "Erreur serveur"
     });
   }
 });
+
+async function getUserData(userId) {
+  const usersData = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: "Users!A2:G"
+  });
+
+  const users = usersData.data.values || [];
+  const index = users.findIndex(row => row[2]?.toString() === userId.toString());
+  
+  if (index === -1) return null;
+
+  return {
+    rowIndex: index + 2,
+    balance: parseInt(users[index][3]) || 0,
+    referralCode: users[index][5],
+    miningSpeed: parseFloat(users[index][6]) || 1
+  };
+}
 
 // Webhook bot
 app.use(bot.webhookCallback('/bot'));

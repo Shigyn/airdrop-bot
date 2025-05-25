@@ -321,8 +321,8 @@ async function loadDashboard() {
 
 async function loadReferrals() {
   const content = document.getElementById('content');
-  content.innerHTML = '<div class="loader">Chargement du parrainage...</div>';
-  
+  content.innerHTML = '<div class="loader">Chargement...</div>';
+
   try {
     const response = await fetch('/api/referrals', {
       method: 'POST',
@@ -332,9 +332,11 @@ async function loadReferrals() {
       },
       body: JSON.stringify({ userId })
     });
-    
-    if (!response.ok) throw new Error('Failed to load referrals');
-    
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
     const data = await response.json();
 
     content.innerHTML = `
@@ -342,39 +344,36 @@ async function loadReferrals() {
         <h2>Programme de Parrainage</h2>
         
         <div class="referral-section">
+          <h3>Votre Code</h3>
+          <div class="referral-code">${data.referralCode || 'N/A'}</div>
+        </div>
+        
+        <div class="referral-section">
           <h3>Lien de Parrainage</h3>
           <div class="referral-url">${data.referralUrl}</div>
-          <button class="copy-button" onclick="copyToClipboard('${data.referralUrl}')">
-            Copier le Lien
+          <button onclick="copyToClipboard('${data.referralUrl}')">
+            Copier
           </button>
         </div>
         
         <div class="referral-stats">
           <div class="stat-item">
-            <span class="stat-label">Filleuls</span>
-            <span class="stat-value">${data.totalReferrals || 0}</span>
+            <span>Filleuls</span>
+            <strong>${data.totalReferrals}</strong>
           </div>
           <div class="stat-item">
-            <span class="stat-label">Gains</span>
-            <span class="stat-value">${data.totalEarned || 0} tokens</span>
+            <span>Gains</span>
+            <strong>${data.totalEarned} tokens</strong>
           </div>
-        </div>
-        
-        <div class="referral-instructions">
-          <h3>Comment ça marche ?</h3>
-          <ol>
-            <li>Partagez votre lien de parrainage</li>
-            <li>Vos filleuls doivent cliquer et démarrer le bot</li>
-            <li>Vous gagnez 10% de leurs récompenses</li>
-          </ol>
         </div>
       </div>
     `;
+
   } catch (error) {
-    console.error('Referrals load error:', error);
+    console.error('Referral load error:', error);
     content.innerHTML = `
       <div class="error">
-        Erreur de chargement du parrainage
+        <p>Erreur de chargement</p>
         <button onclick="loadReferrals()">Réessayer</button>
       </div>
     `;
