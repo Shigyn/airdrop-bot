@@ -79,36 +79,37 @@ async function chargerSession() {
 // FONCTIONS PRINCIPALES
 // ==============================================
 
-function initTelegramWebApp() {
-  if (!window.Telegram?.WebApp) {
-    tg = {
-      WebApp: {
-        initDataUnsafe: { 
-          user: { 
-            id: "test_user", 
-            username: "TestUser"
-          } 
-        }
-      }
-    };
-    userId = "test_user_id";
-    deviceId = "test_device_id";
-    updateUserInfo({ username: "TestUser", balance: "100" });
-    return;
-  }
+async function initTelegramWebApp() {
+  window.Telegram.WebApp.ready();
 
-  tg = window.Telegram.WebApp;
-  tg.expand();
+  const user = window.Telegram.WebApp.initDataUnsafe?.user || {};
+  Mining_Speed = 1; // peut être calculé dynamiquement ici
 
-  const user = tg.initDataUnsafe?.user;
-  userId = user?.id?.toString() || "user_" + Math.random().toString(36).substr(2, 9);
-  deviceId = `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_');
-
+  // Met à jour le header
   updateUserInfo({
-    username: user?.username || "Utilisateur",
+    username: user.username || "Utilisateur",
     balance: "0"
   });
+
+  // Affiche un contenu basique dans #content pour tokens et bouton claim
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="claim-container">
+      <div class="token-display">
+        <span id="tokens">0.00</span> tokens
+      </div>
+      <button id="main-claim-btn" disabled>
+        <span id="claim-text">00:00</span>
+      </button>
+    </div>
+  `;
+
+  demarrerMinage();
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+  initTelegramWebApp();
+});
 
 function initNavigation() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -123,14 +124,16 @@ function initNavigation() {
   });
 }
 
-function updateUserInfo(data) {
+function updateUserInfo({ username, balance }) {
+  const usernameEl = document.getElementById('username');
   const balanceEl = document.getElementById('balance');
-  if (balanceEl) balanceEl.textContent = `${data.balance || 0} tokens`;
-
-  // Affichage mining speed si élément existe
   const speedEl = document.getElementById('mining-speed');
-  if (speedEl) speedEl.textContent = `Vitesse de minage: x${Mining_Speed}`;
+
+  if (usernameEl && username !== undefined) usernameEl.textContent = username;
+  if (balanceEl && balance !== undefined) balanceEl.textContent = balance;
+  if (speedEl) speedEl.textContent = `Vitesse de minage : x${Mining_Speed}`;
 }
+
 
 // ==============================================
 // FONCTIONS MINAGE
@@ -138,44 +141,23 @@ function updateUserInfo(data) {
 
 async function demarrerMinage() {
   clearInterval(miningInterval);
-  
-  try {
-    const userData = await loadUserData();
-    Mining_Speed = userData.mining_speed || 1;
-    updateUserInfo({}); // mettre à jour affichage vitesse
-    
-    let lastUpdate = Date.now();
 
-    miningInterval = setInterval(() => {
-      const now = Date.now();
-      const elapsedMs = now - lastUpdate;
-      lastUpdate = now;
+  let lastUpdate = Date.now();
 
-      // Ajout tokens proportionnel au temps écoulé et à la vitesse
-      tokens += (elapsedMs / 60000) * Mining_Speed; // tokens par minute converti à tokens par ms * elapsedMs
+  miningInterval = setInterval(() => {
+    const now = Date.now();
+    const elapsedMs = now - lastUpdate;
+    lastUpdate = now;
 
-      // Plafonner à 60 tokens max
-      if (tokens > 60 * Mining_Speed) tokens = 60 * Mining_Speed;
+    tokens += (elapsedMs / 60000) * Mining_Speed; // tokens/min converti à ms
+    if (tokens > 60 * Mining_Speed) tokens = 60 * Mining_Speed;
 
-      updateDisplay();
-      sauvegarderSession();
-      
-      // Synchronisation avec le serveur toutes les 30 secondes
-      // On synchronise quand le nombre de secondes modulo 30 est proche de 0 (avec une marge de 1s)
-      const elapsedSeconds = (now - sessionStartTime) / 1000;
-      if (Math.floor(elapsedSeconds) % 30 === 0) {
-        fetch('/update-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, tokens: Math.floor(tokens), deviceId })
-        }).catch(console.error);
-      }
-    }, 1000); // update chaque seconde
-    
-  } catch (error) {
-    console.error('Erreur démarrage minage:', error);
-  }
+    updateDisplay();
+    sauvegarderSession();
+
+  }, 1000);
 }
+
 
 async function startNewSession() {
   try {
@@ -266,34 +248,43 @@ async function handleClaim() {
 function updateDisplay() {
   const now = Date.now();
   const elapsedSeconds = (now - sessionStartTime) / 1000;
-  const maxTime = 3600; // 1h en secondes
+  const maxTime = 3600; // 1h session max
   const remainingSeconds = Math.max(0, maxTime - elapsedSeconds);
 
-  // Formatage du temps MM:SS
   const mins = Math.floor(remainingSeconds / 60);
   const secs = Math.floor(remainingSeconds % 60);
   const timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
-  // Mise à jour de l'UI
+  // Mets à jour tokens (affichage ici, tu peux modifier l’endroit d’affichage)
+  // Par exemple, si tu as un élément #tokens dans #content
   const tokensEl = document.getElementById('tokens');
   if (tokensEl) tokensEl.textContent = tokens.toFixed(2);
 
+  // Mets à jour bouton claim
   const claimTextEl = document.getElementById('claim-text');
   if (claimTextEl) claimTextEl.textContent = timeString;
 
-  // Barre de progression
-  const progressPercent = (elapsedSeconds / maxTime) * 100;
-  const progressBar = document.querySelector('.progress-bar');
-  if (progressBar) progressBar.style.width = `${Math.min(100, progressPercent)}%`;
-
-  // Activation du bouton : activé si tokens >= 1 (et session pas expirée)
   const btn = document.getElementById('main-claim-btn');
   if (btn) btn.disabled = tokens < 1 || remainingSeconds <= 0;
-
-  // Mise à jour vitesse minage visible si élément existe
-  const speedEl = document.getElementById('mining-speed');
-  if (speedEl) speedEl.textContent = `Vitesse de minage: x${Mining_Speed}`;
 }
+
+async function demarrerMinage() {
+  clearInterval(miningInterval);
+  let lastUpdate = Date.now();
+
+  miningInterval = setInterval(() => {
+    const now = Date.now();
+    const elapsedMs = now - lastUpdate;
+    lastUpdate = now;
+
+    // tokens incrémentés par minute, converti ms->min
+    tokens += (elapsedMs / 60000) * Mining_Speed;
+    if (tokens > 60 * Mining_Speed) tokens = 60 * Mining_Speed; // plafond
+
+    updateDisplay();
+  }, 1000);
+}
+
 
 // ==============================================
 // FONCTIONS PAGES
