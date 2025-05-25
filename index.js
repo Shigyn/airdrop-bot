@@ -279,36 +279,16 @@ app.get('/api/tasks', async (req, res) => {
 });
 
 // [CLAIM] Enregistrement avec limite de 60 minutes
+// Endpoint /claim corrigé
 app.post('/claim', async (req, res) => {
-  const { userId, deviceId, tokens: tokensToClaim, username } = req.body;
+  const { userId, deviceId, tokens, miningTime } = req.body;
 
-  // Validation renforcée
-  if (!userId || !deviceId || isNaN(tokensToClaim)) {
-    return res.status(400).json({ 
-      error: "INVALID_DATA",
-      message: "Données invalides" 
-    });
+  // Validation
+  if (!userId || !deviceId || isNaN(tokens) || isNaN(miningTime)) {
+    return res.status(400).json({ error: "Invalid data" });
   }
 
   try {
-    // Vérification de session
-    const session = activeSessions.get(userId);
-    if (!session || session.deviceId !== deviceId) {
-      return res.status(403).json({
-        error: "INVALID_SESSION",
-        message: "Session invalide"
-      });
-    }
-
-    // Formatage pour Sheets
-    const timestamp = new Date().toLocaleString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
     // Enregistrement transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -316,37 +296,38 @@ app.post('/claim', async (req, res) => {
       valueInputOption: "USER_ENTERED",
       resource: {
         values: [[
-          userId.toString(),
-          parseInt(tokensToClaim),
+          userId,
+          parseInt(tokens),
           "CLAIM",
-          timestamp
+          new Date().toLocaleString('fr-FR')
         ]]
       }
     });
 
-    // Mise à jour balance
-    const users = await getUserData(userId);
-    const newBalance = (users.balance || 0) + parseInt(tokensToClaim);
-
-    await sheets.spreadsheets.values.update({
+    // Mise à jour solde
+    const users = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: `Users!D${users.rowIndex}`,
-      valueInputOption: "USER_ENTERED",
-      resource: { values: [[newBalance]] }
+      range: "Users!A2:G"
     });
 
-    // Réponse simplifiée
-    res.json({
-      status: "OK",
-      balance: newBalance
-    });
+    const userRow = users.data.values?.findIndex(row => row[2] === userId);
+    if (userRow >= 0) {
+      const newBalance = (parseInt(users.data.values[userRow][3]) || 0) + parseInt(tokens);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: `Users!D${userRow + 2}`,
+        valueInputOption: "USER_ENTERED",
+        resource: { values: [[newBalance]] }
+      });
+
+      return res.json({ status: "OK", balance: newBalance });
+    }
+
+    return res.status(404).json({ error: "User not found" });
 
   } catch (err) {
     console.error('Claim error:', err);
-    res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "Erreur serveur"
-    });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

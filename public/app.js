@@ -4,8 +4,8 @@ let balance = 0;
 let miningInterval;
 let sessionStartTime = Date.now();
 let tokens = 0;
-let deviceId; // let pour pouvoir modifier
-let Mining_Speed = 1; // variable globale par défaut
+let deviceId;
+let Mining_Speed = 1;
 
 // ==============================================
 // SYSTEME DE PARTICULES COSMIQUES
@@ -42,19 +42,11 @@ function createParticles() {
 
 function initParticles() {
   createParticles();
-
-  window.addEventListener('resize', () => {
-    const particleCount = document.querySelectorAll('.particle').length;
-    if (window.innerWidth < 768 && particleCount !== 25) {
-      createParticles();
-    } else if (window.innerWidth >= 768 && particleCount !== 40) {
-      createParticles();
-    }
-  });
+  window.addEventListener('resize', createParticles);
 }
 
 // ==============================================
-// GESTION DE SESSION PERSISTANTE
+// GESTION DE SESSION
 // ==============================================
 
 function sauvegarderSession() {
@@ -63,8 +55,7 @@ function sauvegarderSession() {
       sessionStartTime,
       tokens,
       userId,
-      deviceId,
-      lastSave: Date.now() // timestamp sauvegarde
+      deviceId
     }));
   }
 }
@@ -74,35 +65,10 @@ async function chargerSession() {
     const session = localStorage.getItem('miningSession');
     if (session) {
       const parsed = JSON.parse(session);
-
       if (parsed.userId === userId && parsed.deviceId === deviceId) {
-        try {
-          const verification = await fetch('/api/verify-session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId,
-              deviceId,
-              sessionStartTime: parsed.sessionStartTime
-            })
-          });
-
-          if (verification.ok) {
-            const data = await verification.json();
-
-            if (data.valid) {
-              const now = Date.now();
-              const elapsedSeconds = (now - parsed.sessionStartTime) / 1000;
-              if (elapsedSeconds <= 3600) { // max 60 min
-                sessionStartTime = parsed.sessionStartTime;
-                tokens = Math.min(parsed.tokens, 60 * Mining_Speed);
-                return true;
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Session verification error:', error);
-        }
+        sessionStartTime = parsed.sessionStartTime;
+        tokens = parsed.tokens;
+        return true;
       }
     }
   }
@@ -114,209 +80,178 @@ async function chargerSession() {
 // ==============================================
 
 function initTelegramWebApp() {
-  console.log("Initialisation de Telegram WebApp...");
-
   if (!window.Telegram?.WebApp) {
-    console.error("WebApp Telegram non détecté - Mode test activé");
     tg = {
       WebApp: {
         initDataUnsafe: { 
           user: { 
             id: "test_user", 
-            username: "TestUser",
-            first_name: "Test",
-            last_name: "User"
+            username: "TestUser"
           } 
-        },
-        expand: () => console.log("Fonction expand appelée"),
-        initData: "mock_data"
+        }
       }
     };
     userId = "test_user_id";
     deviceId = "test_device_id";
-    
-    // Mettre à jour les infos utilisateur immédiatement
-    updateUserInfo({
-      username: "TestUser",
-      balance: "100",
-      lastClaim: new Date().toLocaleDateString()
-    });
+    updateUserInfo({ username: "TestUser", balance: "100" });
     return;
   }
 
   tg = window.Telegram.WebApp;
   tg.expand();
 
-  Telegram.WebApp.backgroundColor = "#6B6B6B";
-  Telegram.WebApp.headerColor = "#6B6B6B";
-
   const user = tg.initDataUnsafe?.user;
-  userId = user?.id?.toString();
-  
-  if (!userId) {
-    console.warn("User ID non trouvé - Utilisation d'un ID par défaut");
-    userId = "default_user_" + Math.random().toString(36).substr(2, 9);
-  }
-
+  userId = user?.id?.toString() || "user_" + Math.random().toString(36).substr(2, 9);
   deviceId = `${navigator.userAgent}-${userId}`.replace(/\s+/g, '_');
-  console.log("Init réussie - UserID:", userId, "DeviceID:", deviceId);
 
-  // Mettre à jour les infos utilisateur
   updateUserInfo({
-    username: user?.username || `${user?.first_name || ''} ${user?.last_name || ''}`.trim(),
-    balance: "0",
-    lastClaim: "Jamais"
+    username: user?.username || "Utilisateur",
+    balance: "0"
   });
 }
 
 function initNavigation() {
-  const navButtons = document.querySelectorAll('.nav-btn');
-  
-  navButtons.forEach(button => {
-    button.addEventListener('click', function() {
-      // Retirer la classe active de tous les boutons
-      navButtons.forEach(btn => btn.classList.remove('active'));
-      
-      // Ajouter la classe active au bouton cliqué
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
       this.classList.add('active');
       
-      // Charger le contenu approprié
-      switch(this.id) {
-        case 'nav-claim':
-          showClaim();
-          break;
-        case 'nav-tasks':
-          loadTasks();
-          break;
-        case 'nav-referral':
-          loadReferrals();
-          break;
-      }
+      if (this.id === 'nav-claim') showClaim();
+      if (this.id === 'nav-tasks') loadTasks();
+      if (this.id === 'nav-referral') loadReferrals();
     });
   });
 }
 
-// Ajoutez cette nouvelle fonction
 function updateUserInfo(data) {
-  const usernameEl = document.getElementById('username');
   const balanceEl = document.getElementById('balance');
-  const lastClaimEl = document.getElementById('lastClaim');
+  if (balanceEl) balanceEl.textContent = `${data.balance || 0} tokens`;
+}
+
+// ==============================================
+// FONCTIONS MINAGE
+// ==============================================
+
+async function demarrerMinage() {
+  clearInterval(miningInterval);
   
-  if (usernameEl) usernameEl.textContent = data.username || 'Inconnu';
-  if (balanceEl) balanceEl.textContent = data.balance ? `${data.balance} tokens` : '0 token';
-  
-  if (lastClaimEl) {
-    if (data.lastClaim) {
-      const lastClaimDate = new Date(data.lastClaim);
-      lastClaimEl.textContent = lastClaimDate.toLocaleDateString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } else {
-      lastClaimEl.textContent = 'Jamais';
-    }
+  try {
+    const userData = await loadUserData();
+    Mining_Speed = userData.mining_speed || 1;
+    
+    miningInterval = setInterval(() => {
+      const now = Date.now();
+      const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
+      tokens = Math.min(elapsedMinutes * Mining_Speed, 60 * Mining_Speed);
+      
+      updateDisplay();
+      sauvegarderSession();
+    }, 1000);
+    
+  } catch (error) {
+    console.error('Erreur démarrage minage:', error);
   }
 }
 
-// Modifiez le chargement initial dans DOMContentLoaded
-window.addEventListener('DOMContentLoaded', async () => {
-  initTelegramWebApp();
-  initParticles();
-  initNavigation();
-  
-  if (!userId) {
-    console.warn('Utilisateur non identifié.');
-    return;
-  }
+async function startNewSession() {
+  sessionStartTime = Date.now();
+  tokens = 0;
+  await demarrerMinage();
+}
 
-  // Charger les données utilisateur
+// ==============================================
+// FONCTIONS CLAIM
+// ==============================================
+
+async function handleClaim() {
+  const btn = document.getElementById('main-claim-btn');
+  if (!btn || btn.disabled) return;
+
+  btn.disabled = true;
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = '<div class="spinner-mini"></div>';
+
   try {
-    const response = await fetch(`/api/user-data?userId=${userId}`);
-    if (response.ok) {
-      const userData = await response.json();
-      updateUserInfo(userData);
-      Mining_Speed = userData.mining_speed || 1;
-    }
-  } catch (error) {
-    console.error('Error loading user data:', error);
-  }
+    const elapsedMinutes = (Date.now() - sessionStartTime) / (1000 * 60);
+    const tokensToClaim = Math.floor(elapsedMinutes * Mining_Speed);
 
-  const sessionLoaded = await chargerSession();
-  if (!sessionLoaded) {
-    try {
-      await demarrerMinage();
-    } catch (e) {
-      console.error('Erreur démarrage minage:', e);
-    }
-  }
+    if (tokensToClaim < 1) throw new Error('NOTHING_TO_CLAIM');
 
-  showClaim();
-});
-
-async function loadUserData() {
-  try {
-    const response = await fetch('/api/user-data', {
+    const response = await fetch('/claim', {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      }
+      },
+      body: JSON.stringify({
+        userId,
+        deviceId,
+        tokens: tokensToClaim,
+        miningTime: elapsedMinutes,
+        username: window.Telegram?.WebApp?.initDataUnsafe?.user?.username
+      })
     });
+
+    if (!response.ok) throw new Error('CLAIM_FAILED');
+
+    const result = await response.json();
     
-    if (!response.ok) throw new Error('Failed to load user data');
-    
-    return await response.json();
+    tokens = 0;
+    sessionStartTime = Date.now();
+    if (result.balance) {
+      document.getElementById('balance').textContent = result.balance;
+    }
+
+    btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens</span>`;
+    setTimeout(() => {
+      btn.innerHTML = originalHTML;
+      btn.disabled = false;
+    }, 2000);
+
   } catch (error) {
-    console.error('Error loading user data:', error);
-    return { mining_speed: 1 }; // Valeur par défaut
+    console.error('Claim error:', error);
+    btn.innerHTML = `<span style="color:#FF5252">⚠️ ${error.message === 'NOTHING_TO_CLAIM' ? 'Min 1 token' : 'Erreur'}</span>`;
+    setTimeout(() => {
+      btn.innerHTML = originalHTML;
+      btn.disabled = false;
+    }, 3000);
   }
 }
 
-async function loadDashboard() {
-  const dashboardElement = document.getElementById('dashboard-content');
+function updateDisplay() {
+  const elapsedMinutes = (Date.now() - sessionStartTime) / (1000 * 60);
+  const remainingMinutes = Math.max(0, 60 - elapsedMinutes);
   
-  try {
-    // Afficher le loader
-    dashboardElement.innerHTML = '<div class="loader">Chargement...</div>';
-    
-    // 1. Charger les données utilisateur
-    const userData = await fetch('/api/user-data', {
-      headers: {
-        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      }
-    });
-    
-    if (!userData.ok) throw new Error('Failed to load user data');
-    
-    // 2. Charger les données du dashboard
-    const dashboardData = await fetch('/api/dashboard', {
-      headers: {
-        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      }
-    });
-    
-    if (!dashboardData.ok) throw new Error('Failed to load dashboard');
-    
-    // 3. Afficher les données
-    const data = await dashboardData.json();
-    dashboardElement.innerHTML = `
-      <div class="balance-card">
-        <h3>Votre solde</h3>
-        <p>${data.balance} tokens</p>
+  document.getElementById('tokens').textContent = tokens.toFixed(2);
+  
+  const mins = Math.floor(remainingMinutes);
+  const secs = Math.floor(remainingMinutes % 60 * 60);
+  document.getElementById('claim-text').textContent = `${mins}:${secs.toString().padStart(2,'0')}`;
+  
+  document.querySelector('.progress-bar').style.width = `${(elapsedMinutes / 60) * 100}%`;
+  document.getElementById('main-claim-btn').disabled = tokens < 1;
+}
+
+// ==============================================
+// FONCTIONS PAGES
+// ==============================================
+
+function showClaim() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="claim-container">
+      <div class="token-display">
+        <span id="tokens">0.00</span>
+        <span class="token-unit">tokens</span>
       </div>
-      <!-- Autres éléments du dashboard -->
-    `;
-    
-  } catch (error) {
-    dashboardElement.innerHTML = `
-      <div class="error">
-        Erreur de chargement: ${error.message}
-        <button onclick="loadDashboard()">Réessayer</button>
-      </div>
-    `;
-    console.error('Dashboard load error:', error);
-  }
+      <button id="main-claim-btn" class="mc-button-anim" disabled>
+        <span id="claim-text">00:00</span>
+        <div class="progress-bar"></div>
+      </button>
+    </div>
+  `;
+  document.getElementById('main-claim-btn').addEventListener('click', handleClaim);
+  updateDisplay();
 }
 
 async function loadReferrals() {
@@ -333,44 +268,32 @@ async function loadReferrals() {
       body: JSON.stringify({ userId })
     });
 
-    if (!response.ok) {
-      throw new Error(await response.text());
-    }
+    if (!response.ok) throw new Error(await response.text());
 
     const data = await response.json();
 
     content.innerHTML = `
       <div class="referral-card">
         <h2>Programme de Parrainage</h2>
-        
-        <div class="referral-section">
-          <h3>Votre Code</h3>
-          <div class="referral-code">${data.referralCode || 'N/A'}</div>
-        </div>
-        
         <div class="referral-section">
           <h3>Lien de Parrainage</h3>
           <div class="referral-url">${data.referralUrl}</div>
-          <button onclick="copyToClipboard('${data.referralUrl}')">
-            Copier
-          </button>
+          <button onclick="copyToClipboard('${data.referralUrl}')">Copier</button>
         </div>
-        
         <div class="referral-stats">
           <div class="stat-item">
             <span>Filleuls</span>
-            <strong>${data.totalReferrals}</strong>
+            <strong>${data.totalReferrals || 0}</strong>
           </div>
           <div class="stat-item">
             <span>Gains</span>
-            <strong>${data.totalEarned} tokens</strong>
+            <strong>${data.totalEarned || 0} tokens</strong>
           </div>
         </div>
       </div>
     `;
 
   } catch (error) {
-    console.error('Referral load error:', error);
     content.innerHTML = `
       <div class="error">
         <p>Erreur de chargement</p>
@@ -380,382 +303,79 @@ async function loadReferrals() {
   }
 }
 
-// Ajoutez cette fonction globale
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text)
-    .then(() => {
-      const notif = document.getElementById('notification');
-      if (notif) {
-        notif.textContent = 'Copié dans le presse-papier!';
-        notif.classList.remove('hidden');
-        setTimeout(() => notif.classList.add('hidden'), 2000);
-      }
-    })
-    .catch(err => console.error('Copy failed:', err));
-}
-
 async function loadTasks() {
   const content = document.getElementById('content');
-  content.innerHTML = '<div class="loader">Chargement des tâches...</div>';
-  
+  content.innerHTML = '<div class="loader">Chargement...</div>';
+
   try {
     const response = await fetch('/api/tasks');
     if (!response.ok) throw new Error('Failed to load tasks');
     
     const tasks = await response.json();
-    console.log('Tasks loaded:', tasks); // Debug log
-
-    let html = '<div class="tasks-container">';
-    if (tasks && tasks.length > 0) {
-      tasks.forEach(task => {
-        html += `
+    content.innerHTML = tasks.length ? `
+      <div class="tasks-container">
+        ${tasks.map(task => `
           <div class="task-item">
-            <h3>${task.title || 'Tâche sans titre'}</h3>
-            ${task.image ? `<img src="${task.image}" class="task-image">` : ''}
-            <p>Récompense: ${task.reward || '0'} tokens</p>
-            <button class="task-button" data-task-id="${task.id}">
-              Commencer
-            </button>
+            <h3>${task.title}</h3>
+            ${task.image ? `<img src="${task.image}">` : ''}
+            <p>Récompense: ${task.reward} tokens</p>
+            <button class="task-button">Commencer</button>
           </div>
-        `;
-      });
-    } else {
-      html += '<p class="no-tasks">Aucune tâche disponible pour le moment</p>';
-    }
-    html += '</div>';
-    
-    content.innerHTML = html;
+        `).join('')}
+      </div>
+    ` : '<p class="no-tasks">Aucune tâche disponible</p>';
+
   } catch (error) {
-    console.error('Tasks load error:', error);
     content.innerHTML = `
       <div class="error">
-        Erreur de chargement des tâches
+        <p>Erreur de chargement</p>
         <button onclick="loadTasks()">Réessayer</button>
       </div>
     `;
   }
 }
 
-function showPage(pageId) {
-  // Masquer toutes les pages
-  document.querySelectorAll('.page').forEach(page => {
-    page.classList.add('hidden');
-  });
+// ==============================================
+// FONCTIONS UTILITAIRES
+// ==============================================
 
-  // Afficher la page cible
-  const targetPage = document.getElementById(pageId);
-  if (targetPage) {
-    targetPage.classList.remove('hidden');
-    
-    // Charger le contenu spécifique
-    switch(pageId) {
-      case 'dashboard-page':
-        loadDashboard();
-        break;
-      case 'tasks-page':
-        loadTasks();
-        break;
-      case 'referrals-page':
-        loadReferrals();
-        break;
-    }
-  }
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text)
+    .then(() => alert('Lien copié!'))
+    .catch(err => console.error('Copy failed:', err));
 }
 
-async function demarrerMinage() {
-  // Arrêter tout intervalle existant
-  if (miningInterval) {
-    clearInterval(miningInterval);
-    miningInterval = null;
-  }
-
+async function loadUserData() {
   try {
-    // 1. Charger les données utilisateur d'abord
-    const userData = await loadUserData();
-    Mining_Speed = userData.mining_speed || 1;
-    
-    // 2. Vérifier l'état de la session
-    const sessionCheck = await fetch('/api/verify-session', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      },
-      body: JSON.stringify({ userId, deviceId })
-    });
-
-    if (!sessionCheck.ok) {
-      throw new Error('SESSION_CHECK_FAILED');
-    }
-
-    const sessionData = await sessionCheck.json();
-    
-    // 3. Gérer selon l'état de la session
-    switch (sessionData.status) {
-      case 'SESSION_VALID':
-        // Reprendre session existante
-        sessionStartTime = new Date(sessionData.startTime).getTime();
-        tokens = parseFloat(sessionData.tokens) || 0;
-        break;
-        
-      case 'DEVICE_MISMATCH':
-        // Nouvel appareil - nouvelle session
-        console.warn('Appareil différent détecté, démarrage nouvelle session');
-        await startNewSession();
-        return;
-        
-      case 'NO_SESSION':
-      default:
-        // Démarrer nouvelle session
-        await startNewSession();
-        return;
-    }
-
-    // 4. Démarrer le minage
-    miningInterval = setInterval(async () => {
-      try {
-        const now = Date.now();
-        const elapsedSeconds = (now - sessionStartTime) / 1000;
-        const maxTokens = 60 * Mining_Speed; // 60 minutes * vitesse
-        
-        // Calculer les tokens (max 1 token/min)
-        tokens = Math.min(elapsedSeconds * (Mining_Speed / 60), maxTokens);
-        
-        // Mettre à jour l'affichage
-        updateDisplay();
-        
-        // Sauvegarder localement
-        sauvegarderSession();
-        
-        // Synchroniser avec le serveur
-        const syncResponse = await fetch('/update-session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            userId, 
-            tokens: tokens.toFixed(4), 
-            deviceId 
-          })
-        });
-        
-        if (!syncResponse.ok) {
-          console.error('Échec synchronisation session');
-        }
-      } catch (error) {
-        console.error('Erreur intervalle minage:', error);
-      }
-    }, 1000); // Mise à jour chaque seconde
-
+    const response = await fetch(`/api/user-data?userId=${userId}`);
+    if (!response.ok) throw new Error('Failed to load user data');
+    return await response.json();
   } catch (error) {
-    console.error('Erreur démarrage minage:', error);
-    
-    // Fallback - démarrer nouvelle session en cas d'erreur
-    try {
-      await startNewSession();
-    } catch (fallbackError) {
-      console.error('Échec démarrage session de secours:', fallbackError);
-      showErrorState();
-    }
+    console.error('Error loading user data:', error);
+    return { mining_speed: 1 };
   }
-}
-
-// Fonction pour afficher l'état d'erreur
-function showErrorState() {
-  const content = document.getElementById('content');
-  if (!content) return;
-  
-  content.innerHTML = `
-    <div class="error-state" style="text-align: center; padding: 20px;">
-      <h3 style="color: #ff4444;">Erreur de connexion</h3>
-      <p>Impossible de se connecter au serveur</p>
-      <button onclick="window.location.reload()" 
-              style="padding: 10px 20px; background: #ff4444; color: white; border: none; border-radius: 5px;">
-        Réessayer
-      </button>
-    </div>
-  `;
-}
-
-async function startNewSession() {
-  sessionStartTime = Date.now();
-  tokens = 0;
-
-  const response = await fetch('/start-session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, deviceId })
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to start new session');
-  }
-
-  demarrerMinage();
-}
-
-async function handleClaim() {
-  const btn = document.getElementById('main-claim-btn');
-  if (!btn) return;
-
-  btn.disabled = true;
-  const originalHTML = btn.innerHTML;
-  btn.innerHTML = '<div class="spinner-mini"></div>';
-
-  try {
-    // Calculer le temps miné en minutes
-    const now = Date.now();
-    const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
-    const tokensToClaim = Math.floor(elapsedMinutes * Mining_Speed);
-
-    if (tokensToClaim <= 0) {
-      throw new Error('NOTHING_TO_CLAIM');
-    }
-
-    const sessionCheck = await fetch('/api/verify-session', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      },
-      body: JSON.stringify({ userId, deviceId })
-    });
-
-    if (!sessionCheck.ok) {
-      throw new Error('SESSION_VERIFICATION_FAILED');
-    }
-
-    const claimResponse = await fetch('/claim', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      },
-      body: JSON.stringify({
-        userId,
-        tokens: tokensToClaim, // Envoyer le montant calculé
-        username: window.Telegram?.WebApp?.initDataUnsafe?.user?.username || 'Anonyme',
-        deviceId,
-        miningTime: elapsedMinutes // Envoyer le temps miné pour vérification
-      })
-    });
-
-    if (!claimResponse.ok) {
-      const errorData = await claimResponse.json();
-      throw new Error(errorData.error || 'CLAIM_FAILED');
-    }
-
-    const result = await claimResponse.json();
-
-    // Réinitialiser après claim réussi
-    tokens = 0;
-    sessionStartTime = now;
-    if (result.mining_speed) Mining_Speed = result.mining_speed;
-
-    // Mettre à jour l'affichage
-    btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
-    if (result.balance) {
-      document.getElementById('balance').textContent = result.balance;
-    }
-
-    setTimeout(() => {
-      btn.innerHTML = originalHTML;
-      btn.disabled = false;
-      updateDisplay();
-    }, 2000);
-
-  } catch (error) {
-    console.error('Claim error:', error);
-    
-    const errorMap = {
-      'NOTHING_TO_CLAIM': 'Rien à claimer',
-      'SESSION_VERIFICATION_FAILED': 'Session invalide',
-      'DEVICE_MISMATCH': 'Appareil invalide',
-      'CLAIM_FAILED': 'Erreur serveur'
-    };
-
-    btn.innerHTML = `<span style="color:#FF5252">⚠️ ${errorMap[error.message] || 'Erreur'}</span>`;
-    
-    setTimeout(() => {
-      btn.innerHTML = originalHTML;
-      btn.disabled = false;
-      updateDisplay();
-    }, 3000);
-  }
-}
-
-function updateDisplay() {
-  const now = Date.now();
-  const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
-  const tokensEarned = elapsedMinutes * Mining_Speed;
-  
-  document.getElementById('tokens').textContent = tokensEarned.toFixed(2);
-  
-  // Mettre à jour le temps restant
-  const remainingMinutes = Math.max(0, 60 - elapsedMinutes);
-  const mins = Math.floor(remainingMinutes);
-  const secs = Math.floor((remainingMinutes - mins) * 60);
-  
-  document.getElementById('claim-text').textContent = 
-    `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
-  
-  // Mettre à jour la barre de progression
-  const progressPercent = (elapsedMinutes / 60) * 100;
-  document.querySelector('.progress-bar').style.width = `${progressPercent}%`;
-  
-  // Activer/désactiver le bouton
-  document.getElementById('main-claim-btn').disabled = elapsedMinutes < 1;
-}
-
-function showClaim() {
-  const content = document.getElementById('content');
-  content.innerHTML = `
-    <div class="claim-container" style="text-align:center;">
-      <div class="token-display" style="margin-bottom: 12px;">
-        <span id="tokens" style="font-size: 2rem; font-weight: bold;">0.00</span>
-        <span class="token-unit" style="font-size: 1rem;">tokens</span>
-      </div>
-      <button id="main-claim-btn" class="mc-button-anim" disabled style="position: relative; overflow: hidden; width: 250px; height: 50px; font-size: 1.2rem; cursor: pointer; border-radius: 8px; border: none; background: #1E90FF; color: white;">
-        <span id="claim-text">Loading...</span>
-        <div class="progress-bar" style="position: absolute; bottom: 0; left: 0; height: 5px; background: #4CAF50; width: 0;"></div>
-      </button>
-    </div>
-  `;
-
-  document.getElementById('main-claim-btn').addEventListener('click', handleClaim);
-  updateDisplay();
 }
 
 // ==============================================
-// LANCEMENT
+// INITIALISATION
 // ==============================================
 
 window.addEventListener('DOMContentLoaded', async () => {
   initTelegramWebApp();
   initParticles();
-  initNavigation(); // <-- Ajoutez cette ligne
+  initNavigation();
   
-  if (!userId) {
-    console.warn('Utilisateur non identifié.');
-    return;
-  }
-
-  // Chargez les données utilisateur
-  try {
-    const userData = await loadUserData();
-    if (userData.balance) {
-      document.getElementById('balance').textContent = userData.balance;
-    }
-  } catch (error) {
-    console.error('Error loading user data:', error);
-  }
-
-  const sessionLoaded = await chargerSession();
-
-  if (!sessionLoaded) {
+  if (userId) {
     try {
-      await demarrerMinage();
-    } catch (e) {
-      console.error('Erreur démarrage minage:', e);
+      const userData = await loadUserData();
+      updateUserInfo(userData);
+      Mining_Speed = userData.mining_speed || 1;
+      
+      if (!(await chargerSession())) {
+        await startNewSession();
+      }
+    } catch (error) {
+      console.error('Initialization error:', error);
     }
   }
 
