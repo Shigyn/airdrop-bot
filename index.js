@@ -247,9 +247,12 @@ app.get('/api/dashboard', async (req, res) => {
     const userId = req.query.userId;
     const userData = await getUserData(userId); // À implémenter
     res.json({
-      balance: userData.balance,
-      miningSpeed: userData.mining_speed
-    });
+	username: userData.username,
+	balance: userData.balance,
+	last_claim: userData.lastClaim,
+	miningSpeed: userData.mining_speed
+});
+
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -281,15 +284,40 @@ app.get('/api/tasks', async (req, res) => {
 // [CLAIM] Enregistrement avec limite de 60 minutes
 // Endpoint /claim corrigé
 app.post('/claim', async (req, res) => {
-  const { userId, deviceId, tokens, miningTime } = req.body;
+  const { userId, deviceId, miningTime } = req.body;
 
   // Validation
-  if (!userId || !deviceId || isNaN(tokens) || isNaN(miningTime)) {
+  if (!userId || !deviceId || isNaN(miningTime)) {
     return res.status(400).json({ error: "Invalid data" });
   }
 
   try {
-    // Enregistrement transaction
+    // Récupération de la session active
+    const session = activeSessions.get(userId);
+    if (!session) {
+      return res.status(404).json({ error: "SESSION_NOT_FOUND" });
+    }
+
+    if (session.deviceId !== deviceId) {
+      return res.status(403).json({ error: "DEVICE_MISMATCH" });
+    }
+
+    const elapsedMinutes = (Date.now() - session.startTime) / (1000 * 60);
+    if (elapsedMinutes > 60) {
+      activeSessions.delete(userId);
+      return res.status(403).json({ error: "LIMIT_REACHED", message: "Vous avez dépassé la limite de 60 minutes" });
+    }
+
+    // Récupérer les infos utilisateur (inclut mining_speed)
+    const user = await getUserData(userId);
+    if (!user) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const miningSpeed = parseFloat(user.mining_speed) || 1;
+    const earnedTokens = Math.floor(miningTime * miningSpeed);
+
+    // Enregistrement de la transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:D",
@@ -297,14 +325,14 @@ app.post('/claim', async (req, res) => {
       resource: {
         values: [[
           userId,
-          parseInt(tokens),
+          earnedTokens,
           "CLAIM",
           new Date().toLocaleString('fr-FR')
         ]]
       }
     });
 
-    // Mise à jour solde
+    // Mise à jour du solde
     const users = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
@@ -312,7 +340,9 @@ app.post('/claim', async (req, res) => {
 
     const userRow = users.data.values?.findIndex(row => row[2] === userId);
     if (userRow >= 0) {
-      const newBalance = (parseInt(users.data.values[userRow][3]) || 0) + parseInt(tokens);
+      const currentBalance = parseInt(users.data.values[userRow][3]) || 0;
+      const newBalance = currentBalance + earnedTokens;
+
       await sheets.spreadsheets.values.update({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: `Users!D${userRow + 2}`,
@@ -320,16 +350,17 @@ app.post('/claim', async (req, res) => {
         resource: { values: [[newBalance]] }
       });
 
-      return res.json({ status: "OK", balance: newBalance });
+      return res.json({ status: "OK", balance: newBalance, claimed: earnedTokens });
     }
 
-    return res.status(404).json({ error: "User not found" });
+    return res.status(404).json({ error: "USER_NOT_FOUND" });
 
   } catch (err) {
     console.error('Claim error:', err);
     return res.status(500).json({ error: "Server error" });
   }
 });
+
 
 // Webhook bot
 app.use(bot.webhookCallback('/bot'));
