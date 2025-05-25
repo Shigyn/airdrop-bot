@@ -91,7 +91,7 @@ function initTelegramWebApp() {
         }
       }
     };
-    userId = "test_user_id";
+    userId = "test_user";
     deviceId = "test_device_id";
     updateUserInfo({ username: "TestUser", balance: "100" });
     return;
@@ -124,8 +124,22 @@ function initNavigation() {
 }
 
 function updateUserInfo(data) {
+  // Affiche username et balance, créer l'élément username si besoin
+  let usernameEl = document.getElementById('username');
+  if (!usernameEl) {
+    usernameEl = document.createElement('div');
+    usernameEl.id = 'username';
+    usernameEl.style.fontWeight = 'bold';
+    usernameEl.style.marginBottom = '8px';
+    const container = document.getElementById('user-info') || document.body;
+    container.prepend(usernameEl);
+  }
+  usernameEl.textContent = data.username || "Utilisateur";
+
   const balanceEl = document.getElementById('balance');
   if (balanceEl) balanceEl.textContent = `${data.balance || 0} tokens`;
+
+  balance = Number(data.balance) || 0;
 }
 
 // ==============================================
@@ -144,21 +158,21 @@ async function demarrerMinage() {
       const elapsedSeconds = (now - sessionStartTime) / 1000;
       const elapsedMinutes = elapsedSeconds / 60;
       
-      // Calcul précis pour 1 token/minute
+      // Calcul tokens minés, max 60 tokens * Mining_Speed (1 token/min max)
       tokens = Math.min(Math.floor(elapsedMinutes) * Mining_Speed, 60 * Mining_Speed);
       
       updateDisplay();
       sauvegarderSession();
       
-      // Synchronisation avec le serveur toutes les 30 secondes
-      if (elapsedSeconds % 30 === 0) {
+      // Synchronisation toutes les 30 secondes
+      if (Math.floor(elapsedSeconds) % 30 === 0) {
         fetch('/update-session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId, tokens, deviceId })
         }).catch(console.error);
       }
-    }, 1000); // Vérifie chaque seconde
+    }, 1000);
     
   } catch (error) {
     console.error('Erreur démarrage minage:', error);
@@ -225,13 +239,14 @@ async function handleClaim() {
 
     const result = await response.json();
     
-    // Réinitialisation après claim
+    // Reset après claim
     tokens = 0;
     sessionStartTime = Date.now();
     
-    // Mise à jour UI
+    // Mise à jour balance UI
     if (result.balance) {
-      document.getElementById('balance').textContent = result.balance;
+      document.getElementById('balance').textContent = `${result.balance} tokens`;
+      balance = Number(result.balance);
     }
     
     btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
@@ -254,23 +269,27 @@ async function handleClaim() {
 function updateDisplay() {
   const now = Date.now();
   const elapsedSeconds = (now - sessionStartTime) / 1000;
-  const remainingSeconds = Math.max(0, 3600 - elapsedSeconds); // 60 minutes en secondes
+  const remainingSeconds = Math.max(0, 3600 - elapsedSeconds); // 60 minutes
   
-  // Formatage du temps MM:SS
+  // Format MM:SS
   const mins = Math.floor(remainingSeconds / 60);
   const secs = Math.floor(remainingSeconds % 60);
-  const timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const timeString = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
   
-  // Mise à jour de l'UI
-  document.getElementById('tokens').textContent = tokens.toFixed(2);
-  document.getElementById('claim-text').textContent = timeString;
+  // Update UI
+  const tokensEl = document.getElementById('tokens');
+  if (tokensEl) tokensEl.textContent = tokens.toFixed(2);
+  const claimText = document.getElementById('claim-text');
+  if (claimText) claimText.textContent = timeString;
   
-  // Barre de progression
-  const progressPercent = (elapsedSeconds / 3600) * 100;
-  document.querySelector('.progress-bar').style.width = `${Math.min(100, progressPercent)}%`;
+  const progressBar = document.querySelector('.progress-bar');
+  if (progressBar) {
+    const progressPercent = (elapsedSeconds / 3600) * 100;
+    progressBar.style.width = `${Math.min(100, progressPercent)}%`;
+  }
   
-  // Activation du bouton
-  document.getElementById('main-claim-btn').disabled = tokens < 1 || remainingSeconds <= 0;
+  const claimBtn = document.getElementById('main-claim-btn');
+  if (claimBtn) claimBtn.disabled = tokens < 1 || remainingSeconds <= 0;
 }
 
 // ==============================================
@@ -397,6 +416,16 @@ async function loadUserData() {
   }
 }
 
+function showErrorState() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="error">
+      <p>Une erreur est survenue, veuillez réessayer.</p>
+      <button onclick="startNewSession()">Réessayer</button>
+    </div>
+  `;
+}
+
 // ==============================================
 // INITIALISATION
 // ==============================================
@@ -414,9 +443,12 @@ window.addEventListener('DOMContentLoaded', async () => {
       
       if (!(await chargerSession())) {
         await startNewSession();
+      } else {
+        await demarrerMinage();
       }
     } catch (error) {
       console.error('Initialization error:', error);
+      showErrorState();
     }
   }
 
