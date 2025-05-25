@@ -35,11 +35,11 @@ body {
 }
 
 .user-info-icon, .nav-icon {
-  width: 1em;     /* largeur égale à la taille de la police */
-  height: 1em;    /* hauteur aussi */
-  vertical-align: middle;  /* pour bien aligner avec le texte */
-  object-fit: contain;     /* pour que l'image garde ses proportions */
-  margin-right: 0.5em;     /* espace entre l’icône et le texte */
+  width: 1em;
+  height: 1em;
+  vertical-align: middle;
+  object-fit: contain;
+  margin-right: 0.5em;
 }
 
 /* === PIXEL ART ELEMENTS === */
@@ -54,10 +54,7 @@ body {
 .pixel-box::after {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: 
     linear-gradient(135deg, #ffffff08 25%, transparent 25%) -50px 0,
     linear-gradient(225deg, #ffffff08 25%, transparent 25%) -50px 0,
@@ -69,8 +66,8 @@ body {
 /* === APP CONTAINER === */
 .app-container {
   max-width: 100%;
-  background-color: transparent; /* Fond transparent */
-  border: none;
+  background-color: transparent; /* plus de fond gris */
+  border: none; /* plus de bordure */
   padding: 12px;
   padding-bottom: 60px; /* Espace pour le menu fixé */
   margin: 0 auto;
@@ -91,6 +88,15 @@ body {
   font-size: 1.2rem;
   text-shadow: 3px 3px 0 #000;
   margin-bottom: 8px;
+}
+
+/* Texte uniforme pour infos utilisateur */
+.user-info-value {
+  font-family: 'Press Start 2P', cursive;
+  font-weight: normal;
+  font-size: 0.8rem;
+  color: var(--mc-text);
+  text-shadow: none;
 }
 
 /* === BUTTONS === */
@@ -118,24 +124,12 @@ body {
 }
 
 /* === USER CARD === */
-.user-card {
-  background-color: var(--mc-stone);
-  border: var(--mc-border);
-  padding: 12px;
-  margin-bottom: 16px;
-}
-
-.user-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.stat-item {
-  background-color: #00000055;
-  padding: 8px;
-  border: 2px solid #000;
+/* Suppression cadre gris & bordure */
+.user-info-card {
+  background-color: transparent; /* plus de fond */
+  border: none;                  /* plus de bordure */
+  padding: 0;                   /* enlever padding si tu veux */
+  margin-bottom: 0;
 }
 
 /* === NAVIGATION === */
@@ -173,8 +167,8 @@ body {
     font-size: 0.7rem;
   }
 
-  .user-stats {
-    grid-template-columns: 1fr;
+  .user-info-value {
+    font-size: 0.7rem;
   }
 }
 
@@ -187,14 +181,15 @@ body {
   bottom: 0;
   left: 0;
   width: 100%;
-  max-width: 480px; /* correspond à la largeur max de ton container */
-  background-color: transparent; /* pour enlever le fond marron */
+  max-width: 480px;
+  background-color: transparent;
   display: flex;
   justify-content: space-around;
   padding: 8px 0;
   box-sizing: border-box;
-  border-top: 1px solid #555; /* optionnel: une petite séparation */
-  z-index: 1000; /* pour qu'il soit au-dessus */
+  border-top: 1px solid #555;
+  z-index: 1000;
+}
 }
 
 /* Bouton animé avec barre de progression et compteur */
