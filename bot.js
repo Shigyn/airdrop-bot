@@ -7,7 +7,14 @@ const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = `https://airdrop-bot-soy1.onrender.com${webhookPath}`;
 
 // Créer le bot en mode webhook
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
+  telegram: {
+    webhook: {
+      domain: 'airdrop-bot-soy1.onrender.com',
+      hookPath: webhookPath
+    }
+  }
+});
 
 // Configuration du webhook
 bot.telegram.setWebhook(webhookUrl)

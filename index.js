@@ -3,18 +3,30 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
-const { bot, webhookCallback } = require('./bot');
-
-// Configuration du webhook pour l'application
-app.post('/webhook/:token', webhookCallback);
-const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
 const { google } = require('googleapis');
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Utiliser le port fourni par Render ou 3000 par défaut
+const PORT = process.env.PORT || 8080; // Port par défaut pour Render
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
+
+const { bot, webhookCallback } = require('./bot');
+const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
+
+// Configuration du webhook pour l'application
+app.post('/webhook/:token', (req, res) => {
+  const { body } = req;
+  const token = req.params.token;
+  
+  // Vérifiez que le token correspond au token du bot
+  if (token !== process.env.TELEGRAM_BOT_TOKEN) {
+    return res.status(403).send('Unauthorized');
+  }
+
+  // Gestion du webhook
+  webhookCallback(req, res);
+});
 
 // Middlewares
 // Configuration CORS plus restrictive mais correcte
