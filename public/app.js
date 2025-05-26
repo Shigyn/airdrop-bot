@@ -1,343 +1,379 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const { bot, webhookCallback } = require('./bot');
-const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
-const { google } = require('googleapis');
+// Initialisation de l'application
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('DOM fully loaded and parsed');
+  
+  // Vérification de l'environnement Telegram
+  if (!window.Telegram || !window.Telegram.WebApp) {
+    console.error('Telegram WebApp SDK not loaded');
+    showNotification('Error: Telegram context not available', 'error');
+    return;
+  }
 
-const app = express();
-const PORT = process.env.PORT || 10000;
-const activeSessions = new Map();
-let sheets;
-let sheetsInitialized = false;
+  // Initialisation de l'application Web Telegram
+  Telegram.WebApp.expand();
+  Telegram.WebApp.enableClosingConfirmation();
+  Telegram.WebApp.BackButton.onClick(() => Telegram.WebApp.close());
 
-// Middlewares
-app.use(cors({
-  origin: [
-    'https://airdrop-bot-soy1.onrender.com',
-    'https://web.telegram.org',
-    'https://t.me/CRYPTORATS_bot'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Telegram-Data', 'Authorization'],
-  credentials: true,
-  exposedHeaders: ['Content-Length', 'X-Request-Id']
-}));
+  // Récupération des données utilisateur
+  const initData = Telegram.WebApp.initData || {};
+  const userId = initData.user?.id;
+  
+  if (!userId) {
+    showNotification('Error: User not authenticated', 'error');
+    return;
+  }
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-app.use((req, res, next) => {
-  const safeBody = { ...req.body };
-  if (safeBody.tokens) safeBody.tokens = "***";
-  if (safeBody.Authorization) safeBody.Authorization = "***";
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
-    headers: req.headers,
-    body: safeBody
-  });
-  next();
-});
-
-const initializeApp = async () => {
+  // Chargement des données utilisateur
   try {
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-    sheets = google.sheets({ version: 'v4', auth });
-    await initGoogleSheets();
-    sheetsInitialized = true;
-    console.log('Server ready');
-    app.listen(PORT, () => console.log(`Running on port ${PORT}`));
-  } catch (err) {
-    console.error('Init failed:', err);
-    process.exit(1);
+    await loadUserData(userId);
+    setupNavigation();
+    showClaimView();
+  } catch (error) {
+    console.error('Initialization error:', error);
+    showNotification('Failed to load app data', 'error');
   }
-};
-
-// ROUTES
-
-app.post('/sync-session', (req, res) => {
-  const { userId, deviceId } = req.body;
-  const session = activeSessions.get(userId);
-
-  if (!session) return res.json({ status: 'NO_SESSION' });
-  if (session.deviceId !== deviceId) {
-    return res.json({
-      status: 'DEVICE_MISMATCH',
-      sessionStart: session.startTime
-    });
-  }
-
-  session.lastActive = new Date();
-  res.json({
-    status: 'SYNCED',
-    sessionStart: session.startTime,
-    tokens: session.tokens
-  });
 });
 
-app.post('/check-session', (req, res) => {
-  const { userId, deviceId } = req.body;
-  if (!userId || !deviceId) {
-    return res.status(400).json({ error: "Missing parameters" });
+// Fonction pour charger les données utilisateur
+async function loadUserData(userId) {
+  try {
+    const response = await fetch(`/api/user-data?userId=${userId}`);
+    if (!response.ok) throw new Error('Network response was not ok');
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    // Mise à jour de l'UI
+    document.getElementById('username').textContent = data.username || 'Anonymous';
+    document.getElementById('balance').textContent = data.balance || '0';
+    document.getElementById('lastClaim').textContent = data.lastClaim || 'Never';
+
+    return data;
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    showNotification('Failed to load user data', 'error');
+    throw error;
   }
+}
 
-  const session = activeSessions.get(userId);
-  if (!session) return res.json({ valid: false, message: "No active session" });
+// Configuration de la navigation
+function setupNavigation() {
+  const navButtons = {
+    'nav-claim': showClaimView,
+    'nav-tasks': showTasksView,
+    'nav-referral': showReferralView
+  };
 
-  if (session.deviceId !== deviceId) {
-    return res.json({
-      valid: false,
-      message: "Device mismatch",
-      sessionDevice: session.deviceId,
-      requestDevice: deviceId
-    });
-  }
-
-  const elapsedMinutes = (Date.now() - session.startTime) / (1000 * 60);
-  const remaining = Math.max(0, 60 - elapsedMinutes);
-
-  res.json({
-    valid: remaining > 0,
-    startTime: session.startTime,
-    remainingMinutes: remaining,
-    tokens: session.tokens || 0
-  });
-});
-
-app.post('/start-session', (req, res) => {
-  const { userId, deviceId } = req.body;
-  const MAX_MINUTES = 60;
-  const existingSession = activeSessions.get(userId);
-  const now = Date.now();
-
-  if (existingSession) {
-    const minutesUsed = (now - existingSession.startTime) / (1000 * 60);
-    const remaining = MAX_MINUTES - minutesUsed;
-
-    if (remaining > 0) {
-      return res.json({
-        status: "SESSION_RESUMED",
-        message: `Session reprise (${Math.floor(remaining)} minutes restantes)`,
-        startTime: existingSession.startTime,
-        remainingMinutes: Math.floor(remaining)
+  Object.entries(navButtons).forEach(([id, handler]) => {
+    const button = document.getElementById(id);
+    if (button) {
+      button.addEventListener('click', () => {
+        // Mettre à jour l'état actif des boutons
+        document.querySelectorAll('.nav-btn').forEach(btn => 
+          btn.classList.remove('active'));
+        button.classList.add('active');
+        
+        // Exécuter le gestionnaire
+        handler();
       });
     }
+  });
+}
 
-    activeSessions.delete(userId);
-    return res.status(403).json({
-      error: "LIMIT_REACHED",
-      message: "Vous avez déjà utilisé vos 60 minutes de minage"
-    });
+// Vue Claim (Mining)
+async function showClaimView() {
+  const content = document.getElementById('content');
+  const userId = Telegram.WebApp.initData?.user?.id;
+  
+  if (!userId) {
+    content.innerHTML = '<p>Error: User not authenticated</p>';
+    return;
   }
 
-  activeSessions.set(userId, {
-    startTime: now,
-    lastActive: now,
-    deviceId,
-    totalMinutes: 0
+  // HTML pour la vue Claim
+  content.innerHTML = `
+    <div class="claim-container">
+      <div class="mining-stats">
+        <div class="stat-card">
+          <img src="./images/mining.png" alt="Mining" class="stat-icon" loading="lazy" />
+          <div class="stat-info">
+            <span class="stat-label">Mining Session</span>
+            <span id="mining-time" class="stat-value">00:00:00</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <img src="./images/speed.png" alt="Speed" class="stat-icon" loading="lazy" />
+          <div class="stat-info">
+            <span class="stat-label">Mining Speed</span>
+            <span id="mining-speed" class="stat-value">1 token/min</span>
+          </div>
+        </div>
+      </div>
+      <button id="start-mining" class="action-btn">
+        <img src="./images/start.png" alt="Start" class="btn-icon" loading="lazy" />
+        Start Mining
+      </button>
+      <button id="claim-tokens" class="action-btn claim-btn" disabled>
+        <img src="./images/claim.png" alt="Claim" class="btn-icon" loading="lazy" />
+        Claim Tokens (<span id="claim-amount">0</span>)
+      </button>
+    </div>
+  `;
+
+  // Gestionnaires d'événements pour les boutons
+  const startBtn = document.getElementById('start-mining');
+  const claimBtn = document.getElementById('claim-tokens');
+  
+  let miningInterval;
+  let secondsMined = 0;
+  let isMining = false;
+
+  startBtn.addEventListener('click', async () => {
+    if (isMining) return;
+    
+    try {
+      const response = await fetch('/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId,
+          deviceId: generateDeviceId() 
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        showNotification(data.message || 'Failed to start session', 'error');
+        return;
+      }
+      
+      isMining = true;
+      startBtn.disabled = true;
+      claimBtn.disabled = false;
+      
+      // Démarrer le minuteur
+      miningInterval = setInterval(() => {
+        secondsMined++;
+        updateMiningDisplay(secondsMined);
+      }, 1000);
+      
+      showNotification('Mining session started!', 'success');
+    } catch (error) {
+      console.error('Error starting session:', error);
+      showNotification('Failed to start mining', 'error');
+    }
   });
 
-  res.json({
-    status: "SESSION_STARTED",
-    startTime: now,
-    remainingMinutes: MAX_MINUTES
+  claimBtn.addEventListener('click', async () => {
+    if (!isMining) return;
+    
+    try {
+      const minutesMined = Math.floor(secondsMined / 60);
+      const response = await fetch('/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          userId,
+          deviceId: generateDeviceId(),
+          miningTime: minutesMined
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        showNotification(data.message || 'Claim failed', 'error');
+        return;
+      }
+      
+      // Réinitialiser l'état minier
+      clearInterval(miningInterval);
+      isMining = false;
+      secondsMined = 0;
+      startBtn.disabled = false;
+      claimBtn.disabled = true;
+      updateMiningDisplay(0);
+      
+      // Mettre à jour le solde affiché
+      document.getElementById('balance').textContent = data.balance;
+      
+      showNotification(data.message || 'Tokens claimed successfully!', 'success');
+    } catch (error) {
+      console.error('Error claiming tokens:', error);
+      showNotification('Failed to claim tokens', 'error');
+    }
   });
-});
 
-app.post('/update-session', async (req, res) => {
-  const { userId, tokens, deviceId } = req.body;
-
+  // Charger la vitesse de minage
   try {
-    if (!userId || !tokens || !deviceId) {
-      return res.status(400).json({ error: "Missing parameters" });
+    const userData = await fetch(`/api/user-data?userId=${userId}`).then(r => r.json());
+    if (userData.mining_speed) {
+      document.getElementById('mining-speed').textContent = 
+        `${userData.mining_speed} token${userData.mining_speed !== 1 ? 's' : ''}/min`;
     }
-
-    const session = activeSessions.get(userId);
-    if (!session) return res.status(404).json({ error: "Session not found" });
-    if (session.deviceId !== deviceId) return res.status(403).json({ error: "Device mismatch" });
-
-    session.tokens = parseFloat(tokens);
-    session.lastActive = new Date();
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Sessions!A2:D",
-      valueInputOption: "USER_ENTERED",
-      resource: {
-        values: [[userId, tokens, new Date().toISOString(), deviceId]]
-      }
-    });
-
-    res.json({ success: true });
   } catch (error) {
-    console.error('Update session error:', error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error loading mining speed:', error);
   }
-});
+}
 
-app.post('/api/referrals', async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
+function updateMiningDisplay(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  document.getElementById('mining-time').textContent = 
+    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  
+  const minutesMined = Math.floor(seconds / 60);
+  document.getElementById('claim-amount').textContent = minutesMined;
+}
 
+// Vue Tasks
+async function showTasksView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="tasks-container">
+      <h2 class="section-title">Available Tasks</h2>
+      <div id="tasks-list" class="tasks-list">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+  `;
+  
   try {
-    const user = await getUserData(userId);
-    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
-
-    const referralsData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Referrals!A2:D"
-    });
-
-    const referrals = referralsData.data.values?.filter(row => row[0] === user.referralCode) || [];
-
-    res.json({
-      referralUrl: `https://t.me/${process.env.BOT_USERNAME}?start=ref_${userId}`,
-      totalReferrals: referrals.length,
-      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0),
-      referralCode: user.referralCode
-    });
-
-  } catch (err) {
-    console.error('Referrals error:', err);
-    res.status(500).json({ error: "LOAD_FAILED", message: "Échec du chargement" });
-  }
-});
-
-app.get('/api/user-data', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
-
-    const usersData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
-    });
-
-    const user = usersData.data.values?.find(row => row[2]?.toString() === userId.toString());
-    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
-
-    res.json({
-      username: user[1],
-      balance: user[3],
-      lastClaim: user[4],
-      mining_speed: parseFloat(user[6]) || 1
-    });
-  } catch (err) {
-    console.error('User data error:', err);
-    res.status(500).json({ error: "SERVER_ERROR" });
-  }
-});
-
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
-
-    const userData = await getUserData(userId);
-    if (!userData) return res.status(404).json({ error: "USER_NOT_FOUND" });
-
-    res.json({
-      username: userData.username,
-      balance: userData.balance,
-      last_claim: userData.lastClaim,
-      miningSpeed: userData.mining_speed
+    const response = await fetch('/api/tasks');
+    const tasks = await response.json();
+    
+    const tasksList = document.getElementById('tasks-list');
+    tasksList.innerHTML = '';
+    
+    if (tasks.error || !tasks.length) {
+      tasksList.innerHTML = '<p class="no-tasks">No tasks available at the moment</p>';
+      return;
+    }
+    
+    tasks.forEach(task => {
+      const taskElement = document.createElement('div');
+      taskElement.className = 'task-card';
+      taskElement.innerHTML = `
+        <img src="${task.image}" alt="${task.title}" class="task-image" loading="lazy" />
+        <div class="task-info">
+          <h3 class="task-title">${task.title}</h3>
+          <p class="task-reward">Reward: ${task.reward} tokens</p>
+          <button class="task-btn">Complete Task</button>
+        </div>
+      `;
+      tasksList.appendChild(taskElement);
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error loading tasks:', error);
+    document.getElementById('tasks-list').innerHTML = 
+      '<p class="error-message">Failed to load tasks. Please try again later.</p>';
   }
-});
+}
 
-app.get('/api/tasks', async (req, res) => {
+// Vue Referral
+async function showReferralView() {
+  const content = document.getElementById('content');
+  const userId = Telegram.WebApp.initData?.user?.id;
+  
+  if (!userId) {
+    content.innerHTML = '<p>Error: User not authenticated</p>';
+    return;
+  }
+  
+  content.innerHTML = `
+    <div class="referral-container">
+      <h2 class="section-title">Referral Program</h2>
+      <div class="referral-stats">
+        <div class="stat-card">
+          <span class="stat-label">Your Referral Code</span>
+          <span id="referral-code" class="stat-value">Loading...</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Referrals</span>
+          <span id="total-referrals" class="stat-value">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Earned</span>
+          <span id="total-earned" class="stat-value">0 tokens</span>
+        </div>
+      </div>
+      <div class="referral-share">
+        <p>Share your referral link and earn 10% of your referrals' mining rewards!</p>
+        <div class="referral-link-container">
+          <input type="text" id="referral-link" readonly class="referral-link-input" />
+          <button id="copy-referral" class="copy-btn">
+            <i class="fas fa-copy"></i>
+          </button>
+        </div>
+        <button id="share-referral" class="action-btn">
+          <i class="fas fa-share-alt"></i> Share Link
+        </button>
+      </div>
+    </div>
+  `;
+  
   try {
-    const tasksData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Tasks!A2:E"
+    const response = await fetch('/api/referrals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
     });
-
-    const tasks = (tasksData.data.values || []).map(row => ({
-      id: row[0],
-      title: row[1],
-      image: row[2],
-      reward: row[3],
-      status: row[4]
-    })).filter(task => task.status === 'ACTIVE');
-
-    res.json(tasks);
-  } catch (err) {
-    console.error('Tasks error:', err);
-    res.status(500).json({ error: "Failed to load tasks" });
-  }
-});
-
-app.post('/claim', async (req, res) => {
-  const { userId, deviceId, miningTime } = req.body;
-
-  if (!userId || !deviceId || isNaN(miningTime)) {
-    return res.status(400).json({ error: "Invalid data" });
-  }
-
-  try {
-    const session = activeSessions.get(userId);
-    if (!session || session.deviceId !== deviceId) {
-      return res.status(403).json({ error: "Invalid or expired session" });
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error);
     }
-
-    const usersData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
+    
+    document.getElementById('referral-code').textContent = data.referralCode;
+    document.getElementById('total-referrals').textContent = data.totalReferrals;
+    document.getElementById('total-earned').textContent = `${data.totalEarned} tokens`;
+    document.getElementById('referral-link').value = data.referralUrl;
+    
+    // Gestionnaires d'événements pour les boutons
+    document.getElementById('copy-referral').addEventListener('click', () => {
+      const linkInput = document.getElementById('referral-link');
+      linkInput.select();
+      document.execCommand('copy');
+      showNotification('Link copied to clipboard!', 'success');
     });
-
-    const userRow = usersData.data.values.findIndex(row => row[2] === userId);
-    if (userRow === -1) return res.status(404).json({ error: "User not found" });
-
-    const user = usersData.data.values[userRow];
-    const miningSpeed = parseFloat(user[6]) || 1;
-    const effectiveMinutes = Math.min(parseInt(miningTime), 60);
-    const tokensToClaim = effectiveMinutes * miningSpeed;
-
-    const currentBalance = parseInt(user[3]) || 0;
-    const newBalance = currentBalance + tokensToClaim;
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: `Users!D${userRow + 2}`,
-      valueInputOption: "USER_ENTERED",
-      resource: { values: [[newBalance]] }
-    });
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Transactions!A2:D",
-      valueInputOption: "USER_ENTERED",
-      resource: {
-        values: [[userId, tokensToClaim, "CLAIM", new Date().toLocaleString('fr-FR')]]
+    
+    document.getElementById('share-referral').addEventListener('click', () => {
+      if (window.Telegram && window.Telegram.WebApp) {
+        Telegram.WebApp.shareUrl(data.referralUrl);
+      } else {
+        showNotification('Sharing is only available in the Telegram app', 'info');
       }
     });
-
-    activeSessions.delete(userId);
-
-    return res.json({
-      status: "OK",
-      claimed: tokensToClaim,
-      balance: newBalance,
-      message: `Vous avez revendiqué ${tokensToClaim} tokens`
-    });
-
-  } catch (err) {
-    console.error('Claim error:', err);
-    return res.status(500).json({ error: "Server error" });
+    
+  } catch (error) {
+    console.error('Error loading referral data:', error);
+    document.getElementById('referral-code').textContent = 'Error loading data';
+    showNotification('Failed to load referral data', 'error');
   }
-});
+}
 
-// Webhook (FIX: utiliser la fonction webhookCallback)
-app.use('/bot', webhookCallback(bot));
+// Fonction utilitaire pour générer un ID de périphérique
+function generateDeviceId() {
+  return 'device-' + Math.random().toString(36).substr(2, 9);
+}
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-
-// Start server
-initializeApp();
+// Fonction pour afficher les notifications
+function showNotification(message, type = 'info') {
+  const notification = document.getElementById('notification');
+  if (!notification) return;
+  
+  notification.textContent = message;
+  notification.className = `notification ${type}`;
+  notification.classList.remove('hidden');
+  
+  setTimeout(() => {
+    notification.classList.add('hidden');
+  }, 5000);
+}
