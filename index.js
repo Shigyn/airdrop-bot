@@ -270,6 +270,7 @@ app.use((req, res, next) => {
   next();
 });
 const initializeApp = async () => {
+  let server;
   try {
     // Vérifiez que toutes les variables d'environnement nécessaires sont présentes
     if (!process.env.GOOGLE_CREDS_B64) {
@@ -353,7 +354,7 @@ const initializeApp = async () => {
     // Démarrez le serveur
     try {
       // Utiliser le port 8080 pour Render
-      const server = app.listen(8080, () => {
+      server = app.listen(8080, () => {
         console.log(`Server running on port 8080`);
         console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
         console.log(`Google Sheets initialized: ${sheetsInitialized}`);
