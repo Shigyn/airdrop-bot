@@ -77,8 +77,8 @@ const initializeApp = async () => {
     if (!process.env.GOOGLE_CREDS_B64) {
       throw new Error('GOOGLE_CREDS_B64 is required');
     }
-    if (!process.env.BOT_TOKEN) {
-      throw new Error('BOT_TOKEN is required');
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
+      throw new Error('TELEGRAM_BOT_TOKEN is required');
     }
 
     // Configuration des timeouts

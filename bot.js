@@ -1,4 +1,4 @@
-const { Telegraf, Markup } = require('telegraf');
+const { Telegraf } = require('telegraf');
 const googleSheets = require('./googleSheets');
 const logger = require('./logger');
 
