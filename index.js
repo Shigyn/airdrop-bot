@@ -24,6 +24,7 @@ app.use(cors({
       'https://airdrop-bot-soy1.onrender.com'
     ];
     
+    // Vérifie si l'origine est autorisée
     if (!origin || allowedOrigins.some(allowed => origin.includes(allowed))) {
       callback(null, true);
     } else {
@@ -35,6 +36,50 @@ app.use(cors({
   credentials: true,
   exposedHeaders: ['Content-Length', 'X-Request-Id', 'Cache-Control']
 }));
+
+// Middleware de vérification de l'authentification Telegram
+app.use('/api', async (req, res, next) => {
+  try {
+    // Vérifie si les données Telegram sont présentes
+    const telegramData = req.headers['telegram-data'];
+    if (!telegramData) {
+      return res.status(401).json({
+        error: "AUTH_REQUIRED",
+        message: "Telegram authentication data is required"
+      });
+    }
+
+    // Parse les données Telegram
+    const initData = JSON.parse(telegramData);
+    if (!initData.auth_date || !initData.user) {
+      return res.status(401).json({
+        error: "INVALID_AUTH_DATA",
+        message: "Invalid Telegram authentication data"
+      });
+    }
+
+    // Vérifie si l'auth_date est récent (moins de 10 minutes)
+    const authDate = parseInt(initData.auth_date);
+    const now = Math.floor(Date.now() / 1000);
+    if (now - authDate > 600) {
+      return res.status(401).json({
+        error: "AUTH_EXPIRED",
+        message: "Authentication expired"
+      });
+    }
+
+    // Ajoute les données utilisateur à la requête
+    req.telegramUser = initData.user;
+    next();
+  } catch (error) {
+    console.error('Telegram auth error:', error);
+    res.status(401).json({
+      error: "AUTH_VALIDATION_FAILED",
+      message: "Failed to validate Telegram authentication",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
 
 // Configuration des fichiers statiques
 app.use('/static', express.static(path.join(__dirname, 'public'), {
@@ -385,231 +430,49 @@ app.use('/api', (req, res, next) => {
       error: "TELEGRAM_AUTH_REQUIRED",
       message: "Telegram authentication data missing"
     });
-  }
-  next();
-});
 
-// Endpoint de test pour vérifier la configuration de Telegram
-app.get('/api/test-telegram', (req, res) => {
-  const telegramData = {
-    isTelegram: !!window.Telegram,
-    isWebApp: !!window.Telegram?.WebApp,
-    initData: window.Telegram?.WebApp?.initData,
-    initDataUnsafe: window.Telegram?.WebApp?.initDataUnsafe
-  };
-  
-  res.json({
-    status: 'success',
-    data: telegramData
-  });
-});
+        // Vérifiez que l'auth_date est récent (moins de 10 minutes)
+        const now = Math.floor(Date.now() / 1000);
+        if (now - authDate > 600) {
+          return res.status(401).json({ 
+            error: "AUTH_EXPIRED",
+            message: "Authentication expired"
+          });
+        }
 
-app.post('/api/validate-auth', (req, res) => {
-  try {
-    const { initData } = req.body;
-    
-    if (!initData) {
-      return res.status(400).json({ 
-        error: "AUTH_DATA_MISSING",
-        message: "Telegram auth data missing"
-      });
-    }
+        // Vérifiez l'intégrité des données avec le hash
+        const checkString = Object.entries(params)
+          .filter(([key]) => key !== 'hash')
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, value]) => `${key}=${value}`)
+          .join('\n');
 
-    // Vérifier que les données sont valides
-    const params = new URLSearchParams(initData);
-    const user = JSON.parse(params.get('user'));
-    const authDate = params.get('auth_date');
-    const hash = params.get('hash');
-    
-    if (!user?.id || !authDate || !hash) {
-      return res.status(401).json({ 
-        error: "INVALID_AUTH_DATA",
-        message: "Invalid Telegram auth data"
-      });
-    }
+        const secretKey = Buffer.from(process.env.BOT_TOKEN || '', 'utf8');
+        const hmac = crypto.createHmac('sha256', secretKey);
+        hmac.update(checkString);
+        const calculatedHash = hmac.digest('hex');
 
-    // Vérifier que l'auth_date est récent (moins de 10 minutes)
-    const now = Math.floor(Date.now() / 1000);
-    if (now - authDate > 600) {
-      return res.status(401).json({ 
-        error: "AUTH_EXPIRED",
-        message: "Authentication expired"
-      });
-    }
+        if (calculatedHash !== hash) {
+          return res.status(401).json({ 
+            error: "INVALID_HASH",
+            message: "Invalid authentication hash"
+          });
+        }
 
-    // Vérifier l'intégrité des données avec le hash
-    const checkString = Object.entries(params)
-      .filter(([key]) => key !== 'hash')
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, value]) => `${key}=${value}`)
-      .join('\n');
+        // Authentification réussie
+        res.json({ 
+          userId: user.id,
+          username: user.username || `user_${user.id}`,
+          authDate: new Date(authDate * 1000),
+          success: true
+        });
 
-    const secretKey = Buffer.from(process.env.BOT_TOKEN || '', 'utf8');
-    const hmac = crypto.createHmac('sha256', secretKey);
-    hmac.update(checkString);
-    const calculatedHash = hmac.digest('hex');
-
-    if (calculatedHash !== hash) {
-      return res.status(401).json({ 
-        error: "INVALID_HASH",
-        message: "Invalid authentication hash"
-      });
-    }
-
-    // Authentification réussie
-    res.json({ 
-      userId: user.id,
-      username: user.username || `user_${user.id}`,
-      authDate: new Date(authDate * 1000),
-      success: true
-    });
-
-  } catch (error) {
-    console.error('Auth validation error:', error);
-    res.status(500).json({ 
-      error: "AUTH_VALIDATION_FAILED",
-      message: "Failed to validate authentication"
-    });
-  }
-});
-
-// Endpoint pour récupérer les données utilisateur
-app.get('/api/user-data', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    
-    if (!userId) {
-      return res.status(400).json({ error: "USER_ID_REQUIRED" });
-    }
-
-    // Récupérer les données utilisateur depuis Google Sheets
-    const [userRow] = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: `Users!A2:D`,
-      majorDimension: 'ROWS'
-    });
-
-    const userData = userRow.values?.find(row => row[0] === userId);
-    
-    if (!userData) {
-      return res.status(404).json({
-        error: "USER_NOT_FOUND",
-        message: "User data not found"
-      });
-    }
-
-    // Récupérer les données de session
-    const session = activeSessions.get(userId);
-    const miningSpeed = session ? 1 : 0; // Vitesse de minage par défaut
-
-    // Formatage des données
-    const user = {
-      userId: userData[0],
-      username: userData[1] || `user_${userId}`,
-      balance: parseFloat(userData[2]) || 0,
-      lastClaim: userData[3] || 'Never',
-      miningSpeed: miningSpeed,
-      miningTime: session ? session.totalMinutes : 0
-    };
-
-    res.json(user);
-  } catch (error) {
-    console.error('Error getting user data:', error);
-    res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "Failed to fetch user data"
-    });
-  }
-});
-
-app.post('/api/referrals', async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
-
-  try {
-    const user = await getUserData(userId);
-    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
-
-    const referralsData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Referrals!A2:D"
-    });
-
-    const referrals = referralsData.data.values?.filter(row => row[0] === user.referralCode) || [];
-
-    res.json({
-      referralUrl: `https://t.me/${process.env.BOT_USERNAME}?start=ref_${userId}`,
-      totalReferrals: referrals.length,
-      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0),
-      referralCode: user.referralCode
-    });
-  } catch (err) {
-    console.error('Referrals error:', err);
-    res.status(500).json({ error: "LOAD_FAILED", message: "Échec du chargement" });
-  }
-});
-
-app.get('/api/user-data', async (req, res) => {
-  try {
-    // Vérifiez les en-têtes d'authentification
-    const telegramData = req.headers['telegram-data'];
-    const userId = req.query.userId;
-    
-    console.log(`User data request for: ${userId}`); // Debug
-    console.log('Telegram auth data:', telegramData); // Debug
-
-    if (!userId) {
-      return res.status(400).json({ 
-        error: "USER_ID_REQUIRED",
-        message: "User ID is required"
-      });
-    }
-
-    // Validation basique des données Telegram (à améliorer)
-    if (!telegramData) {
-      return res.status(401).json({
-        error: "UNAUTHORIZED",
-        message: "Telegram auth data missing"
-      });
-    }
-
-    // Chargez les données depuis Google Sheets
-    const usersData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
-    });
-
-    const user = usersData.data.values?.find(row => 
-      row[2]?.toString() === userId.toString()
-    );
-
-    if (!user) {
-      return res.status(404).json({ 
-        error: "USER_NOT_FOUND",
-        message: "User not found in database"
-      });
-    }
-
-    // Réponse réussie
-    res.json({
-      username: user[1] || `user_${userId}`,
-      balance: parseInt(user[3]) || 0,
-      lastClaim: user[4] || null,
-      mining_speed: parseFloat(user[6]) || 1
-    });
-
-  } catch (err) {
-    console.error('Server error in /api/user-data:', err);
-    res.status(500).json({ 
-      error: "SERVER_ERROR",
-      message: "Internal server error",
-      details: process.env.NODE_ENV === 'development' ? err.message : null
-    });
-  }
-});
-
-app.get('/api/dashboard', async (req, res) => {
-  try {
+      } catch (error) {
+        console.error('Auth validation error:', error);
+        res.status(500).json({ 
+          error: "AUTH_VALIDATION_FAILED",
+          message: "Failed to validate authentication"
+        });
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
 
