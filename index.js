@@ -257,18 +257,11 @@ const initializeApp = async () => {
 
       // Export the server for testing
       module.exports = server;
+      return server;
     } catch (error) {
       console.error('Error starting server:', error);
       process.exit(1);
     }
-
-    // Gestion des erreurs de serveur
-    server.on('error', (error) => {
-      console.error('Server error:', error);
-      process.exit(1);
-    });
-
-    // Export the server for testing
     module.exports = server;
 
     // Gestion des erreurs de serveur
