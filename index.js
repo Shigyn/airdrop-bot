@@ -423,70 +423,70 @@ app.post('/update-session', async (req, res) => {
   }
 });
 
-// Ajoutez ce middleware avant vos routes
 app.use('/api', (req, res, next) => {
   if (!req.headers['telegram-data']) {
     return res.status(401).json({
       error: "TELEGRAM_AUTH_REQUIRED",
       message: "Telegram authentication data missing"
     });
+  }
+  next();
+});
 
-        // Vérifiez que l'auth_date est récent (moins de 10 minutes)
-        const now = Math.floor(Date.now() / 1000);
-        if (now - authDate > 600) {
-          return res.status(401).json({ 
-            error: "AUTH_EXPIRED",
-            message: "Authentication expired"
-          });
-        }
-
-        // Vérifiez l'intégrité des données avec le hash
-        const checkString = Object.entries(params)
-          .filter(([key]) => key !== 'hash')
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([key, value]) => `${key}=${value}`)
-          .join('\n');
-
-        const secretKey = Buffer.from(process.env.BOT_TOKEN || '', 'utf8');
-        const hmac = crypto.createHmac('sha256', secretKey);
-        hmac.update(checkString);
-        const calculatedHash = hmac.digest('hex');
-
-        if (calculatedHash !== hash) {
-          return res.status(401).json({ 
-            error: "INVALID_HASH",
-            message: "Invalid authentication hash"
-          });
-        }
-
-        // Authentification réussie
-        res.json({ 
-          userId: user.id,
-          username: user.username || `user_${user.id}`,
-          authDate: new Date(authDate * 1000),
-          success: true
-        });
-
-      } catch (error) {
-        console.error('Auth validation error:', error);
-        res.status(500).json({ 
-          error: "AUTH_VALIDATION_FAILED",
-          message: "Failed to validate authentication"
-        });
+// Route pour récupérer les données utilisateur
+app.get('/api/user-data', async (req, res) => {
+  try {
     const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
+    if (!userId) {
+      return res.status(400).json({
+        error: "MISSING_USER_ID",
+        message: "User ID is required"
+      });
+    }
 
-    const userData = await getUserData(userId);
-    if (!userData) return res.status(404).json({ error: "USER_NOT_FOUND" });
+    // Vérifiez que l'utilisateur est authentifié via Telegram
+    if (!req.telegramUser || req.telegramUser.id !== userId) {
+      return res.status(401).json({
+        error: "INVALID_USER",
+        message: "User ID does not match authenticated user"
+      });
+    }
+
+    // Récupérez les données utilisateur depuis Google Sheets
+    const user = await getUserData(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: "USER_NOT_FOUND",
+        message: "User not found"
+      });
+    }
+
+    // Ajoutez les données de session si elles existent
+    const session = activeSessions.get(userId);
+    const sessionData = session ? {
+      startTime: session.startTime,
+      totalTime: session.totalMinutes,
+      tokensMined: session.tokensMined
+    } : null;
 
     res.json({
-      username: userData.username,
-      balance: parseInt(userData.balance) || 0,
-      last_claim: userData.lastClaim,
-      miningSpeed: userData.mining_speed
+      success: true,
+      data: {
+        username: user.username || `user_${userId}`,
+        balance: parseFloat(user.balance) || 0,
+        lastClaim: user.lastClaim || 'Never',
+        miningSpeed: parseFloat(user.miningSpeed) || 1,
+        miningTime: parseFloat(user.miningTime) || 0,
+        session: sessionData
+      }
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Get user data error:', error);
+    res.status(500).json({
+      error: "INTERNAL_ERROR",
+      message: "Failed to fetch user data",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
