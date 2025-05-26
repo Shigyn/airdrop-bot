@@ -124,6 +124,9 @@ function initNavigation() {
       if (this.id === 'nav-referral') loadReferrals();
     });
   });
+  
+  // Charger la page initiale
+  showClaim();
 }
 
 function updateUserInfo({ username, balance }) {
@@ -170,6 +173,12 @@ async function demarrerMinage() {
     const elapsedMs = now - lastUpdate;
     lastUpdate = now;
 
+    const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
+    if (elapsedMinutes >= 60) {
+      clearInterval(miningInterval);
+      return;
+    }
+
     // Calcul des tokens gagnés
     const newTokens = (elapsedMs / 60000) * Mining_Speed;
     tokens = Math.min(tokens + newTokens, 60 * Mining_Speed); // Plafond à 60 tokens
@@ -179,6 +188,7 @@ async function demarrerMinage() {
     updateDisplay();
 
   }, 1000);
+}
 
   // Mise à jour initiale
   updateDisplay();
@@ -251,8 +261,8 @@ async function handleClaim() {
     
     // Mise à jour UI
     if (result.balance !== undefined) {
+  balance = result.balance; // Mettre à jour la variable globale
   updateUserInfo({ balance: result.balance.toString() });
-  document.getElementById('balance').textContent = result.balance;
 }
     
     btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
@@ -277,6 +287,11 @@ function updateDisplay() {
   const elapsedSeconds = (now - sessionStartTime) / 1000;
   const maxTime = 3600; // 1h session max
   const remainingSeconds = Math.max(0, maxTime - elapsedSeconds);
+
+  // Arrêter le minage si le temps est écoulé
+  if (remainingSeconds <= 0) {
+    clearInterval(miningInterval);
+  }
 
   // Formatage du temps
   const mins = Math.floor(remainingSeconds / 60);
@@ -450,9 +465,15 @@ function copyToClipboard(text) {
 
 async function loadUserData() {
   try {
-    const response = await fetch(`/api/user-data?userId=${userId}`);
+    const response = await fetch(`/api/dashboard?userId=${userId}`);
     if (!response.ok) throw new Error('Failed to load user data');
-    return await response.json();
+    const data = await response.json();
+    return {
+      username: data.username,
+      balance: data.balance,
+      lastClaim: data.last_claim,
+      mining_speed: data.miningSpeed
+    };
   } catch (error) {
     console.error('Error loading user data:', error);
     return { mining_speed: 1 };

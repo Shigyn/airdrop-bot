@@ -279,14 +279,17 @@ app.get('/api/user-data', async (req, res) => {
 app.get('/api/dashboard', async (req, res) => {
   try {
     const userId = req.query.userId;
-    const userData = await getUserData(userId); // À implémenter
-    res.json({
-	username: userData.username,
-	balance: userData.balance,
-	last_claim: userData.lastClaim,
-	miningSpeed: userData.mining_speed
-});
+    if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
 
+    const userData = await getUserData(userId);
+    if (!userData) return res.status(404).json({ error: "USER_NOT_FOUND" });
+
+    res.json({
+      username: userData.username,
+      balance: userData.balance,
+      last_claim: userData.lastClaim,
+      miningSpeed: userData.mining_speed
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
