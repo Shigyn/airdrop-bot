@@ -470,8 +470,14 @@ app.post('/claim', async (req, res) => {
   }
 });
 
-app.use(bot.webhookCallback('/bot'));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(bot.webhookCallback('/bot'));// Par :
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.png') || path.endsWith('.ico')) {
+      res.set('Cache-Control', 'public, max-age=86400');
+    }
+  }
+}))app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 initializeApp();
