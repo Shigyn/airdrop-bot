@@ -9,35 +9,27 @@ const webhookUrl = `https://airdrop-bot-soy1.onrender.com${webhookPath}`;
 // Créer le bot en mode polling
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
-// Démarrer le polling
-bot.launch()
-  .then(() => {
+// Initialiser les services
+async function initializeServices() {
+  try {
+    await googleSheets.initGoogleSheets();
+    logger.info('Google Sheets initialized successfully');
+    
+    await bot.launch();
     logger.info('Bot started successfully in polling mode');
-  })
-  .catch(err => {
-    logger.error('Failed to start bot:', err);
+    
+    // Configuration du webhook
+    await bot.telegram.setWebhook(webhookUrl);
+    logger.info(`Webhook configured at ${webhookUrl}`);
+    
+  } catch (err) {
+    logger.error('Failed to initialize services:', err);
     process.exit(1);
-  });
+  }
+}
 
-googleSheets.initGoogleSheets().catch(err => {
-  logger.error('Sheets initialization failed:', err);
-  process.exit(1);
-});
-
-// Démarrer le bot
-const startBot = () => {
-  bot.launch()
-    .then(() => {
-      logger.info('Bot started successfully in polling mode');
-    })
-    .catch(err => {
-      logger.error('Failed to start bot:', err);
-      process.exit(1);
-    });
-};
-
-// Démarrer le bot une seule fois
-startBot();
+// Démarrer une seule fois
+initializeServices();
 
 // Gestion des commandes
 bot.start(async (ctx) => {
