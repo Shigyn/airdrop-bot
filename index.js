@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const { bot, webhookCallback } = require('./bot');
 const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
 const { google } = require('googleapis');
@@ -269,30 +270,71 @@ app.use('/api', (req, res, next) => {
 });
 
 app.post('/api/validate-auth', (req, res) => {
-  const { initData } = req.body;
-  
-  if (!initData) {
-    return res.status(400).json({ error: "Telegram auth data missing" });
-  }
-
-  // Ici vous devriez valider les données d'authentification
-  // Pour le moment, nous allons juste extraire l'user ID
   try {
+    const { initData } = req.body;
+    
+    if (!initData) {
+      return res.status(400).json({ 
+        error: "AUTH_DATA_MISSING",
+        message: "Telegram auth data missing"
+      });
+    }
+
+    // Vérifier que les données sont valides
     const params = new URLSearchParams(initData);
     const user = JSON.parse(params.get('user'));
+    const authDate = params.get('auth_date');
+    const hash = params.get('hash');
     
-    if (!user?.id) {
-      return res.status(401).json({ error: "Invalid Telegram auth data" });
+    if (!user?.id || !authDate || !hash) {
+      return res.status(401).json({ 
+        error: "INVALID_AUTH_DATA",
+        message: "Invalid Telegram auth data"
+      });
     }
-    
+
+    // Vérifier que l'auth_date est récent (moins de 10 minutes)
+    const now = Math.floor(Date.now() / 1000);
+    if (now - authDate > 600) {
+      return res.status(401).json({ 
+        error: "AUTH_EXPIRED",
+        message: "Authentication expired"
+      });
+    }
+
+    // Vérifier l'intégrité des données avec le hash
+    const checkString = Object.entries(params)
+      .filter(([key]) => key !== 'hash')
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+
+    const secretKey = Buffer.from(process.env.BOT_TOKEN || '', 'utf8');
+    const hmac = crypto.createHmac('sha256', secretKey);
+    hmac.update(checkString);
+    const calculatedHash = hmac.digest('hex');
+
+    if (calculatedHash !== hash) {
+      return res.status(401).json({ 
+        error: "INVALID_HASH",
+        message: "Invalid authentication hash"
+      });
+    }
+
+    // Authentification réussie
     res.json({ 
       userId: user.id,
       username: user.username || `user_${user.id}`,
-      authDate: new Date(params.get('auth_date') * 1000)
+      authDate: new Date(authDate * 1000),
+      success: true
     });
+
   } catch (error) {
     console.error('Auth validation error:', error);
-    res.status(500).json({ error: "Failed to validate auth" });
+    res.status(500).json({ 
+      error: "AUTH_VALIDATION_FAILED",
+      message: "Failed to validate authentication"
+    });
   }
 });
 

@@ -33,6 +33,25 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     console.log('User authenticated with ID:', userId);
     
+    // Vérifiez si l'authentification est valide
+    const authResponse = await fetch('/api/validate-auth', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': Telegram.WebApp.initData
+      },
+      body: JSON.stringify({ initData: Telegram.WebApp.initData })
+    });
+
+    if (!authResponse.ok) {
+      const errorData = await authResponse.json();
+      console.error('Auth validation failed:', errorData);
+      throw new Error(errorData.error || 'Invalid Telegram auth');
+    }
+
+    const authData = await authResponse.json();
+    console.log('Auth validated:', authData);
+    
     // Chargez les données utilisateur depuis votre backend
     await loadUserData(userId);
     setupNavigation();
