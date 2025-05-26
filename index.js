@@ -245,7 +245,6 @@ const initializeApp = async () => {
               process.exit(1);
             }
             console.log('Previous instance stopped. Restarting...');
-            // Redémarrer l'application
             process.exit(0); // Sortir proprement au lieu de redémarrer
           });
         } else {
