@@ -1,46 +1,117 @@
 // Initialisation de l'application
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log('DOM fully loaded and parsed');
+  console.log('WebApp initialized');
   
-  // Vérification de l'environnement Telegram
-  if (!window.Telegram || !window.Telegram.WebApp) {
-    console.error('Telegram WebApp SDK not loaded');
-    showNotification('Error: Telegram context not available', 'error');
-    return;
+  // Vérifiez que l'API Telegram est disponible
+  if (window.Telegram && window.Telegram.WebApp) {
+    // Affichez des informations de débogage
+    console.log('Telegram WebApp available:', Telegram.WebApp);
+    console.log('Init data:', Telegram.WebApp.initData);
+    console.log('Init data unsafe:', Telegram.WebApp.initDataUnsafe);
+    
+    // Développez l'application pour occuper tout l'écran
+    Telegram.WebApp.expand();
+    
+    // Récupérez les données utilisateur
+    const user = Telegram.WebApp.initDataUnsafe?.user;
+    const userId = user?.id;
+    
+    if (userId) {
+      console.log('User authenticated with ID:', userId);
+      try {
+        // Chargez les données utilisateur depuis votre backend
+        await loadUserData(userId);
+        setupNavigation();
+        showClaimView();
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        showNotification('Failed to load user data', 'error');
+      }
+    } else {
+      console.error('User not authenticated');
+      showNotification('Please open this app from Telegram', 'error');
+      // Affichez un message plus convivial pour les utilisateurs
+      document.getElementById('content').innerHTML = `
+        <div class="auth-error">
+          <h2>Authentication Required</h2>
+          <p>Please open this application from within the Telegram bot to continue.</p>
+          <p>If you're already in Telegram, try refreshing the page.</p>
+        </div>
+      `;
+    }
+  } else {
+    console.error('Telegram WebApp SDK not available');
+    // Mode de secours pour le débogage hors de Telegram
+    if (process.env.NODE_ENV === 'development') {
+      showNotification('Running in development mode', 'info');
+      // Chargez des données factices pour le développement
+      document.getElementById('username').textContent = 'Dev User';
+      document.getElementById('balance').textContent = '1000';
+      document.getElementById('lastClaim').textContent = new Date().toLocaleString();
+      setupNavigation();
+      showClaimView();
+    } else {
+      showNotification('Please open in Telegram', 'error');
+      document.getElementById('content').innerHTML = `
+        <div class="auth-error">
+          <h2>Telegram Required</h2>
+          <p>This application only works within the Telegram messenger.</p>
+          <p>Please open it from our Telegram bot.</p>
+        </div>
+      `;
+    }
+  }
+});
+
+app.post('/api/validate-auth', (req, res) => {
+  const { initData } = req.body;
+  
+  if (!initData) {
+    return res.status(400).json({ error: "Telegram auth data missing" });
   }
 
-  // Initialisation de l'application Web Telegram
-  Telegram.WebApp.expand();
-  Telegram.WebApp.enableClosingConfirmation();
-  Telegram.WebApp.BackButton.onClick(() => Telegram.WebApp.close());
-
-  // Récupération des données utilisateur
-  const initData = Telegram.WebApp.initData || {};
-  const userId = initData.user?.id;
-  
-  if (!userId) {
-    showNotification('Error: User not authenticated', 'error');
-    return;
-  }
-
-  // Chargement des données utilisateur
+  // Ici vous devriez valider les données d'authentification
+  // Pour le moment, nous allons juste extraire l'user ID
   try {
-    await loadUserData(userId);
-    setupNavigation();
-    showClaimView();
+    const params = new URLSearchParams(initData);
+    const user = JSON.parse(params.get('user'));
+    
+    if (!user?.id) {
+      return res.status(401).json({ error: "Invalid Telegram auth data" });
+    }
+    
+    res.json({ 
+      userId: user.id,
+      username: user.username || `user_${user.id}`,
+      authDate: new Date(params.get('auth_date') * 1000)
+    });
   } catch (error) {
-    console.error('Initialization error:', error);
-    showNotification('Failed to load app data', 'error');
+    console.error('Auth validation error:', error);
+    res.status(500).json({ error: "Failed to validate auth" });
   }
 });
 
 // Fonction pour charger les données utilisateur
 async function loadUserData(userId) {
   try {
-    const response = await fetch(`/api/user-data?userId=${userId}`);
-    if (!response.ok) throw new Error('Network response was not ok');
+    // D'abord valider l'authentification avec le serveur
+    const authResponse = await fetch('/api/validate-auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        initData: window.Telegram.WebApp.initData 
+      })
+    });
     
-    const data = await response.json();
+    if (!authResponse.ok) {
+      throw new Error('Authentication failed');
+    }
+    
+    // Ensuite charger les données utilisateur
+    const userResponse = await fetch(`/api/user-data?userId=${userId}`);
+    if (!userResponse.ok) throw new Error('Network response was not ok');
+    
+    const data = await userResponse.json();
     
     if (data.error) {
       throw new Error(data.error);
