@@ -587,3 +587,17 @@ body {
   background-color: #4CAF50;
   transition: width 0.5s ease;
 }
+
+.error-message {
+  color: #ff4444;
+  padding: 10px;
+  margin-top: 15px;
+  border-radius: 5px;
+  background-color: #ffeeee;
+  border: 1px solid #ffcccc;
+  text-align: center;
+}
+
+.error-message.hidden {
+  display: none;
+}

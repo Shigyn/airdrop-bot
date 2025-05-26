@@ -105,45 +105,59 @@ app.post('/check-session', (req, res) => {
   });
 });
 
-app.post('/start-session', (req, res) => {
-  const { userId, deviceId } = req.body;
-  const MAX_MINUTES = 60;
+// Ajoutez ce middleware pour vérifier l'authentification
+app.use('/start-session', (req, res, next) => {
+  const telegramData = req.headers['telegram-data'];
+  if (!telegramData) {
+    return res.status(401).json({ 
+      error: "AUTH_REQUIRED",
+      message: "Telegram authentication data missing"
+    });
+  }
+  next();
+});
 
-  const existingSession = activeSessions.get(userId);
-  const now = Date.now();
-
-  if (existingSession) {
-    const minutesUsed = (now - existingSession.startTime) / (1000 * 60);
-    const remaining = MAX_MINUTES - minutesUsed;
-
-    if (remaining > 0) {
-      return res.json({
-        status: "SESSION_RESUMED",
-        message: `Session reprise (${Math.floor(remaining)} minutes restantes)` ,
-        startTime: existingSession.startTime,
-        remainingMinutes: Math.floor(remaining)
+app.post('/start-session', async (req, res) => {
+  try {
+    const { userId, deviceId } = req.body;
+    
+    // Validation supplémentaire
+    if (!userId || !deviceId) {
+      return res.status(400).json({ 
+        error: "INVALID_REQUEST",
+        message: "Missing parameters" 
       });
     }
 
-    activeSessions.delete(userId);
-    return res.status(403).json({
-      error: "LIMIT_REACHED",
-      message: "Vous avez déjà utilisé vos 60 minutes de minage"
+    // Votre logique existante de session...
+    const MAX_MINUTES = 60;
+    const existingSession = activeSessions.get(userId);
+    const now = Date.now();
+
+    if (existingSession) {
+      // ... (gardez votre logique existante)
+    }
+
+    activeSessions.set(userId, {
+      startTime: now,
+      lastActive: now,
+      deviceId,
+      totalMinutes: 0
+    });
+
+    res.json({
+      status: "SESSION_STARTED",
+      startTime: now,
+      remainingMinutes: MAX_MINUTES
+    });
+
+  } catch (error) {
+    console.error('Start session error:', error);
+    res.status(500).json({ 
+      error: "SERVER_ERROR",
+      message: "Internal server error" 
     });
   }
-
-  activeSessions.set(userId, {
-    startTime: now,
-    lastActive: now,
-    deviceId,
-    totalMinutes: 0
-  });
-
-  res.json({
-    status: "SESSION_STARTED",
-    startTime: now,
-    remainingMinutes: MAX_MINUTES
-  });
 });
 
 app.post('/update-session', async (req, res) => {
