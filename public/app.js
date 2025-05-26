@@ -21,25 +21,57 @@ function showNotification(message, type = 'info') {
 // Fonctions de données utilisateur
 async function loadUserData() {
   try {
+    // Vérifier l'authentification
+    if (!Telegram.WebApp.initData) {
+      throw new Error('Telegram Web App not initialized');
+    }
     const userId = Telegram.WebApp.initData?.user?.id;
-    if (!userId) throw new Error('User not authenticated');
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
 
+    // Récupérer les données utilisateur
     const response = await fetch('/api/user-data', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': Telegram.WebApp.initData
+      },
       body: JSON.stringify({ userId })
     });
 
-    if (!response.ok) throw new Error('Failed to fetch user data');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch user data');
+    }
+
     const userData = await response.json();
+    if (!userData || !userData.username || !userData.balance) {
+      throw new Error('Invalid user data received: ' + JSON.stringify(userData));
+    }
 
     // Mettre à jour l'UI
-    ['username', 'balance', 'lastClaim'].forEach(id => {
-      const element = document.getElementById(id);
-      if (element) {
-        element.textContent = userData[id] || 'N/A';
-      }
-    });
+    const username = document.getElementById('username');
+    const balance = document.getElementById('balance');
+    const lastClaim = document.getElementById('lastClaim');
+
+    if (username) {
+      username.textContent = userData.username;
+    } else {
+      console.error('Username element not found');
+    }
+
+    if (balance) {
+      balance.textContent = userData.balance;
+    } else {
+      console.error('Balance element not found');
+    }
+
+    if (lastClaim) {
+      lastClaim.textContent = userData.lastClaim ? new Date(userData.lastClaim).toLocaleString() : 'Never claimed';
+    } else {
+      console.error('Last claim element not found');
+    }
 
     return userData;
   } catch (error) {
