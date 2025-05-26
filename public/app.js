@@ -5,32 +5,56 @@ let miningInterval;
 let secondsMined = 0;
 let isMining = false;
 
-// Fonctions utilitaires
-function showNotification(message, type = 'info') {
-  try {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 3000);
-  } catch (error) {
-    console.error('Error showing notification:', error);
-  }
-}
+// Initialisation de l'application
+document.addEventListener('DOMContentLoaded', initializeApp);
 
-// Fonctions de données utilisateur
-async function loadUserData() {
+async function initializeApp() {
   try {
-    // Vérifier l'authentification
-    if (!Telegram.WebApp.initData) {
-      throw new Error('Telegram Web App not initialized');
+    // Vérifier que Telegram WebApp est initialisé
+    if (!window.Telegram || !window.Telegram.WebApp) {
+      throw new Error('Please open this app from Telegram');
     }
-    const userId = Telegram.WebApp.initData?.user?.id;
-    if (!userId) {
+
+    // Développer l'application pour utiliser tout l'écran
+    Telegram.WebApp.expand();
+
+    // Vérifier l'authentification
+    const user = Telegram.WebApp.initDataUnsafe?.user;
+    if (!user?.id) {
       throw new Error('User not authenticated');
     }
 
-    // Récupérer les données utilisateur
+    console.log('User authenticated:', user);
+
+    // Charger les données utilisateur
+    await loadUserData();
+
+    // Configurer la navigation
+    setupNavigation();
+
+    // Afficher la vue initiale
+    await showView('claim');
+  } catch (error) {
+    console.error('Initialization error:', error);
+    showNotification(error.message, 'error');
+    
+    const content = document.getElementById('content');
+    if (content) {
+      content.innerHTML = `
+        <div class="error-message">
+          <h2>Initialization Error</h2>
+          <p>${error.message}</p>
+          <p>Please open this app from Telegram.</p>
+        </div>
+      `;
+    }
+  }
+}
+
+async function loadUserData() {
+  try {
+    const userId = Telegram.WebApp.initDataUnsafe.user.id;
+    
     const response = await fetch('/api/user-data', {
       method: 'POST',
       headers: {
@@ -41,159 +65,207 @@ async function loadUserData() {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to fetch user data');
+      throw new Error('Failed to fetch user data');
     }
 
     const userData = await response.json();
-    if (!userData || !userData.username || !userData.balance) {
-      throw new Error('Invalid user data received: ' + JSON.stringify(userData));
-    }
-
-    // Mettre à jour l'UI
-    const username = document.getElementById('username');
-    const balance = document.getElementById('balance');
-    const lastClaim = document.getElementById('lastClaim');
-
-    if (username) {
-      username.textContent = userData.username;
-    } else {
-      console.error('Username element not found');
-    }
-
-    if (balance) {
-      balance.textContent = userData.balance;
-    } else {
-      console.error('Balance element not found');
-    }
-
-    if (lastClaim) {
-      lastClaim.textContent = userData.lastClaim ? new Date(userData.lastClaim).toLocaleString() : 'Never claimed';
-    } else {
-      console.error('Last claim element not found');
-    }
-
+    updateUserUI(userData);
+    
     return userData;
   } catch (error) {
     console.error('Error loading user data:', error);
-    showNotification('Erreur lors du chargement des données utilisateur', 'error');
+    showNotification('Failed to load user data', 'error');
     throw error;
   }
 }
 
-// Fonctions de minage
-function startMining() {
-  try {
-    const userId = Telegram.WebApp.initData?.user?.id;
-    if (!userId) throw new Error('User not authenticated');
+function updateUserUI(userData) {
+  const usernameElement = document.getElementById('username');
+  const balanceElement = document.getElementById('balance');
+  const lastClaimElement = document.getElementById('lastClaim');
 
-    const miningBtn = document.getElementById('mining-btn');
-    if (!miningBtn) throw new Error('Mining button not found');
-
-    miningBtn.innerHTML = `
-      <img src="./images/stop.png" alt="Stop" class="btn-icon" />
-      Stop Mining
-    `;
-    miningBtn.classList.add('active');
-
-    const miningAnimation = document.getElementById('mining-animation');
-    if (miningAnimation) miningAnimation.classList.add('active');
-
-    miningInterval = setInterval(() => {
-      secondsMined++;
-      updateMiningDisplay(secondsMined);
-    }, 1000);
-
-    isMining = true;
-  } catch (error) {
-    console.error('Error starting mining:', error);
-    showNotification('Erreur lors du démarrage du minage', 'error');
+  if (usernameElement) usernameElement.textContent = userData.username || 'N/A';
+  if (balanceElement) balanceElement.textContent = userData.balance || '0';
+  if (lastClaimElement) {
+    lastClaimElement.textContent = userData.lastClaim 
+      ? new Date(userData.lastClaim).toLocaleString() 
+      : 'Never claimed';
   }
+}
+
+function showNotification(message, type = 'info') {
+  const notification = document.createElement('div');
+  notification.className = `notification ${type}`;
+  notification.textContent = message;
+  document.body.appendChild(notification);
+  setTimeout(() => notification.remove(), 3000);
+}
+
+function setupNavigation() {
+  const navButtons = document.querySelectorAll('.nav-btn');
+  navButtons.forEach(button => {
+    button.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const viewId = button.dataset.view;
+      
+      navButtons.forEach(btn => btn.classList.remove('active'));
+      button.classList.add('active');
+      
+      await showView(viewId);
+    });
+  });
+}
+
+async function showView(viewId) {
+  const content = document.getElementById('content');
+  if (!content) return;
+
+  content.innerHTML = '<div class="loading-spinner"></div>';
+
+  try {
+    switch (viewId) {
+      case 'claim':
+        await showClaimView();
+        break;
+      case 'tasks':
+        await showTasksView();
+        break;
+      case 'referral':
+        await showReferralView();
+        break;
+      default:
+        throw new Error(`Unknown view: ${viewId}`);
+    }
+  } catch (error) {
+    console.error(`Error showing ${viewId} view:`, error);
+    content.innerHTML = `<div class="error">Error loading view</div>`;
+  }
+}
+
+async function showClaimView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="claim-view">
+      <h2>Mining</h2>
+      <div class="mining-stats">
+        <div id="mining-time">00:00:00</div>
+      </div>
+      <button id="mining-btn" class="primary-btn">
+        ${isMining ? 'Stop Mining' : 'Start Mining'}
+      </button>
+    </div>
+  `;
+
+  document.getElementById('mining-btn').addEventListener('click', toggleMining);
+}
+
+async function showTasksView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="tasks-view">
+      <h2>Available Tasks</h2>
+      <div class="tasks-list">
+        Loading tasks...
+      </div>
+    </div>
+  `;
+
+  try {
+    const response = await fetch('/api/tasks');
+    const tasks = await response.json();
+    
+    content.querySelector('.tasks-list').innerHTML = tasks.data.map(task => `
+      <div class="task-item">
+        <h3>${task.description}</h3>
+        <p>Reward: ${task.reward}</p>
+        <button class="task-btn" data-task-id="${task.id}">
+          Claim Task
+        </button>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Error loading tasks:', error);
+    content.querySelector('.tasks-list').innerHTML = `
+      <div class="error">Failed to load tasks</div>
+    `;
+  }
+}
+
+async function showReferralView() {
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="referral-view">
+      <h2>Referral Program</h2>
+      <div class="referral-info">
+        Loading referral information...
+      </div>
+    </div>
+  `;
+
+  try {
+    const userId = Telegram.WebApp.initDataUnsafe.user.id;
+    const response = await fetch(`/api/referral?userId=${userId}`);
+    const referralData = await response.json();
+    
+    content.querySelector('.referral-info').innerHTML = `
+      <p>Your referral code: ${referralData.data.referralCode}</p>
+      <p>Total referrals: ${referralData.data.referralsCount}</p>
+      <p>Earned points: ${referralData.data.pointsEarned}</p>
+      <button id="copy-referral" class="action-btn">
+        Copy Referral Link
+      </button>
+    `;
+
+    document.getElementById('copy-referral').addEventListener('click', () => {
+      navigator.clipboard.writeText(referralData.data.referralUrl);
+      showNotification('Referral link copied!', 'success');
+    });
+  } catch (error) {
+    console.error('Error loading referral info:', error);
+    content.querySelector('.referral-info').innerHTML = `
+      <div class="error">Failed to load referral information</div>
+    `;
+  }
+}
+
+function toggleMining() {
+  if (isMining) {
+    stopMining();
+  } else {
+    startMining();
+  }
+}
+
+function startMining() {
+  isMining = true;
+  secondsMined = 0;
+  updateMiningUI();
+  
+  miningInterval = setInterval(() => {
+    secondsMined++;
+    updateMiningUI();
+  }, 1000);
 }
 
 function stopMining() {
-  try {
-    if (!isMining) return;
-
-    const miningBtn = document.getElementById('mining-btn');
-    if (!miningBtn) throw new Error('Mining button not found');
-
-    miningBtn.innerHTML = `
-      <img src="./images/start.png" alt="Start" class="btn-icon" />
-      Start Mining
-    `;
-    miningBtn.classList.remove('active');
-
-    const miningAnimation = document.getElementById('mining-animation');
-    if (miningAnimation) miningAnimation.classList.remove('active');
-
-    clearInterval(miningInterval);
-    isMining = false;
-  } catch (error) {
-    console.error('Error stopping mining:', error);
-    showNotification('Erreur lors de l\'arrêt du minage', 'error');
-  }
+  isMining = false;
+  clearInterval(miningInterval);
+  updateMiningUI();
 }
 
-function updateMiningDisplay(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  
-  document.getElementById('mining-time').textContent = 
-    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-  
+function updateMiningUI() {
   const miningBtn = document.getElementById('mining-btn');
+  const miningTime = document.getElementById('mining-time');
+  
   if (miningBtn) {
-    if (seconds >= 30) {
-      miningBtn.innerHTML = `
-        <img src="./images/claim.png" alt="Claim" class="btn-icon" />
-        Claim (${Math.floor(seconds/60)}m)
-      `;
-      miningBtn.classList.add('claim-ready');
-    } else {
-      miningBtn.textContent = `Mining (${hours}h ${minutes}m ${secs}s)`;
-      miningBtn.classList.remove('claim-ready');
-    }
+    miningBtn.textContent = isMining ? 'Stop Mining' : 'Start Mining';
+  }
+  
+  if (miningTime) {
+    const hours = Math.floor(secondsMined / 3600);
+    const minutes = Math.floor((secondsMined % 3600) / 60);
+    const seconds = secondsMined % 60;
+    miningTime.textContent = 
+      `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }
 }
-
-// Fonctions de navigation
-function setupNavigation() {
-  try {
-    const navButtons = document.querySelectorAll('.nav-btn');
-    navButtons.forEach(button => {
-      button.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const viewId = button.dataset.view;
-        
-        // Gérer la navigation
-        navButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        await showView(viewId);
-      });
-    });
-  } catch (error) {
-    console.error('Error setting up navigation:', error);
-    showNotification('Erreur lors de la configuration de la navigation', 'error');
-  }
-}
-
-// Fonction principale d'initialisation
-async function initializeApp() {
-  try {
-    if (!Telegram.WebApp.initData) {
-      throw new Error('Telegram Web App not initialized');
-    }
-
-    await loadUserData();
-    setupNavigation();
-    await showView('claim');
-  } catch (error) {
-    console.error('Error initializing app:', error);
-    showNotification('Erreur lors de l\'initialisation de l\'application', 'error');
-  }
-}
-
-// Initialiser l'application au chargement
-document.addEventListener('DOMContentLoaded', initializeApp);
