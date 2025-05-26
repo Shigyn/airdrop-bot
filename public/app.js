@@ -1,3 +1,8 @@
+// Ajoutez en haut du fichier, après 'use strict' ou au début
+let miningInterval;
+let secondsMined = 0;
+let isMining = false;
+
 // Initialisation de l'application
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('WebApp initialized');
@@ -184,9 +189,6 @@ async function showClaimView() {
   document.getElementById('mining-btn').addEventListener('click', handleMiningAction);
 }
 
-      // Démarrer le minage ici...
-      startMiningTimer();
-
     } catch (error) {
       console.error('Start mining error:', error);
       errorDisplay.textContent = error.message;
@@ -254,34 +256,42 @@ function updateMiningDisplay(seconds) {
 }
 
 async function handleMiningAction() {
+  const userId = Telegram.WebApp.initDataUnsafe?.user?.id;
+  if (!userId) {
+    showNotification('User not authenticated', 'error');
+    return;
+  }
+
   const miningBtn = document.getElementById('mining-btn');
   miningBtn.disabled = true;
 
   try {
     if (!isMining) {
-      // Démarrer/reprendre la session
-      const sessionRes = await fetch('/start-session', {
+      // Démarrer la session
+      const response = await fetch('/start-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Telegram-Data': Telegram.WebApp.initData || ''
         },
         body: JSON.stringify({
-          userId: Telegram.WebApp.initDataUnsafe.user.id,
+          userId,
           deviceId: generateDeviceId()
         })
       });
 
-      const sessionData = await sessionRes.json();
-      if (sessionData.error) throw new Error(sessionData.message);
+      const data = await response.json();
+      if (data.error) throw new Error(data.message);
 
-      // Démarrer le timer visuel
+      // Démarrer le minage
       isMining = true;
+      secondsMined = 0;
       miningInterval = setInterval(() => {
         secondsMined++;
         updateMiningDisplay(secondsMined);
         
-        if (secondsMined >= 3600) { // 60 minutes max
+        // Arrêter à 60 minutes
+        if (secondsMined >= 3600) {
           clearInterval(miningInterval);
           miningBtn.disabled = false;
         }
@@ -289,33 +299,34 @@ async function handleMiningAction() {
 
     } else {
       // Claimer les tokens
-      const claimRes = await fetch('/claim', {
+      const minutes = Math.min(Math.floor(secondsMined / 60), 60);
+      const claimResponse = await fetch('/claim', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Telegram-Data': Telegram.WebApp.initData || ''
         },
         body: JSON.stringify({
-          userId: Telegram.WebApp.initDataUnsafe.user.id,
+          userId,
           deviceId: generateDeviceId(),
-          miningTime: Math.min(Math.floor(secondsMined / 60), 60)
+          miningTime: minutes
         })
       });
 
-      const claimData = await claimRes.json();
+      const claimData = await claimResponse.json();
       if (claimData.error) throw new Error(claimData.message);
 
-      // Réinitialiser l'UI
+      // Réinitialiser
       clearInterval(miningInterval);
       isMining = false;
       secondsMined = 0;
       updateMiningDisplay(0);
       document.getElementById('balance').textContent = claimData.balance;
-      showNotification(`Success! Claimed ${claimData.claimed} tokens`, 'success');
+      showNotification(`Claimed ${claimData.claimed} tokens!`, 'success');
     }
   } catch (error) {
+    console.error('Mining error:', error);
     showNotification(error.message, 'error');
-    console.error('Mining action failed:', error);
   } finally {
     miningBtn.disabled = false;
   }
