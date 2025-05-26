@@ -4,6 +4,9 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const { bot, webhookCallback } = require('./bot');
+
+// Configuration du webhook pour l'application
+app.post('/webhook/:token', webhookCallback);
 const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
 const { google } = require('googleapis');
 
@@ -212,7 +215,6 @@ const initializeApp = async () => {
       console.log('Bot started successfully');
     } catch (error) {
       console.error('Error starting bot:', error);
-      throw error;
     }
 
     // Démarrez le serveur
