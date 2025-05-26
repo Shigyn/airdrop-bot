@@ -140,12 +140,7 @@ app.post('/api/user-data', async (req, res) => {
 
     res.json({
       success: true,
-      data: {
-        username: userData.username,
-        balance: userData.balance,
-        lastClaim: userData.lastClaim,
-        miningSpeed: userData.mining_speed
-      }
+      data: userData
     });
   } catch (error) {
     console.error('Error getting user data:', error);
