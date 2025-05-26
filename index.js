@@ -243,10 +243,33 @@ const initializeApp = async () => {
         PORT = 3000;
       }
 
+      // Vérification si le port est déjà utilisé
       const server = app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
         console.log(`Google Sheets initialized: ${sheetsInitialized}`);
+      }).on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+          console.error(`Port ${PORT} is already in use. Trying to stop previous instance...`);
+          // Essayez de tuer le processus précédent
+          require('child_process').exec('pkill -f "node index.js"', (err) => {
+            if (err) {
+              console.error('Failed to kill previous instance:', err);
+            } else {
+              console.log('Previous instance stopped. Restarting...');
+              // Redémarrer l'application
+              require('child_process').exec('node index.js', (err) => {
+                if (err) {
+                  console.error('Failed to restart:', err);
+                  process.exit(1);
+                }
+              });
+            }
+          });
+        } else {
+          console.error('Server error:', error);
+          process.exit(1);
+        }
       });
 
       // Gestion des erreurs de serveur
