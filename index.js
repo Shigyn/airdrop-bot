@@ -215,15 +215,49 @@ const initializeApp = async () => {
       console.error('Error initializing bot:', error);
     }
 
-    // Vérifier si une instance est déjà en cours
+    // Gestion du verrou de démarrage
+    const fs = require('fs');
+    const lockFilePath = '.lock';
+    
     try {
-      const isAlreadyRunning = require('child_process').spawnSync('pkill', ['-0', '-f', 'node index.js']);
-      if (isAlreadyRunning.status === 0) {
-        console.error('Another instance is already running. Exiting...');
-        process.exit(1);
+      // Créer le dossier temporaire si nécessaire
+      if (!fs.existsSync('.temp')) {
+        fs.mkdirSync('.temp');
       }
+      
+      // Vérifier et créer le fichier de verrou
+      const lockFile = path.join('.temp', lockFilePath);
+      if (fs.existsSync(lockFile)) {
+        // Lire le contenu du fichier de verrou
+        const lockContent = fs.readFileSync(lockFile, 'utf8');
+        const [pid, timestamp] = lockContent.split('|');
+        
+        // Vérifier si le processus existe encore
+        try {
+          process.kill(parseInt(pid), 0);
+          console.error('Another instance is already running. Exiting...');
+          process.exit(1);
+        } catch (e) {
+          // Le processus n'existe plus, on peut supprimer le verrou et continuer
+          fs.unlinkSync(lockFile);
+        }
+      }
+      
+      // Créer le nouveau verrou
+      const currentPid = process.pid;
+      const currentTimestamp = Date.now();
+      fs.writeFileSync(lockFile, `${currentPid}|${currentTimestamp}`);
+      
+      // Nettoyer le verrou au shutdown
+      process.on('exit', () => {
+        if (fs.existsSync(lockFile)) {
+          fs.unlinkSync(lockFile);
+        }
+      });
+      process.on('SIGINT', () => process.exit(0));
+      process.on('SIGTERM', () => process.exit(0));
     } catch (err) {
-      console.error('Error checking for existing instance:', err);
+      console.error('Error managing lock file:', err);
       process.exit(1);
     }
 
