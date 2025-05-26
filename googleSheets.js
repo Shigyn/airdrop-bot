@@ -26,15 +26,16 @@ class GoogleSheetsService {
     try {
       const res = await this.sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: process.env.TASKS_RANGE || 'Tasks!A2:D',
+        range: 'Tasks!A2:E', // ID, Description, Image, Reward, Statut
       });
 
       return (res.data.values || []).map(row => ({
         id: row[0],
         description: row[1],
-        reward: row[2],
-        status: row[3],
-        completed: row[3] === 'COMPLETED' || false,
+        image: row[2],
+        reward: row[3],
+        status: row[4],
+        completed: row[4] === 'COMPLETED' || false,
       }));
     } catch (error) {
       console.error('Error reading tasks:', error);
@@ -100,25 +101,25 @@ class GoogleSheetsService {
       // Récupérer les transactions de l'utilisateur
       const transactionsRes = await this.sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: process.env.TRANSACTIONS_RANGE || 'Transactions!A2:E',
+        range: 'Transactions!A2:D', // User_ID, Points, Type, Timestamp
       });
 
       // Récupérer les informations utilisateur
       const usersRes = await this.sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: 'Users!A2:F',
+        range: 'Users!A2:G', // Date_Inscription, Username, user_id, Balance, Last_Claim_Time, Referral_Code, Mining_Speed
       });
 
       // Trouver les transactions de l'utilisateur
-      const transactions = (transactionsRes.data.values || []).filter(row => row[1] === userId);
+      const transactions = (transactionsRes.data.values || []).filter(row => row[0] === userId);
       // Calculer le solde total
-      const balance = transactions.reduce((sum, row) => sum + (parseFloat(row[3]) || 0), 0);
+      const balance = transactions.reduce((sum, row) => sum + (parseFloat(row[1]) || 0), 0);
 
       // Trouver les informations utilisateur
-      const userRow = (usersRes.data.values || []).find(row => row[0] === userId);
+      const userRow = (usersRes.data.values || []).find(row => row[2] === userId);
       const username = userRow ? userRow[1] : 'Utilisateur';
-      const lastClaim = userRow ? new Date(userRow[2]).toLocaleDateString() : 'Aucun';
-      const miningSpeed = userRow ? parseFloat(userRow[4]) || 0 : 0;
+      const lastClaim = userRow ? new Date(userRow[4]).toLocaleDateString() : 'Aucun';
+      const miningSpeed = userRow ? parseFloat(userRow[6]) || 0 : 0;
 
       return {
         userId,
@@ -143,54 +144,25 @@ class GoogleSheetsService {
         error: "No available tasks",
         message: "Aucune tâche disponible actuellement"
       };
-    }
-    
-    const randomTask = availableTasks[Math.floor(Math.random() * availableTasks.length)];
-    return this.claimTask(userId, randomTask.id);
-  }
-
-  async getUserData(userId) {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Users!A2:F"
+        range: "Referals!A2:E"  // Referrer, Reward, Filleul_ID, Filleul_Username, Date
       });
       
-      console.log("Debug - Données utilisateurs:", response.data.values);
-      
-      const user = (response.data.values || []).find(row => row[2] === userId);
-      
-      if (!user) {
-        console.log("Utilisateur non trouvé pour ID:", userId);
-        return null;
-      }
+      // Trouver les références de l'utilisateur
+      const referrals = (response.data.values || []).filter(row => row[0] === userId);
       
       return {
-        username: user[1] || "Anonyme",
-        balance: user[3] || "0",
-        lastClaim: user[4] || null
+        referralCode: userId,  // Utiliser l'ID utilisateur comme code
+        pointsEarned: referrals.reduce((sum, row) => sum + (parseFloat(row[1]) || 0), 0),
+        referralsCount: referrals.length,
+        referrals: referrals.map(row => ({
+          id: row[2],
+          username: row[3],
+          date: row[4]
+        }))
       };
-    } catch (error) {
-      console.error('Erreur getUserData:', error);
-      throw error;
-    }
-  }
-
-  async getReferralInfo(code) {
-    try {
-      const response = await this.sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: "Referrals!A2:D"
-      });
-      
-      const referral = (response.data.values || []).find(row => row[0] === code);
-      
-      return referral ? {
-        referralCode: code,
-        pointsEarned: referral[1] || 0,
-        referralsCount: referral[2] || 0,
-        referrals: referral[3] ? referral[3].split(',') : []
-      } : null;
     } catch (error) {
       console.error('Erreur getReferralInfo:', error);
       throw error;

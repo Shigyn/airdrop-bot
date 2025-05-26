@@ -132,30 +132,70 @@ app.post('/api/user-data', async (req, res) => {
     }
 
     const userData = await googleSheets.getUserData(userId);
-    res.json(userData);
-  } catch (error) {
-    console.error('Error getting user data:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/claim', async (req, res) => {
-  try {
-    const userId = req.body.userId;
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
+    if (!userData) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const result = await googleSheets.claimTask(userId);
-    res.json(result);
+    res.json({
+      success: true,
+      data: {
+        username: userData.username,
+        balance: userData.balance,
+        lastClaim: userData.lastClaim,
+        miningSpeed: userData.mining_speed
+      }
+    });
   } catch (error) {
-    console.error('Error claiming:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error getting user data:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message
+    });
   }
 });
 
+// Route pour obtenir les tâches disponibles
 app.get('/api/tasks', async (req, res) => {
   try {
+    const tasks = await googleSheets.getAvailableTasks();
+    res.json({
+      success: true,
+      data: tasks
+    });
+  } catch (error) {
+    console.error('Error getting tasks:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Route pour obtenir les informations de referral
+app.get('/api/referral', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'userId is required'
+      });
+    }
+
+    const referralInfo = await googleSheets.getReferralInfo(userId);
+    res.json({
+      success: true,
+      data: referralInfo
+    });
+  } catch (error) {
+    console.error('Error getting referral info:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message
+    });
+  }
+});
+
     const tasks = await googleSheets.getAvailableTasks();
     res.json(tasks);
   } catch (error) {
