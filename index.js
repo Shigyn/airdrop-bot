@@ -177,6 +177,45 @@ app.post('/update-session', async (req, res) => {
   }
 });
 
+// Ajoutez ce middleware avant vos routes
+app.use('/api', (req, res, next) => {
+  if (!req.headers['telegram-data']) {
+    return res.status(401).json({
+      error: "TELEGRAM_AUTH_REQUIRED",
+      message: "Telegram authentication data missing"
+    });
+  }
+  next();
+});
+
+app.post('/api/validate-auth', (req, res) => {
+  const { initData } = req.body;
+  
+  if (!initData) {
+    return res.status(400).json({ error: "Telegram auth data missing" });
+  }
+
+  // Ici vous devriez valider les données d'authentification
+  // Pour le moment, nous allons juste extraire l'user ID
+  try {
+    const params = new URLSearchParams(initData);
+    const user = JSON.parse(params.get('user'));
+    
+    if (!user?.id) {
+      return res.status(401).json({ error: "Invalid Telegram auth data" });
+    }
+    
+    res.json({ 
+      userId: user.id,
+      username: user.username || `user_${user.id}`,
+      authDate: new Date(params.get('auth_date') * 1000)
+    });
+  } catch (error) {
+    console.error('Auth validation error:', error);
+    res.status(500).json({ error: "Failed to validate auth" });
+  }
+});
+
 app.post('/api/referrals', async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
@@ -206,26 +245,60 @@ app.post('/api/referrals', async (req, res) => {
 
 app.get('/api/user-data', async (req, res) => {
   try {
+    // Vérifiez les en-têtes d'authentification
+    const telegramData = req.headers['telegram-data'];
     const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
+    
+    console.log(`User data request for: ${userId}`); // Debug
+    console.log('Telegram auth data:', telegramData); // Debug
 
+    if (!userId) {
+      return res.status(400).json({ 
+        error: "USER_ID_REQUIRED",
+        message: "User ID is required"
+      });
+    }
+
+    // Validation basique des données Telegram (à améliorer)
+    if (!telegramData) {
+      return res.status(401).json({
+        error: "UNAUTHORIZED",
+        message: "Telegram auth data missing"
+      });
+    }
+
+    // Chargez les données depuis Google Sheets
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
 
-    const user = usersData.data.values?.find(row => row[2]?.toString() === userId.toString());
-    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
+    const user = usersData.data.values?.find(row => 
+      row[2]?.toString() === userId.toString()
+    );
 
+    if (!user) {
+      return res.status(404).json({ 
+        error: "USER_NOT_FOUND",
+        message: "User not found in database"
+      });
+    }
+
+    // Réponse réussie
     res.json({
-      username: user[1],
+      username: user[1] || `user_${userId}`,
       balance: parseInt(user[3]) || 0,
-      lastClaim: user[4],
+      lastClaim: user[4] || null,
       mining_speed: parseFloat(user[6]) || 1
     });
+
   } catch (err) {
-    console.error('User data error:', err);
-    res.status(500).json({ error: "SERVER_ERROR" });
+    console.error('Server error in /api/user-data:', err);
+    res.status(500).json({ 
+      error: "SERVER_ERROR",
+      message: "Internal server error",
+      details: process.env.NODE_ENV === 'development' ? err.message : null
+    });
   }
 });
 

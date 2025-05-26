@@ -63,69 +63,48 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-app.post('/api/validate-auth', (req, res) => {
-  const { initData } = req.body;
-  
-  if (!initData) {
-    return res.status(400).json({ error: "Telegram auth data missing" });
-  }
-
-  // Ici vous devriez valider les données d'authentification
-  // Pour le moment, nous allons juste extraire l'user ID
-  try {
-    const params = new URLSearchParams(initData);
-    const user = JSON.parse(params.get('user'));
-    
-    if (!user?.id) {
-      return res.status(401).json({ error: "Invalid Telegram auth data" });
-    }
-    
-    res.json({ 
-      userId: user.id,
-      username: user.username || `user_${user.id}`,
-      authDate: new Date(params.get('auth_date') * 1000)
-    });
-  } catch (error) {
-    console.error('Auth validation error:', error);
-    res.status(500).json({ error: "Failed to validate auth" });
-  }
-});
-
 // Fonction pour charger les données utilisateur
 async function loadUserData(userId) {
   try {
-    // D'abord valider l'authentification avec le serveur
-    const authResponse = await fetch('/api/validate-auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        initData: window.Telegram.WebApp.initData 
-      })
+    console.log(`Fetching user data for ID: ${userId}`); // Debug
+    
+    const response = await fetch(`/api/user-data?userId=${userId}`, {
+      headers: {
+        'Telegram-Data': window.Telegram.WebApp.initData || '',
+        'Content-Type': 'application/json'
+      }
     });
+
+    console.log('Response status:', response.status); // Debug
     
-    if (!authResponse.ok) {
-      throw new Error('Authentication failed');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API Error:', errorData);
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
     }
-    
-    // Ensuite charger les données utilisateur
-    const userResponse = await fetch(`/api/user-data?userId=${userId}`);
-    if (!userResponse.ok) throw new Error('Network response was not ok');
-    
-    const data = await userResponse.json();
-    
+
+    const data = await response.json();
+    console.log('User data received:', data); // Debug
+
     if (data.error) {
       throw new Error(data.error);
     }
 
     // Mise à jour de l'UI
     document.getElementById('username').textContent = data.username || 'Anonymous';
-    document.getElementById('balance').textContent = data.balance || '0';
+    document.getElementById('balance').textContent = data.balance ?? '0';
     document.getElementById('lastClaim').textContent = data.lastClaim || 'Never';
 
     return data;
   } catch (error) {
-    console.error('Error loading user data:', error);
-    showNotification('Failed to load user data', 'error');
+    console.error('Error in loadUserData:', error);
+    
+    // Fallback UI update
+    document.getElementById('username').textContent = 'Error';
+    document.getElementById('balance').textContent = '0';
+    document.getElementById('lastClaim').textContent = 'Unknown';
+    
+    showNotification('Failed to load user data. Please try again.', 'error');
     throw error;
   }
 }
