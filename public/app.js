@@ -116,26 +116,50 @@ async function loadUserData(userId) {
 
 // Configuration de la navigation
 function setupNavigation() {
-  const navButtons = {
-    'nav-claim': showClaimView,
-    'nav-tasks': showTasksView,
-    'nav-referral': showReferralView
-  };
-
-  Object.entries(navButtons).forEach(([id, handler]) => {
-    const button = document.getElementById(id);
-    if (button) {
+  try {
+    const navButtons = document.querySelectorAll('.nav-btn');
+    navButtons.forEach(button => {
       button.addEventListener('click', () => {
-        // Mettre à jour l'état actif des boutons
-        document.querySelectorAll('.nav-btn').forEach(btn => 
-          btn.classList.remove('active'));
-        button.classList.add('active');
-        
-        // Exécuter le gestionnaire
-        handler();
+        const viewId = button.id.replace('nav-', '');
+        showView(viewId);
       });
+    });
+  } catch (error) {
+    console.error('Navigation setup error:', error);
+    showNotification('Error setting up navigation', 'error');
+  }
+}
+
+function showView(viewId) {
+  try {
+    const activeBtn = document.querySelector('.nav-btn.active');
+    if (activeBtn) activeBtn.classList.remove('active');
+    document.getElementById(`nav-${viewId}`).classList.add('active');
+
+    const content = document.getElementById('content');
+    if (!content) {
+      throw new Error('Content container not found');
     }
-  });
+
+    content.innerHTML = '';
+
+    switch (viewId) {
+      case 'claim':
+        showClaimView();
+        break;
+      case 'tasks':
+        showTasksView();
+        break;
+      case 'referral':
+        showReferralView();
+        break;
+      default:
+        throw new Error(`Unknown view: ${viewId}`);
+    }
+  } catch (error) {
+    console.error('Error switching view:', error);
+    showNotification('Error switching view', 'error');
+  }
 }
 
 // Vue Claim (Mining)
