@@ -296,6 +296,55 @@ app.post('/api/validate-auth', (req, res) => {
   }
 });
 
+// Endpoint pour récupérer les données utilisateur
+app.get('/api/user-data', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: "USER_ID_REQUIRED" });
+    }
+
+    // Récupérer les données utilisateur depuis Google Sheets
+    const [userRow] = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `Users!A2:D`,
+      majorDimension: 'ROWS'
+    });
+
+    const userData = userRow.values?.find(row => row[0] === userId);
+    
+    if (!userData) {
+      return res.status(404).json({
+        error: "USER_NOT_FOUND",
+        message: "User data not found"
+      });
+    }
+
+    // Récupérer les données de session
+    const session = activeSessions.get(userId);
+    const miningSpeed = session ? 1 : 0; // Vitesse de minage par défaut
+
+    // Formatage des données
+    const user = {
+      userId: userData[0],
+      username: userData[1] || `user_${userId}`,
+      balance: parseFloat(userData[2]) || 0,
+      lastClaim: userData[3] || 'Never',
+      miningSpeed: miningSpeed,
+      miningTime: session ? session.totalMinutes : 0
+    };
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error getting user data:', error);
+    res.status(500).json({
+      error: "SERVER_ERROR",
+      message: "Failed to fetch user data"
+    });
+  }
+});
+
 app.post('/api/referrals', async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });

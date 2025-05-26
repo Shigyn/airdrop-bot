@@ -98,17 +98,28 @@ async function loadUserData(userId) {
     const usernameElement = document.getElementById('username');
     const balanceElement = document.getElementById('balance');
     const lastClaimElement = document.getElementById('lastClaim');
+    const miningSpeedElement = document.getElementById('mining-speed');
+    const miningTimeElement = document.getElementById('mining-time');
+    const miningButton = document.getElementById('mining-button');
 
     if (usernameElement) usernameElement.textContent = data.username || 'Anonymous';
     if (balanceElement) balanceElement.textContent = data.balance ?? '0';
     if (lastClaimElement) lastClaimElement.textContent = data.lastClaim || 'Never';
 
-    // Mettre à jour la vitesse de minage si disponible
-    if (data.mining_speed) {
-      const miningSpeedElement = document.getElementById('mining-speed');
-      if (miningSpeedElement) {
-        miningSpeedElement.textContent = `${data.mining_speed} token/min`;
-      }
+    // Mettre à jour la vitesse de minage
+    if (miningSpeedElement) {
+      miningSpeedElement.textContent = `${data.miningSpeed} token/min`;
+    }
+
+    // Mettre à jour le temps de minage
+    if (miningTimeElement) {
+      miningTimeElement.textContent = `${Math.floor(data.miningTime)} min`;
+    }
+
+    // Mettre à jour le bouton de minage
+    if (miningButton) {
+      miningButton.disabled = false;
+      miningButton.textContent = 'Commencer le minage';
     }
 
     return data;
@@ -119,10 +130,19 @@ async function loadUserData(userId) {
     const usernameElement = document.getElementById('username');
     const balanceElement = document.getElementById('balance');
     const lastClaimElement = document.getElementById('lastClaim');
+    const miningSpeedElement = document.getElementById('mining-speed');
+    const miningTimeElement = document.getElementById('mining-time');
+    const miningButton = document.getElementById('mining-button');
 
     if (usernameElement) usernameElement.textContent = 'Error';
     if (balanceElement) balanceElement.textContent = '0';
     if (lastClaimElement) lastClaimElement.textContent = 'Unknown';
+    if (miningSpeedElement) miningSpeedElement.textContent = '0 token/min';
+    if (miningTimeElement) miningTimeElement.textContent = '0 min';
+    if (miningButton) {
+      miningButton.disabled = true;
+      miningButton.textContent = 'Erreur';
+    }
     
     showNotification('Failed to load user data. Please try again.', 'error');
     throw error;
