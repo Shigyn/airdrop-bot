@@ -6,6 +6,30 @@ let secondsMined = 0;
 let isMining = false;
 
 // Fonctions utilitaires
+
+// Fonction d'initialisation
+async function initializeApp() {
+  try {
+    const userId = Telegram.WebApp.initData?.user?.id;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+
+    // Charger les données utilisateur
+    await loadUserData();
+
+    // Configurer les événements de navigation
+    setupNavigation();
+
+    // Afficher la vue initiale
+    await showView('claim');
+  } catch (error) {
+    console.error('Erreur lors de l\'initialisation:', error);
+    showNotification('Erreur lors de l\'initialisation de l\'application', 'error');
+  }
+}
+
+// Fonctions utilitaires
 function showNotification(message, type = 'info') {
   try {
     const notification = document.createElement('div');
@@ -22,99 +46,244 @@ function showNotification(message, type = 'info') {
   }
 }
 
+// Initialiser l'application au chargement
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+// Fonctions de navigation
+function setupNavigation() {
+  try {
+    const navButtons = document.querySelectorAll('.nav-btn');
+    navButtons.forEach(button => {
+      button.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const viewId = button.dataset.view;
+        
+        // Désactiver tous les boutons
+        navButtons.forEach(btn => btn.classList.remove('active'));
+        
+        // Activer le bouton cliqué
+        button.classList.add('active');
+        
+        // Afficher la vue correspondante
+        await showView(viewId);
+      });
+    });
+  } catch (error) {
+    console.error('Error setting up navigation:', error);
+    showNotification('Erreur lors de la configuration de la navigation', 'error');
+  }
+}
+
 // Fonctions de données utilisateur
+// Fonction pour charger les données utilisateur
 async function loadUserData() {
   try {
-    try {
-      const userId = Telegram.WebApp.initDataUnsafe?.user?.id;
-      if (!userId) throw new Error('User not authenticated');
+    // Vérifier l'authentification
+    if (!Telegram.WebApp.initData) {
+      throw new Error('Telegram Web App not initialized');
+    }
+    const userId = Telegram.WebApp.initDataUnsafe?.user?.id;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
 
-      const response = await fetch('/api/user-data', {
+    // Récupérer les données utilisateur
+    const response = await fetch('/api/user-data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': Telegram.WebApp.initData
+      },
+      body: JSON.stringify({ userId })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch user data');
+    }
+
+    const userData = await response.json();
+    if (!userData || !userData.username || !userData.balance) {
+      throw new Error('Invalid user data received');
+    }
+
+    console.log('User data loaded:', userData);
+
+    // Mettre à jour l'UI avec les données
+    const username = document.getElementById('username');
+    const balance = document.getElementById('balance');
+    const lastClaim = document.getElementById('lastClaim');
+
+    if (username) {
+      username.textContent = userData.username;
+    } else {
+      console.error('Username element not found');
+    }
+
+    if (balance) {
+      balance.textContent = userData.balance;
+    } else {
+      console.error('Balance element not found');
+    }
+
+    if (lastClaim) {
+      lastClaim.textContent = userData.lastClaim ? new Date(userData.lastClaim).toLocaleString() : 'Never claimed';
+    } else {
+      console.error('Last claim element not found');
+    }
+
+    return userData;
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    showNotification('Erreur lors du chargement des données utilisateur', 'error');
+    throw error;
+  }
+}
+// Fonctions de minage
+function startMining(userId) {
+  try {
+    if (!userId) throw new Error('User not authenticated');
+
+    const miningBtn = document.getElementById('mining-btn');
+    if (!miningBtn) throw new Error('Mining button not found');
+
+    miningBtn.innerHTML = `
+      <img src="./images/stop.png" alt="Stop" class="btn-icon" />
+      Stop Mining
+    `;
+    miningBtn.classList.add('active');
+
+    // Démarrer l'animation de minage
+    const miningAnimation = document.getElementById('mining-animation');
+    if (miningAnimation) {
+      miningAnimation.classList.add('active');
+    }
+
+    // Démarrer l'interval de minage
+    miningInterval = setInterval(() => {
+      secondsMined++;
+      updateMiningDisplay(secondsMined);
+    }, 1000);
+  } catch (error) {
+    console.error('Error starting mining:', error);
+    showNotification('Erreur lors du démarrage du minage', 'error');
+  }
+}
+
+// Fonction pour arrêter le minage
+function stopMining() {
+  try {
+    if (!isMining) return;
+
+    const miningBtn = document.getElementById('mining-btn');
+    if (!miningBtn) throw new Error('Mining button not found');
+
+    miningBtn.innerHTML = `
+      <img src="./images/start.png" alt="Start" class="btn-icon" />
+      Start Mining
+    `;
+    miningBtn.classList.remove('active');
+    miningBtn.classList.remove('mining-active');
+
+    // Arrêter l'animation de minage
+    const miningAnimation = document.getElementById('mining-animation');
+    if (miningAnimation) {
+      miningAnimation.classList.remove('active');
+    }
+
+    // Arrêter l'interval de minage
+    clearInterval(miningInterval);
+    isMining = false;
+  } catch (error) {
+    console.error('Error stopping mining:', error);
+    showNotification('Erreur lors de l\'arrêt du minage', 'error');
+  }
+}
+
+// Fonction pour gérer l'action de minage
+async function handleMiningAction() {
+  try {
+    const userId = Telegram.WebApp.initDataUnsafe?.user?.id;
+    if (!userId) {
+      showNotification('User not authenticated', 'error');
+      return;
+    }
+
+    const miningBtn = document.getElementById('mining-btn');
+    if (!miningBtn) {
+      console.error('Mining button not found');
+      return;
+    }
+
+    miningBtn.disabled = true;
+
+    if (!isMining) {
+      // Démarrer la session
+      const response = await fetch('/start-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Telegram-Data': Telegram.WebApp.initData || ''
         },
-        body: JSON.stringify({ userId })
+        body: JSON.stringify({
+          userId,
+          deviceId: generateDeviceId()
+        })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch user data');
-      }
+      const data = await response.json();
+      if (data.error) throw new Error(data.message);
 
-      const userData = await response.json();
-      console.log('User data loaded:', userData);
-
-      // Mettre à jour l'UI avec les données
-      const username = document.getElementById('username');
-      const balance = document.getElementById('balance');
-      const lastClaim = document.getElementById('lastClaim');
-      const miningSpeed = document.getElementById('mining-speed');
-
-      if (username) username.textContent = userData.data.username || 'Chargement...';
-      if (balance) balance.textContent = userData.data.balance || '--';
-      if (lastClaim) lastClaim.textContent = userData.data.lastClaim || '--';
-      if (miningSpeed) miningSpeed.textContent = `${userData.data.miningSpeed} token/min`;
-
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      showNotification(`Erreur: ${error.message}`, 'error');
-      throw error; // Propager l'erreur pour la gestion globale
+      // Démarrer le minage
+      isMining = true;
+      secondsMined = 0;
+      miningInterval = setInterval(() => {
+        secondsMined++;
+        updateMiningDisplay(secondsMined);
+        
+        // Arrêter à 60 minutes
+        if (secondsMined >= 3600) {
+          clearInterval(miningInterval);
+          miningBtn.disabled = false;
+          isMining = false;
+        }
+      }, 1000);
+    } else {
+      // Arrêter le minage
+      isMining = false;
+      clearInterval(miningInterval);
+      miningBtn.disabled = false;
     }
-
   } catch (error) {
-    console.error('Error in loadUserData:', error);
-    setTimeout(() => loadUserData(), 5000);
+    console.error('Error in mining action:', error);
+    showNotification('Error in mining action', 'error');
+    miningBtn.disabled = false;
+    isMining = false;
+    clearInterval(miningInterval);
   }
 }
 
-// Fonctions de minage
-function startMining(userId) {
-  try {
-    try {
-      if (!userId) throw new Error('User not authenticated');
+    // Mettre à jour le temps de minage
+    updateMiningTime();
 
-      const miningBtn = document.getElementById('mining-btn');
-      if (!miningBtn) throw new Error('Mining button not found');
+    // Démarrer l'intervalle de minage
+    miningInterval = setInterval(async () => {
+      try {
+        secondsMined++;
+        updateMiningTime();
 
-      miningBtn.innerHTML = `
-        <img src="./images/stop.png" alt="Stop" class="btn-icon" />
-        Stop Mining
-      `;
-      miningBtn.classList.add('mining-active');
-
-      isMining = true;
-      secondsMined = 0;
-
-      // Mettre à jour le temps de minage
-      updateMiningTime();
-
-      // Démarrer l'intervalle de minage
-      miningInterval = setInterval(async () => {
-        try {
-          secondsMined++;
-          updateMiningTime();
-
-          // Claim automatique après 30 secondes
-          if (secondsMined >= 30) {
-            await claimTokens();
-          }
-        } catch (error) {
-          console.error('Error in mining interval:', error);
-          showNotification('Erreur lors du minage', 'error');
-          throw error; // Propager l'erreur pour la gestion globale
+        // Claim automatique après 30 secondes
+        if (secondsMined >= 30) {
+          await claimTokens();
         }
-      }, 1000);
-
-    } catch (error) {
-      console.error('Error in mining setup:', error);
-      showNotification('Erreur lors de la configuration du minage', 'error');
-      throw error; // Propager l'erreur pour la gestion globale
-    }
-
+      } catch (error) {
+        console.error('Error in mining interval:', error);
+        showNotification('Erreur lors du minage', 'error');
+      }
+    }, 1000);
   } catch (error) {
-    console.error('Error in startMining:', error);
+    console.error('Error starting mining:', error);
+    showNotification(`Erreur: ${error.message}`, 'error');
     showNotification('Erreur critique lors du démarrage du minage', 'error');
     throw error; // Propager l'erreur pour la gestion globale
   }
@@ -373,48 +542,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Charger les données utilisateur
     await loadUserData();
 
+    // Authentification
+    try {
+      Telegram.WebApp.expand();
+      
+      const user = Telegram.WebApp.initDataUnsafe?.user;
+      const userId = user?.id;
+      
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
+      console.log('User authenticated with ID:', userId);
+      
+      const authResponse = await fetch('/api/validate-auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Telegram-Data': Telegram.WebApp.initData
+        },
+        body: JSON.stringify({ initData: Telegram.WebApp.initData })
+      });
+
+      const authData = await authResponse.json();
+      
+      if (!authResponse.ok) {
+        throw new Error(authData.error || 'Invalid Telegram auth');
+      }
+
+      await loadUserData();
+      console.log('Auth validated:', authData);
+      setupUI();
+    } catch (error) {
+      console.error('Error during authentication:', error);
+      showNotification('Erreur d\'authentification', 'error');
+      
+      const content = document.getElementById('content');
+      if (content) {
+        content.innerHTML = `
+          <div class="error-message">
+            <h2>Erreur d\'authentification</h2>
+            <p>${error.message}</p>
+            <p>Merci d\'ouvrir cette application depuis le bot Telegram.</p>
+          </div>
+        `;
+      }
+    }
+
   } catch (error) {
     console.error('Error initializing app:', error);
     showNotification('Erreur lors de l\'initialisation', 'error');
-  }
-});
     
-    Telegram.WebApp.expand();
-    
-    const user = Telegram.WebApp.initDataUnsafe?.user;
-    const userId = user?.id;
-    
-    if (!userId) {
-      throw new Error('User not authenticated');
-    }
-
-    console.log('User authenticated with ID:', userId);
-    
-    const authResponse = await fetch('/api/validate-auth', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': Telegram.WebApp.initData
-      },
-      body: JSON.stringify({ initData: Telegram.WebApp.initData })
-    });
-
-    if (!authResponse.ok) {
-      const errorData = await authResponse.json();
-      throw new Error(errorData.error || 'Invalid Telegram auth');
-    }
-
-    await loadUserData();
-    
-    const authData = await authResponse.json();
-    console.log('Auth validated:', authData);
-
-    setupUI();
-
-  } catch (error) {
-    console.error('Error initializing app:', error);
-    showNotification('Erreur lors de l\'initialisation', 'error');
-
     const content = document.getElementById('content');
     if (content) {
       content.innerHTML = `
@@ -708,30 +886,78 @@ async function showReferralView() {
   }
 }
 
-          button.classList.add('active');
+// Configurer la navigation entre les vues
+async function setupNavigation() {
+  try {
+    // Sélectionner tous les boutons de navigation
+    const navButtons = document.querySelectorAll('.nav-button');
+    if (!navButtons || navButtons.length === 0) {
+      throw new Error('Navigation buttons not found');
+    }
 
+    // Ajouter les gestionnaires d'événements
+    navButtons.forEach(button => {
+      button.addEventListener('click', async (e) => {
+        try {
+          e.preventDefault();
+          const viewId = button.dataset.view;
+          if (!viewId) {
+            throw new Error('View ID not specified');
+          }
+
+          // Désactiver tous les boutons actifs
+          navButtons.forEach(btn => btn.classList.remove('active'));
+          
+          // Activer le bouton cliqué
+          button.classList.add('active');
+          
+          // Afficher la vue
           await showView(viewId);
         } catch (error) {
           console.error('Error handling navigation:', error);
           showNotification('Error switching view', 'error');
+          
+          // Afficher un message d'erreur dans le contenu
+          const content = document.getElementById('content');
+          if (content) {
+            content.innerHTML = `
+              <div class="error-message">
+                <h3>Erreur de navigation</h3>
+                <p>${error.message}</p>
+              </div>
+            `;
+          }
         }
       });
     });
   } catch (error) {
     console.error('Navigation setup error:', error);
     showNotification('Error setting up navigation', 'error');
+    
+    // Afficher un message d'erreur dans le contenu
+    const content = document.getElementById('content');
+    if (content) {
+      content.innerHTML = `
+        <div class="error-message">
+          <h3>Erreur de configuration</h3>
+          <p>${error.message}</p>
+        </div>
+      `;
+    }
   }
 }
 
+// Fonction principale pour afficher une vue
 async function showView(viewId) {
   try {
+    // Vérifier le conteneur de contenu
     const content = document.getElementById('content');
-    if (!content) {
-      throw new Error('Content container not found');
-    }
+    if (!content) throw new Error('Content container not found');
 
+    // Afficher le spinner de chargement
     content.innerHTML = '<div class="loading-spinner"></div>';
 
+    // Afficher la vue appropriée selon l'ID
     switch (viewId) {
       case 'claim':
         await showClaimView();
@@ -746,6 +972,44 @@ async function showView(viewId) {
         throw new Error(`Unknown view: ${viewId}`);
     }
   } catch (error) {
+    console.error('Error displaying view:', error);
+    showNotification('Error displaying view', 'error');
+    
+    // Afficher un message d'erreur dans le contenu
+    const content = document.getElementById('content');
+    if (content) {
+      content.innerHTML = `
+        <div class="error-message">
+          <h3>Erreur d'affichage</h3>
+          <p>${error.message}</p>
+        </div>
+      `;
+    }
+  }
+}
+    // Vérifier le conteneur de contenu
+    const content = document.getElementById('content');
+    if (!content) throw new Error('Content container not found');
+
+    // Afficher le spinner de chargement
+    content.innerHTML = '<div class="loading-spinner"></div>';
+
+    // Afficher la vue appropriée selon l'ID
+    switch (viewId) {
+      case 'claim':
+        await showClaimView();
+        break;
+      case 'tasks':
+        await showTasksView();
+        break;
+      case 'referral':
+        await showReferralView();
+        break;
+      default:
+        throw new Error(`Unknown view: ${viewId}`);
+    }
+  } catch (error) {
+    // Gestion des erreurs
     console.error('Error displaying view:', error);
     showNotification('Error displaying view', 'error');
     
@@ -883,18 +1147,6 @@ async function showClaimView() {
         throw new Error(data.message || 'Claim failed');
       }
 
-      // Mettre à jour le solde affiché
-      document.getElementById('balance').textContent = data.balance;
-      showNotification('Tokens claimed successfully!', 'success');
-
-    } catch (error) {
-      console.error('Claim error:', error);
-      errorDisplay.textContent = error.message;
-      errorDisplay.classList.remove('hidden');
-    }
-  });
-}
-
 function updateMiningDisplay(seconds) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -905,11 +1157,17 @@ function updateMiningDisplay(seconds) {
   
   // Mettre à jour le bouton
   const miningBtn = document.getElementById('mining-btn');
-  if (seconds >= 30) { // 30 secondes minimum pour claim
-    miningBtn.innerHTML = `
-      <img src="./images/claim.png" alt="Claim" class="btn-icon" />
-      Claim (${Math.floor(seconds/60)}m)
-    `;
+  if (miningBtn) {
+    if (seconds >= 30) { // 30 secondes minimum pour claim
+      miningBtn.innerHTML = `
+        <img src="./images/claim.png" alt="Claim" class="btn-icon" />
+        Claim (${Math.floor(seconds/60)}m)
+      `;
+      miningBtn.classList.add('claim-ready');
+    } else {
+      miningBtn.textContent = `Mining (${hours}h ${minutes}m ${secs}s)`;
+      miningBtn.classList.remove('claim-ready');
+    }
     miningBtn.classList.add('claim-ready');
   } else {
     miningBtn.innerHTML = `
@@ -928,6 +1186,11 @@ async function handleMiningAction() {
   }
 
   const miningBtn = document.getElementById('mining-btn');
+  if (!miningBtn) {
+    console.error('Mining button not found');
+    return;
+  }
+
   miningBtn.disabled = true;
 
   try {
@@ -959,8 +1222,54 @@ async function handleMiningAction() {
         if (secondsMined >= 3600) {
           clearInterval(miningInterval);
           miningBtn.disabled = false;
+          isMining = false;
         }
       }, 1000);
+    } else {
+      // Arrêter le minage
+      isMining = false;
+      clearInterval(miningInterval);
+      miningBtn.disabled = false;
+      
+      // Claimer les tokens si au moins 30 secondes ont été minées
+      if (secondsMined >= 30) {
+        const minutes = Math.floor(secondsMined / 60);
+        const claimResponse = await fetch('/claim', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Telegram-Data': Telegram.WebApp.initData || ''
+          },
+          body: JSON.stringify({
+            userId,
+            deviceId: generateDeviceId(),
+            miningTime: minutes
+          })
+        });
+
+        const claimData = await claimResponse.json();
+        if (claimData.error) throw new Error(claimData.message);
+
+        showNotification('Tokens claimed successfully!', 'success');
+        secondsMined = 0;
+      }
+    }
+  } catch (error) {
+    console.error('Mining error:', error);
+    showNotification(error.message, 'error');
+    miningBtn.disabled = false;
+    isMining = false;
+    clearInterval(miningInterval);
+  }
+}
+    }
+  } catch (error) {
+    console.error('Error in mining action:', error);
+    showNotification('Error in mining action', 'error');
+    miningBtn.disabled = false;
+    isMining = false;
+    clearInterval(miningInterval);
+  }
 
     } else {
       // Claimer les tokens
@@ -1066,42 +1375,63 @@ async function showReferralView() {
 
     return `
       <div class="referral-container">
-        <h2 class="section-title">Referral Program</h2>
+        <h2 class="section-title">Programme de Parrainage</h2>
         <div class="referral-stats">
           <div class="stat-card">
-            <span class="stat-label">Your Referral Code</span>
+            <span class="stat-label">Votre Code</span>
             <span class="stat-value">${data.referralCode}</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Total Referrals</span>
+            <span class="stat-label">Parrainages</span>
             <span class="stat-value">${data.totalReferrals}</span>
           </div>
           <div class="stat-card">
-            <span class="stat-label">Total Earned</span>
-            <span class="stat-value">${data.totalEarned} tokens</span>
+            <span class="stat-label">Points Gagnés</span>
+            <span class="stat-value">${data.totalEarned} points</span>
           </div>
         </div>
         <div class="referral-actions">
           <input type="text" id="referral-link" class="referral-input" value="${data.referralUrl}" readonly>
           <button id="copy-referral" class="action-btn" onclick="copyLink()">
-            <i class="fas fa-copy"></i> Copy Link
+            <i class="fas fa-copy"></i> Copier le lien
           </button>
           <button id="share-referral" class="action-btn" onclick="shareLink()">
-            <i class="fas fa-share-alt"></i> Share Link
+            <i class="fas fa-share"></i> Partager
           </button>
         </div>
       </div>
     `;
   } catch (error) {
-    console.error('Error loading referral data:', error);
-    showNotification('Failed to load referral data', 'error');
+    console.error('Error loading referral info:', error);
+    showNotification('Erreur lors du chargement des informations de parrainage', 'error');
     return `
-      <div class="referral-container">
-        <h2 class="section-title">Referral Program</h2>
-        <p class="error-message">Failed to load referral data</p>
+      <div class="error-container">
+        <h2>Erreur</h2>
+        <p>${error.message}</p>
       </div>
     `;
   }
+}
+            <i class="fas fa-share"></i> Partager
+          </button>
+        </div>
+      </div>
+    `;
+  } catch (error) {
+    console.error('Error loading referral info:', error);
+    showNotification('Erreur lors du chargement des informations de parrainage', 'error');
+    return `
+      <div class="error-container">
+        <h2>Erreur</h2>
+        <p>${error.message}</p>
+      </div>
+    `;
+  }
+}
+
+// Fonctions utilitaires
+function generateDeviceId() {
+  return 'device-' + Math.random().toString(36).substr(2, 9);
 }
 
 // Fonctions utilitaires
@@ -1120,18 +1450,54 @@ function showNotification(message, type = 'info') {
 
 // Fonctions de partage
 function copyLink() {
-  const linkInput = document.getElementById('referral-link');
-  linkInput.select();
-  document.execCommand('copy');
-  showNotification('Link copied to clipboard!', 'success');
+  const referralLink = document.getElementById('referral-link');
+  if (referralLink) {
+    referralLink.select();
+    document.execCommand('copy');
+    showNotification('Lien copié dans le presse-papiers', 'success');
+  }
 }
 
 function shareLink() {
-  if (window.Telegram && window.Telegram.WebApp) {
-    const link = document.getElementById('referral-link').value;
-    Telegram.WebApp.shareUrl(link);
-  } else {
-    showNotification('Sharing is only available in the Telegram app', 'info');
+  const referralLink = document.getElementById('referral-link');
+  if (referralLink) {
+    const url = referralLink.value;
+    if (navigator.share) {
+      navigator.share({
+        title: 'Airdrop Telegram',
+        text: 'Rejoignez notre programme de parrainage!',
+        url: url
+      }).catch(console.error);
+    } else if (window.Telegram && window.Telegram.WebApp) {
+      Telegram.WebApp.shareUrl(url);
+    } else {
+      showNotification('Veuillez copier le lien et le partager manuellement', 'info');
+    }
+  }
+}
+
+// Fonctions de minage
+function updateMiningDisplay(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  
+  document.getElementById('mining-time').textContent = 
+    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  
+  // Mettre à jour le bouton
+  const miningBtn = document.getElementById('mining-btn');
+  if (miningBtn) {
+    if (seconds >= 30) { // 30 secondes minimum pour claim
+      miningBtn.innerHTML = `
+        <img src="./images/claim.png" alt="Claim" class="btn-icon" />
+        Claim (${Math.floor(seconds/60)}m)
+      `;
+      miningBtn.classList.add('claim-ready');
+    } else {
+      miningBtn.textContent = `Mining (${hours}h ${minutes}m ${secs}s)`;
+      miningBtn.classList.remove('claim-ready');
+    }
   }
 }
 
@@ -1158,17 +1524,14 @@ async function completeTask(taskId) {
   }
 }
 
-// Fonction principale d'initialisation
-async function initApp() {
+// Fonction d'initialisation
+async function initializeApp() {
   try {
     // Vérifier l'authentification Telegram
     if (!Telegram.WebApp.initData) {
       throw new Error('Telegram Web App not initialized');
     }
 
-    // Initialiser l'interface utilisateur
-    setupUI();
-    
     // Charger les données utilisateur
     await loadUserData();
     
@@ -1176,12 +1539,12 @@ async function initApp() {
     setupNavigation();
     
     // Afficher la vue par défaut
-    await showView('home');
+    await showView('claim');
   } catch (error) {
     console.error('Error initializing app:', error);
-    showNotification('Error initializing app', 'error');
+    showNotification('Erreur lors de l\'initialisation de l\'application', 'error');
   }
 }
 
-// Démarrer l'application
-initApp();
+// Initialiser l'application au chargement
+document.addEventListener('DOMContentLoaded', initializeApp);
