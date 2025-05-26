@@ -171,6 +171,32 @@ app.get('/api/tasks', async (req, res) => {
   }
 });
 
+// Route pour obtenir une tâche spécifique
+app.get('/api/tasks/:taskId', async (req, res) => {
+  try {
+    const tasks = await googleSheets.readTasks();
+    const task = tasks.find(t => t.id === req.params.taskId);
+    
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: 'Task not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: task
+    });
+  } catch (error) {
+    console.error('Error getting task:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Route pour obtenir les informations de referral
 app.get('/api/referral', async (req, res) => {
   try {

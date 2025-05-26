@@ -239,10 +239,11 @@ async function showTasksView() {
       <div class="tasks-view">
         <h2>Tâches disponibles</h2>
         <div class="tasks-list">
-          ${tasks.map(task => `
+          ${tasks.data.map(task => `
             <div class="task-item">
               <h3>${task.description}</h3>
               <p>Récompense: ${task.reward}</p>
+              <p>Status: ${task.status}</p>
               <button class="task-claim-btn" data-task-id="${task.id}">
                 ${task.completed ? 'Réclamée' : 'Réclamer'}
               </button>
@@ -261,13 +262,13 @@ async function showTasksView() {
         const taskId = button.dataset.taskId;
         
         try {
-          const response = await fetch('/api/claim-task', {
+          const response = await fetch('/api/claim', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Telegram-Data': Telegram.WebApp.initData
             },
-            body: JSON.stringify({ userId: Telegram.WebApp.initDataUnsafe.user.id, taskId })
+            body: JSON.stringify({ userId: Telegram.WebApp.initDataUnsafe.user.id, taskId: taskId })
           });
 
           if (!response.ok) {
@@ -318,13 +319,13 @@ async function showReferralView() {
       <div class="referral-view">
         <h2>Parrainage</h2>
         <div class="referral-info">
-          <p>Votre code de parrainage: ${referralInfo.referralCode}</p>
-          <p>Points gagnés: ${referralInfo.pointsEarned}</p>
-          <p>Nombre de parrainages: ${referralInfo.referralsCount}</p>
+          <p>Votre code de parrainage: ${referralInfo.data.referralCode}</p>
+          <p>Points gagnés: ${referralInfo.data.pointsEarned}</p>
+          <p>Nombre de parrainages: ${referralInfo.data.referralsCount}</p>
           <div class="referrals-list">
-            ${referralInfo.referrals.map(referral => `
+            ${referralInfo.data.referrals.map(referral => `
               <div class="referral-item">
-                <p>${referral}</p>
+                <p>${referral.username} (${referral.date})</p>
               </div>
             `).join('')}
           </div>
@@ -355,50 +356,46 @@ function showNotification(message, type = 'info') {
 // Fonction pour charger les données utilisateur
 async function loadUserData(userId) {
   try {
-    console.log(`Fetching user data for ID: ${userId}`); // Debug
+    console.log(`Fetching user data for ID: ${userId}`);
     
-    const response = await fetch(`/api/user-data?userId=${userId}`, {
+    const response = await fetch('/api/user-data', {
+      method: 'POST',
       headers: {
-        'Telegram-Data': window.Telegram.WebApp.initData || '',
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        'Telegram-Data': Telegram.WebApp.initData || ''
+      },
+      body: JSON.stringify({ userId: Telegram.WebApp.initDataUnsafe.user.id })
     });
 
-    console.log('Response status:', response.status); // Debug
-    
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('API Error:', errorData);
-      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch user data');
     }
 
-    const data = await response.json();
-    console.log('User data received:', data); // Debug
+    const userData = await response.json();
+    console.log('User data loaded:', userData);
 
-    if (data.error) {
-      throw new Error(data.error);
+    // Mettre à jour l'UI avec les données
+    const username = document.getElementById('username');
+    const balance = document.getElementById('balance');
+    const lastClaim = document.getElementById('lastClaim');
+
+    if (username) username.textContent = userData.data.username || 'Chargement...';
+    if (balance) balance.textContent = userData.data.balance || '--';
+    if (lastClaim) lastClaim.textContent = userData.data.lastClaim || '--';
+
+    // Mettre à jour le compteur de mining
+    if (userData.data.miningSpeed) {
+      document.getElementById('mining-speed').textContent = `${userData.data.miningSpeed} token/min`;
     }
 
-    // Mise à jour de l'UI
-    const usernameElement = document.getElementById('username');
-    const balanceElement = document.getElementById('balance');
-    const lastClaimElement = document.getElementById('lastClaim');
-    const miningSpeedElement = document.getElementById('mining-speed');
-    const miningTimeElement = document.getElementById('mining-time');
-    const miningButton = document.getElementById('mining-button');
-
-    if (usernameElement) usernameElement.textContent = data.username || 'Anonymous';
-    if (balanceElement) balanceElement.textContent = data.balance ?? '0';
-    if (lastClaimElement) lastClaimElement.textContent = data.lastClaim || 'Never';
-
-    // Mettre à jour la vitesse de minage
-    if (miningSpeedElement) {
-      miningSpeedElement.textContent = `${data.miningSpeed} token/min`;
-    }
-
-    // Mettre à jour le temps de minage
-    if (miningTimeElement) {
-      miningTimeElement.textContent = `${Math.floor(data.miningTime)} min`;
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    showNotification(`Erreur: ${error.message}`, 'error');
+    // Réessayer après une erreur
+    setTimeout(() => loadUserData(userId), 5000);
+  }
+}
     }
 
     // Mettre à jour le bouton de minage
