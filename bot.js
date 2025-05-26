@@ -6,8 +6,13 @@ const logger = require('./logger');
 const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = `https://airdrop-bot-soy1.onrender.com${webhookPath}`;
 
-// Créer le bot en mode polling
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+// Créer le bot en mode webhook
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
+  webhook: {
+    domain: 'https://airdrop-bot-soy1.onrender.com',
+    port: 8080
+  }
+});
 
 // Initialiser les services
 async function initializeServices() {
@@ -15,12 +20,13 @@ async function initializeServices() {
     await googleSheets.initGoogleSheets();
     logger.info('Google Sheets initialized successfully');
     
-    await bot.launch();
-    logger.info('Bot started successfully in polling mode');
-    
     // Configuration du webhook
     await bot.telegram.setWebhook(webhookUrl);
     logger.info(`Webhook configured at ${webhookUrl}`);
+    
+    // Démarrer le bot en mode webhook
+    bot.startWebhook(webhookPath);
+    logger.info('Bot started successfully in webhook mode');
     
   } catch (err) {
     logger.error('Failed to initialize services:', err);
