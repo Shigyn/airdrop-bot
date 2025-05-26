@@ -130,47 +130,32 @@ app.post('/api/user-data', async (req, res) => {
   try {
     const userId = req.body.userId;
     console.log('Request for user data:', userId);
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'userId is required' 
-      });
+      return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Simuler des données si Google Sheets n'est pas configuré
-    let userData;
-    if (!sheetsInitialized) {
-      console.warn('Google Sheets not initialized, returning test data');
-      userData = {
-        userId: userId,
-        username: `user_${userId}`,
-        balance: Math.floor(Math.random() * 100),
-        lastClaim: new Date().toISOString()
-      };
-    } else {
-      userData = await getUserData(userId);
-      if (!userData) {
-        return res.status(404).json({ 
-          success: false,
-          error: 'User not found' 
-        });
-      }
+    // Récupérer les données de l'utilisateur depuis Google Sheets
+    const userData = await getUserData(userId);
+    
+    if (!userData) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    console.log('Returning user data:', userData);
-    res.json({
-      success: true,
-      data: userData
-    });
+    // Formater les données pour l'interface
+    const formattedData = {
+      username: userData.username || `user_${userId}`,
+      balance: userData.balance || '0',
+      lastClaim: userData.lastClaim || 'Never claimed'
+    };
+
+    console.log('Returning formatted user data:', formattedData);
+    res.json(formattedData);
   } catch (error) {
     console.error('Error in /api/user-data:', error);
-    res.status(500).json({ 
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ error: error.message });
   }
-});
+};
 
 // Route pour obtenir les tâches disponibles
 app.get('/api/tasks', async (req, res) => {
