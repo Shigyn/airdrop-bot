@@ -14,17 +14,30 @@ let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
 
 // Middlewares
-// Configuration CORS plus permissive pour le développement
+// Configuration CORS plus restrictive mais correcte
 app.use(cors({
-  origin: true, // Accepte toutes les origines
+  origin: function (origin, callback) {
+    // Autorise les requêtes depuis le bot Telegram et l'interface web
+    const allowedOrigins = [
+      'https://web.telegram.org',
+      'https://t.me',
+      'https://airdrop-bot-soy1.onrender.com'
+    ];
+    
+    if (!origin || allowedOrigins.some(allowed => origin.includes(allowed))) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Telegram-Data', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Telegram-Data', 'Authorization', 'Accept'],
   credentials: true,
-  exposedHeaders: ['Content-Length', 'X-Request-Id']
+  exposedHeaders: ['Content-Length', 'X-Request-Id', 'Cache-Control']
 }));
 
 // Configuration des fichiers statiques
-app.use(express.static(path.join(__dirname, 'public'), {
+app.use('/static', express.static(path.join(__dirname, 'public'), {
   maxAge: '1d', // Cache pendant 1 jour
   setHeaders: (res, path) => {
     if (path.endsWith('.js')) {
@@ -32,7 +45,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
     } else if (path.endsWith('.css')) {
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache CSS pendant 1 an
     }
-  }
+  },
+  fallthrough: false // Ne passe pas à la prochaine route si le fichier n'est pas trouvé
 }));
 
 // Parser JSON avec taille maximale augmentée
