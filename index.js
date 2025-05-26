@@ -155,7 +155,7 @@ app.post('/api/user-data', async (req, res) => {
     console.error('Error in /api/user-data:', error);
     res.status(500).json({ error: error.message });
   }
-};
+});
 
 // Route pour obtenir les tâches disponibles
 app.get('/api/tasks', async (req, res) => {
