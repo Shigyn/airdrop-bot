@@ -33,11 +33,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     console.log('User authenticated with ID:', userId);
     
-    // Test de la configuration Telegram
-    const testResponse = await fetch('/api/test-telegram');
-    const testData = await testResponse.json();
-    console.log('Telegram test data:', testData);
-    
     // Vérifiez si l'authentification est valide
     const authResponse = await fetch('/api/validate-auth', {
       method: 'POST',
@@ -91,6 +86,260 @@ document.addEventListener('DOMContentLoaded', async () => {
     showNotification('Erreur d\'initialisation. Veuillez ouvrir depuis Telegram.', 'error');
   }
 });
+
+// Fonction pour charger les données utilisateur
+async function loadUserData(userId) {
+  try {
+    console.log(`Fetching user data for ID: ${userId}`);
+    
+    const response = await fetch(`/api/user-data?userId=${userId}`, {
+      headers: {
+        'Telegram-Data': Telegram.WebApp.initData
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch user data');
+    }
+
+    const userData = await response.json();
+    console.log('User data loaded:', userData);
+
+    // Mettre à jour l'UI avec les données
+    const username = document.getElementById('username');
+    const balance = document.getElementById('balance');
+    const lastClaim = document.getElementById('lastClaim');
+
+    if (username) username.textContent = userData.username || 'Chargement...';
+    if (balance) balance.textContent = userData.balance || '--';
+    if (lastClaim) lastClaim.textContent = userData.lastClaim || '--';
+
+  } catch (error) {
+    console.error('Error loading user data:', error);
+    showNotification('Erreur lors du chargement des données utilisateur', 'error');
+  }
+}
+
+// Configuration de la navigation
+function setupNavigation() {
+  const navButtons = document.querySelectorAll('.nav-btn');
+  navButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      // Désactiver tous les boutons
+      navButtons.forEach(btn => btn.classList.remove('active'));
+      
+      // Activer le bouton cliqué
+      button.classList.add('active');
+      
+      // Afficher la vue correspondante
+      const viewId = button.id.replace('nav-', '');
+      showView(viewId);
+    });
+  });
+}
+
+// Afficher une vue spécifique
+function showView(viewId) {
+  const content = document.getElementById('content');
+  if (!content) return;
+
+  switch (viewId) {
+    case 'claim':
+      showClaimView();
+      break;
+    case 'tasks':
+      showTasksView();
+      break;
+    case 'referral':
+      showReferralView();
+      break;
+    default:
+      showClaimView();
+  }
+}
+
+// Afficher la vue de mining
+function showClaimView() {
+  const content = document.getElementById('content');
+  if (!content) return;
+
+  content.innerHTML = `
+    <div class="claim-view">
+      <h2>Mining</h2>
+      <div class="claim-actions">
+        <button id="claim-btn" class="primary-btn">
+          <i class="fas fa-plus"></i> Claim
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Ajouter l'événement au bouton Claim
+  const claimBtn = document.getElementById('claim-btn');
+  if (claimBtn) {
+    claimBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/claim', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Telegram-Data': Telegram.WebApp.initData
+          },
+          body: JSON.stringify({ userId: Telegram.WebApp.initDataUnsafe.user.id })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to claim');
+        }
+
+        const data = await response.json();
+        showNotification(data.message, 'success');
+        
+        // Rafraîchir les données utilisateur
+        await loadUserData(Telegram.WebApp.initDataUnsafe.user.id);
+
+      } catch (error) {
+        console.error('Claim error:', error);
+        showNotification('Erreur lors du claim', 'error');
+      }
+    });
+  }
+}
+
+// Afficher la vue des tâches
+async function showTasksView() {
+  const content = document.getElementById('content');
+  if (!content) return;
+
+  try {
+    const response = await fetch('/api/tasks', {
+      headers: {
+        'Telegram-Data': Telegram.WebApp.initData
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch tasks');
+    }
+
+    const tasks = await response.json();
+    
+    content.innerHTML = `
+      <div class="tasks-view">
+        <h2>Tâches disponibles</h2>
+        <div class="tasks-list">
+          ${tasks.map(task => `
+            <div class="task-item">
+              <h3>${task.description}</h3>
+              <p>Récompense: ${task.reward}</p>
+              <button class="task-claim-btn" data-task-id="${task.id}">
+                ${task.completed ? 'Réclamée' : 'Réclamer'}
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // Ajouter les événements aux boutons de tâches
+    const taskButtons = document.querySelectorAll('.task-claim-btn');
+    taskButtons.forEach(button => {
+      if (button.textContent === 'Réclamée') return;
+
+      button.addEventListener('click', async () => {
+        const taskId = button.dataset.taskId;
+        
+        try {
+          const response = await fetch('/api/claim-task', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Telegram-Data': Telegram.WebApp.initData
+            },
+            body: JSON.stringify({ userId: Telegram.WebApp.initDataUnsafe.user.id, taskId })
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to claim task');
+          }
+
+          const data = await response.json();
+          showNotification(data.message, 'success');
+          
+          // Rafraîchir la vue des tâches
+          await showTasksView();
+          
+          // Rafraîchir les données utilisateur
+          await loadUserData(Telegram.WebApp.initDataUnsafe.user.id);
+
+        } catch (error) {
+          console.error('Task claim error:', error);
+          showNotification('Erreur lors de la réclamation de la tâche', 'error');
+        }
+      });
+    });
+
+  } catch (error) {
+    console.error('Error loading tasks:', error);
+    showNotification('Erreur lors du chargement des tâches', 'error');
+  }
+}
+
+// Afficher la vue des parrainages
+async function showReferralView() {
+  const content = document.getElementById('content');
+  if (!content) return;
+
+  try {
+    const response = await fetch('/api/referral', {
+      headers: {
+        'Telegram-Data': Telegram.WebApp.initData
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch referral info');
+    }
+
+    const referralInfo = await response.json();
+    
+    content.innerHTML = `
+      <div class="referral-view">
+        <h2>Parrainage</h2>
+        <div class="referral-info">
+          <p>Votre code de parrainage: ${referralInfo.referralCode}</p>
+          <p>Points gagnés: ${referralInfo.pointsEarned}</p>
+          <p>Nombre de parrainages: ${referralInfo.referralsCount}</p>
+          <div class="referrals-list">
+            ${referralInfo.referrals.map(referral => `
+              <div class="referral-item">
+                <p>${referral}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+
+  } catch (error) {
+    console.error('Error loading referral info:', error);
+    showNotification('Erreur lors du chargement des informations de parrainage', 'error');
+  }
+}
+
+// Afficher une notification
+function showNotification(message, type = 'info') {
+  const notification = document.getElementById('notification');
+  if (!notification) return;
+
+  notification.textContent = message;
+  notification.className = `notification ${type}`;
+  notification.classList.remove('hidden');
+
+  setTimeout(() => {
+    notification.classList.add('hidden');
+  }, 3000);
+}
 
 // Fonction pour charger les données utilisateur
 async function loadUserData(userId) {

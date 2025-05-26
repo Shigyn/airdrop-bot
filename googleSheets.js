@@ -95,6 +95,37 @@ class GoogleSheetsService {
     return this.claimTask(userId, taskId);
   }
 
+  async getUserData(userId) {
+    try {
+      // Récupérer les transactions de l'utilisateur
+      const res = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: process.env.TRANSACTIONS_RANGE || 'Transactions!A2:E',
+        majorDimension: 'ROWS'
+      });
+
+      const transactions = (res.data.values || []).filter(row => row[1] === userId);
+      
+      // Calculer le solde total
+      const balance = transactions.reduce((sum, row) => {
+        const amount = parseFloat(row[3]);
+        return !isNaN(amount) ? sum + amount : sum;
+      }, 0);
+
+      // Récupérer la dernière réclamation
+      const lastClaim = transactions.length > 0 ? transactions[transactions.length - 1][0] : null;
+
+      return {
+        balance: balance.toFixed(2),
+        lastClaim: lastClaim ? new Date(lastClaim).toLocaleString() : 'Aucune',
+        userId: userId
+      };
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      throw new Error('Failed to fetch user data');
+    }
+  }
+
   async claimRandomTask(userId) {
     const availableTasks = await this.getAvailableTasks();
     
