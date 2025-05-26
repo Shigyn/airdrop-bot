@@ -2,8 +2,6 @@ const { Telegraf } = require('telegraf');
 const googleSheets = require('./googleSheets');
 const logger = require('./logger');
 
-const logger = require('./logger');
-
 // Configuration du webhook
 const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = `https://airdrop-bot-soy1.onrender.com${webhookPath}`;
