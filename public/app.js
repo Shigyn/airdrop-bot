@@ -7,8 +7,13 @@ let isMining = false;
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('WebApp initialized');
   
-  // Vérifiez que l'API Telegram est disponible
-  if (window.Telegram && window.Telegram.WebApp) {
+  try {
+    // Vérifiez que l'API Telegram est disponible
+    if (!window.Telegram || !window.Telegram.WebApp) {
+      console.error('Telegram WebApp SDK not available');
+      throw new Error('Telegram WebApp SDK not available');
+    }
+
     // Affichez des informations de débogage
     console.log('Telegram WebApp available:', Telegram.WebApp);
     console.log('Init data:', Telegram.WebApp.initData);
@@ -21,50 +26,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     const user = Telegram.WebApp.initDataUnsafe?.user;
     const userId = user?.id;
     
-    if (userId) {
-      console.log('User authenticated with ID:', userId);
-      try {
-        // Chargez les données utilisateur depuis votre backend
-        await loadUserData(userId);
-        setupNavigation();
-        showClaimView();
-      } catch (error) {
-        console.error('Error loading user data:', error);
-        showNotification('Failed to load user data', 'error');
-      }
-    } else {
+    if (!userId) {
       console.error('User not authenticated');
-      showNotification('Please open this app from Telegram', 'error');
-      // Affichez un message plus convivial pour les utilisateurs
-      document.getElementById('content').innerHTML = `
-        <div class="auth-error">
-          <h2>Authentication Required</h2>
-          <p>Please open this application from within the Telegram bot to continue.</p>
-          <p>If you're already in Telegram, try refreshing the page.</p>
+      throw new Error('User not authenticated');
+    }
+
+    console.log('User authenticated with ID:', userId);
+    
+    // Chargez les données utilisateur depuis votre backend
+    await loadUserData(userId);
+    setupNavigation();
+    showClaimView();
+
+  } catch (error) {
+    console.error('Initialization error:', error);
+    
+    // Affichez un message d'erreur clair
+    const content = document.getElementById('content');
+    if (content) {
+      content.innerHTML = `
+        <div class="error-message">
+          <h2>Erreur d'initialisation</h2>
+          <p>${error.message}</p>
+          <p>Merci d'ouvrir cette application depuis le bot Telegram.</p>
+          <p>Si vous êtes déjà dans Telegram, essayez de recharger la page.</p>
         </div>
       `;
     }
-  } else {
-    console.error('Telegram WebApp SDK not available');
-    // Mode de secours pour le débogage hors de Telegram
-    if (process.env.NODE_ENV === 'development') {
-      showNotification('Running in development mode', 'info');
-      // Chargez des données factices pour le développement
-      document.getElementById('username').textContent = 'Dev User';
-      document.getElementById('balance').textContent = '1000';
-      document.getElementById('lastClaim').textContent = new Date().toLocaleString();
-      setupNavigation();
-      showClaimView();
-    } else {
-      showNotification('Please open in Telegram', 'error');
-      document.getElementById('content').innerHTML = `
-        <div class="auth-error">
-          <h2>Telegram Required</h2>
-          <p>This application only works within the Telegram messenger.</p>
-          <p>Please open it from our Telegram bot.</p>
-        </div>
-      `;
-    }
+
+    // Mise à jour de l'UI avec les valeurs par défaut
+    const username = document.getElementById('username');
+    const balance = document.getElementById('balance');
+    const lastClaim = document.getElementById('lastClaim');
+
+    if (username) username.textContent = 'Non connecté';
+    if (balance) balance.textContent = '--';
+    if (lastClaim) lastClaim.textContent = '--';
+
+    showNotification('Erreur d\'initialisation. Veuillez ouvrir depuis Telegram.', 'error');
   }
 });
 
