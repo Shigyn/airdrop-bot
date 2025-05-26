@@ -6,13 +6,15 @@ const crypto = require('crypto');
 const { google } = require('googleapis');
 
 const app = express();
-let PORT = 8080; // Forcer l'utilisation du port 8080 pour Render
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
 
 const { bot } = require('./bot');
 const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
+
+// Configuration du port
+const port = process.env.PORT || 8080;
 
 // Middlewares
 // Configuration CORS plus restrictive mais correcte
@@ -197,7 +199,7 @@ app.get('/api/tasks/:taskId', async (req, res) => {
   }
 });
 
-// Route pour obtenir les informations de referral
+// Routes API
 app.get('/api/referral', async (req, res) => {
   try {
     const userId = req.query.userId;
@@ -219,44 +221,6 @@ app.get('/api/referral', async (req, res) => {
       success: false,
       error: error.message
     });
-  }
-});
-
-    const tasks = await googleSheets.getAvailableTasks();
-    res.json(tasks);
-  } catch (error) {
-    console.error('Error getting tasks:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/claim-task', async (req, res) => {
-  try {
-    const { userId, taskId } = req.body;
-    if (!userId || !taskId) {
-      return res.status(400).json({ error: 'userId and taskId are required' });
-    }
-
-    const result = await googleSheets.claimSpecificTask(userId, taskId);
-    res.json(result);
-  } catch (error) {
-    console.error('Error claiming task:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/referral', async (req, res) => {
-  try {
-    const userId = req.telegramUser?.id;
-    if (!userId) {
-      return res.status(401).json({ error: 'User not authenticated' });
-    }
-
-    const referralInfo = await googleSheets.getReferralInfo(userId);
-    res.json(referralInfo);
-  } catch (error) {
-    console.error('Error getting referral info:', error);
-    res.status(500).json({ error: error.message });
   }
 });
 
@@ -300,74 +264,9 @@ app.post('/api/claim-task', async (req, res) => {
   }
 });
 
-app.get('/api/referral', async (req, res) => {
-  try {
-    const userId = req.telegramUser?.id;
-    if (!userId) {
-      return res.status(401).json({ error: 'User not authenticated' });
-    }
-
-    const referralInfo = await googleSheets.getReferralInfo(userId);
-    res.json(referralInfo);
-  } catch (error) {
-    console.error('Error getting referral info:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Middleware de logging amélioré
+// Middleware de logging
 app.use((req, res, next) => {
-  const startTime = Date.now();
-  const safeBody = { ...req.body };
-  if (safeBody.tokens) safeBody.tokens = '***';
-  if (safeBody.Authorization) safeBody.Authorization = '***';
-  
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
-    headers: req.headers,
-    body: safeBody,
-    query: req.query
-  });
-  
-  res.on('finish', () => {
-    const responseTime = Date.now() - startTime;
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} completed in ${responseTime}ms`);
-  });
-  
-  next();
-});
-
-// Middleware de logging amélioré
-app.use((req, res, next) => {
-  const startTime = Date.now();
-  const safeBody = { ...req.body };
-  if (safeBody.tokens) safeBody.tokens = '***';
-  if (safeBody.Authorization) safeBody.Authorization = '***';
-  
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
-    headers: req.headers,
-    body: safeBody,
-    query: req.query
-  });
-  
-  res.on('finish', () => {
-    const responseTime = Date.now() - startTime;
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} completed in ${responseTime}ms`);
-  });
-  
-  next();
-});
-
-app.use((req, res, next) => {
-  const safeBody = { ...req.body };
-  if (safeBody.tokens) safeBody.tokens = "***";
-  if (safeBody.Authorization) safeBody.Authorization = "***";
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
-    headers: req.headers,
-    body: safeBody
-  });
-  next();
-});
-
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
 const initializeApp = async () => {
   try {
     // Vérifiez que toutes les variables d'environnement nécessaires sont présentes
@@ -382,27 +281,6 @@ const initializeApp = async () => {
     app.set('trust proxy', true);
     app.set('keep-alive-timeout', 30000); // 30 secondes
     app.set('timeout', 30000); // 30 secondes
-
-    // Configuration des limites de requêtes
-    app.use(express.json({ 
-      limit: '50mb',
-      verify: (req, res, buf) => {
-        // Log des requêtes trop grandes
-        if (buf.length > 50 * 1024 * 1024) {
-          console.warn(`Large request body: ${buf.length} bytes`);
-        }
-      }
-    }));
-    app.use(express.urlencoded({ 
-      limit: '50mb',
-      extended: true,
-      verify: (req, res, buf) => {
-        // Log des requêtes trop grandes
-        if (buf.length > 50 * 1024 * 1024) {
-          console.warn(`Large request body: ${buf.length} bytes`);
-        }
-      }
-    }));
 
     // Initialisation de Google Sheets
     const auth = new google.auth.GoogleAuth({
