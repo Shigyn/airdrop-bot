@@ -2,13 +2,25 @@ const { Telegraf } = require('telegraf');
 const googleSheets = require('./googleSheets');
 const logger = require('./logger');
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const { Telegraf } = require('telegraf');
+const googleSheets = require('./googleSheets');
+const logger = require('./logger');
 
 // Configuration du webhook
 const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = `https://airdrop-bot-soy1.onrender.com${webhookPath}`;
 
-// Initialisation de Google Sheets
+// Créer le bot en mode webhook
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
+  telegram: {
+    webhook: {
+      port: process.env.PORT || 10000,
+      domain: 'airdrop-bot-soy1.onrender.com',
+      hookPath: webhookPath
+    }
+  }
+});
+
 googleSheets.initGoogleSheets().catch(err => {
   logger.error('Sheets initialization failed:', err);
   process.exit(1);
@@ -57,9 +69,10 @@ bot.telegram.setWebhook(webhookUrl)
     process.exit(1);
   });
 
-const webhookCallback = bot.webhookCallback(webhookPath);
+// Démarrage du bot
+bot.startWebhook(webhookPath, null, process.env.PORT || 10000);
 
 module.exports = {
   bot,
-  webhookCallback,
+  webhookCallback: bot.webhookCallback(webhookPath)
 };
