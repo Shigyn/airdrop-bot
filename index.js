@@ -397,46 +397,33 @@ app.post('/claim', async (req, res) => {
   try {
     // Vérifier la session existante
     const session = activeSessions.get(userId);
-    if (!session || session.deviceId !== deviceId) {
-      return res.status(403).json({ 
-        error: "INVALID_SESSION",
-        message: "Session invalide ou expirée" 
+    if (!session) {
+      return res.status(403).json({
+        error: "NO_ACTIVE_SESSION",
+        message: "No active mining session"
       });
     }
 
-    // Calculer le temps effectif (max 60mn)
-    const effectiveMinutes = Math.min(parseInt(miningTime), 60);
-    if (effectiveMinutes < 0.5) { // 30 secondes minimum
-      return res.status(400).json({ 
-        error: "MIN_TIME",
-        message: "Minimum 30 secondes pour claim" 
+    // Vérifier l'appareil
+    if (session.deviceId !== deviceId) {
+      return res.status(403).json({
+        error: "DEVICE_MISMATCH",
+        message: "Different device"
       });
     }
 
-    // Récupérer les données utilisateur
-    const usersData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G"
-    });
+    // Calculer les tokens basés sur le temps de minage
+    const tokens = Math.floor(miningTime * 1); // 1 token par minute
+    session.tokensMined += tokens;
+    session.totalMinutes += miningTime;
 
-    const userRow = usersData.data.values.findIndex(row => row[2] === userId);
-    if (userRow === -1) return res.status(404).json({ error: "USER_NOT_FOUND" });
-
-    const user = usersData.data.values[userRow];
-    const miningSpeed = parseFloat(user[6]) || 1;
-    const tokensToClaim = effectiveMinutes * miningSpeed;
-    const newBalance = (parseInt(user[3]) || 0) + tokensToClaim;
-
-    // Mettre à jour le solde
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: `Users!D${userRow + 2}`,
-      valueInputOption: "USER_ENTERED",
-      resource: { values: [[newBalance]] }
-    });
-
-    // Enregistrer la transaction
-    await sheets.spreadsheets.values.append({
+    // Mettre à jour les données utilisateur
+    const userData = await getUserData(userId);
+    if (!userData) {
+      return res.status(404).json({
+        error: "USER_NOT_FOUND",
+        message: "User data not found"
+      });
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:D",
       valueInputOption: "USER_ENTERED",
@@ -470,14 +457,32 @@ app.post('/claim', async (req, res) => {
   }
 });
 
-app.use(bot.webhookCallback('/bot'));// Par :
+app.use(bot.webhookCallback('/bot'));
+
+// Configuration des fichiers statiques
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: (res, path) => {
     if (path.endsWith('.png') || path.endsWith('.ico')) {
       res.set('Cache-Control', 'public, max-age=86400');
     }
   }
-}))app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+}));
 
-initializeApp();
+// Route par défaut
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Middleware pour les routes non trouvées
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' });
+});
+
+// Gestion des erreurs
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// Initialisation de l'application
+initializeApp().catch(console.error);
