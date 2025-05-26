@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { google } = require('googleapis');
 
 const app = express();
-const PORT = process.env.PORT || 8080; // Port par défaut pour Render
+const PORT = process.env.PORT || 3000; // Port par défaut pour Render
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
@@ -230,11 +230,37 @@ const initializeApp = async () => {
     }
 
     // Démarrez le serveur
-    const server = app.listen(process.env.PORT || 8080, () => {
-      console.log(`Server running on port ${process.env.PORT || 8080}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
-      console.log(`Google Sheets initialized: ${sheetsInitialized}`);
-    });
+    try {
+      const server = app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+        console.log(`Google Sheets initialized: ${sheetsInitialized}`);
+      });
+
+      // Gestion des erreurs de serveur
+      server.on('error', (error) => {
+        console.error('Server error:', error);
+        if (error.code === 'EADDRINUSE') {
+          console.error('Port already in use. Trying to stop previous instance...');
+          // Essayez de tuer le processus précédent
+          require('child_process').exec('pkill -f "node index.js"', (err) => {
+            if (err) {
+              console.error('Failed to kill previous instance:', err);
+            }
+            console.log('Previous instance stopped. Restarting...');
+            process.exit(1);
+          });
+        } else {
+          process.exit(1);
+        }
+      });
+
+      // Export the server for testing
+      module.exports = server;
+    } catch (error) {
+      console.error('Error starting server:', error);
+      process.exit(1);
+    }
 
     // Gestion des erreurs de serveur
     server.on('error', (error) => {
