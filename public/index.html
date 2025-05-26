@@ -11,6 +11,30 @@
 
   <!-- Scripts -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    // Configuration de Telegram WebApp
+    if (window.Telegram) {
+      window.Telegram.WebApp.ready();
+      window.Telegram.WebApp.expand();
+      window.Telegram.WebApp.enableScroll();
+      
+      // Configurer les paramètres de l'application
+      window.Telegram.WebApp.MainButton.show();
+      window.Telegram.WebApp.MainButton.setText('Claim');
+      
+      // Définir les paramètres de l'application
+      window.Telegram.WebApp.setBackButton();
+      window.Telegram.WebApp.setWindowBackground();
+      
+      // Configurer le thème
+      window.Telegram.WebApp.setThemeParams({
+        bg_color: '#ffffff',
+        text_color: '#000000',
+        button_color: '#0088cc',
+        button_text_color: '#ffffff'
+      });
+    }
+  </script>
   <script src="app.js" defer></script>
 
 </head>
