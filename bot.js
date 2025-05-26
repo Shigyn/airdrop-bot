@@ -10,7 +10,7 @@ const webhookUrl = `https://airdrop-bot-soy1.onrender.com${webhookPath}`;
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
   telegram: {
     webhook: {
-      port: process.env.PORT || 10000,
+      port: process.env.PORT || 3000, // Utiliser le même port que l'application
       domain: 'airdrop-bot-soy1.onrender.com',
       hookPath: webhookPath
     }

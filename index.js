@@ -8,7 +8,7 @@ const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
 const { google } = require('googleapis');
 
 const app = express();
-const PORT = process.env.PORT || 8080; // Port par défaut pour Render
+const PORT = process.env.PORT || 3000; // Utiliser le port fourni par Render ou 3000 par défaut
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
@@ -216,11 +216,14 @@ const initializeApp = async () => {
     }
 
     // Démarrez le serveur
-    const server = app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+    const server = app.listen(process.env.PORT || 8080, () => {
+      console.log(`Server running on port ${process.env.PORT || 8080}`);
       console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
       console.log(`Google Sheets initialized: ${sheetsInitialized}`);
     });
+
+    // Export the server for testing
+    module.exports = server;
 
     // Gestion des erreurs de serveur
     server.on('error', (error) => {
