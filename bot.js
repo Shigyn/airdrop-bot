@@ -20,11 +20,38 @@ async function initializeServices() {
     await googleSheets.initGoogleSheets();
     logger.info('Google Sheets initialized successfully');
     
-    // Configuration du webhook
-    await bot.telegram.setWebhook(webhookUrl);
-    logger.info(`Webhook configured at ${webhookUrl}`);
+    // Configuration du webhook avec gestion des erreurs
+    let webhookConfigured = false;
+    const maxRetries = 3;
+    let retryCount = 0;
     
+    while (!webhookConfigured && retryCount < maxRetries) {
+      try {
+        await bot.telegram.setWebhook(webhookUrl);
+        webhookConfigured = true;
+        logger.info(`Webhook configured successfully at ${webhookUrl}`);
+      } catch (error) {
+        if (error.response?.error_code === 429) {
+          const retryAfter = error.response.parameters?.retry_after || 1;
+          logger.info(`Rate limited. Retrying in ${retryAfter} seconds...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          retryCount++;
+        } else if (error.response?.error_code === 409) {
+          logger.info('Conflict detected. Removing existing webhook...');
+          await bot.telegram.deleteWebhook();
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!webhookConfigured) {
+      throw new Error('Failed to configure webhook after multiple retries');
+    }
+
     // Démarrer le bot en mode webhook
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Délai pour éviter les conflits
     bot.startWebhook(webhookPath);
     logger.info('Bot started successfully in webhook mode');
     
