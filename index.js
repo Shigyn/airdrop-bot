@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { google } = require('googleapis');
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Port par défaut pour Render
+const PORT = parseInt(process.env.PORT) || 3000; // Port par défaut pour Render
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
@@ -231,6 +231,12 @@ const initializeApp = async () => {
 
     // Démarrez le serveur
     try {
+      // Vérification du port
+      if (PORT === 10000) {
+        console.error('Port 10000 is reserved. Using port 3000 instead');
+        PORT = 3000;
+      }
+
       const server = app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
