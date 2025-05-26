@@ -424,35 +424,60 @@ app.post('/claim', async (req, res) => {
         error: "USER_NOT_FOUND",
         message: "User data not found"
       });
+    }
+
+    // Mettre à jour le solde
+    userData.balance = (userData.balance || 0) + tokens;
+    userData.lastClaim = new Date().toISOString();
+
+    // Sauvegarder les données
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:Z",
+      valueInputOption: "RAW",
+      resource: {
+        values: [[
+          userId,
+          userData.username,
+          userData.balance,
+          userData.lastClaim,
+          userData.referralCount,
+          userData.totalTokens
+        ]]
+      }
+    });
+
+    // Enregistrer la transaction
+    await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:D",
       valueInputOption: "USER_ENTERED",
       resource: {
         values: [[
-          userId, 
-          tokensToClaim, 
-          "CLAIM", 
-          new Date().toLocaleString('fr-FR')
+          userId,
+          tokens,
+          "CLAIM",
+          new Date().toISOString()
         ]]
       }
     });
 
-    // Ne PAS supprimer la session pour permettre des claims ultérieurs
-    // Mais réinitialiser le timer si besoin
+    // Réinitialiser le timer de la session
     session.startTime = Date.now();
 
     res.json({
-      status: "OK",
-      claimed: tokensToClaim,
-      balance: newBalance,
-      message: `${tokensToClaim} tokens claimés`
+      success: true,
+      claimed: tokens,
+      balance: userData.balance,
+      message: `${tokens} tokens claimés`
     });
 
-  } catch (err) {
-    console.error('Claim error:', err);
+  } catch (error) {
+    console.error('Claim error:', error);
     res.status(500).json({ 
       error: "SERVER_ERROR",
-      message: "Erreur serveur" 
+      message: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
