@@ -26,13 +26,19 @@ googleSheets.initGoogleSheets().catch(err => {
 
 // Démarrer le bot
 let botStarted = false;
+let lastLogTime = 0;
+const LOG_INTERVAL = 30000; // 30 secondes entre les logs
 
 // Vérifier le statut du bot
 setInterval(() => {
   if (!botStarted) {
-    logger.info('Bot is starting...');
+    const currentTime = Date.now();
+    if (currentTime - lastLogTime >= LOG_INTERVAL) {
+      logger.info('Bot is starting...');
+      lastLogTime = currentTime;
+    }
   }
-}, 5000); // 5 secondes entre les logs
+}, 5000); // 5 secondes entre les vérifications
 
 // Gestion des commandes
 bot.start(async (ctx) => {

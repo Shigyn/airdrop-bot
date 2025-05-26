@@ -215,6 +215,13 @@ const initializeApp = async () => {
       console.error('Error initializing bot:', error);
     }
 
+    // Vérifier si une instance est déjà en cours
+    const isAlreadyRunning = require('child_process').spawnSync('pkill', ['-0', '-f', 'node index.js']);
+    if (isAlreadyRunning.status === 0) {
+      console.error('Another instance is already running. Exiting...');
+      process.exit(1);
+    }
+
     // Démarrez le serveur
     try {
       // Utiliser le port 8080 pour Render
