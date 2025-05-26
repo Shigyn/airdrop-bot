@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { google } = require('googleapis');
 
 const app = express();
-let PORT = parseInt(process.env.PORT || '8080'); // Port par défaut pour Render
+let PORT = 8080; // Forcer l'utilisation du port 8080 pour Render
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
@@ -231,19 +231,46 @@ const initializeApp = async () => {
 
     // Démarrez le serveur
     try {
-      // Utiliser le port fourni par Render
-      const server = app.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-        console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
-        console.log(`Google Sheets initialized: ${sheetsInitialized}`);
-      }).on('error', (error) => {
+      // Utiliser le port 8080 pour Render
+    const server = app.listen(8080, () => {
+      console.log(`Server running on port 8080`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+      console.log(`Google Sheets initialized: ${sheetsInitialized}`);
+    }).on('error', (error) => {
+      console.error('Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port 8080 is already in use. Stopping previous instance...`);
+        // Essayez de tuer le processus précédent
+        require('child_process').exec('pkill -f "node index.js"', (err) => {
+          if (err) {
+            console.error('Failed to kill previous instance:', err);
+            process.exit(1);
+          }
+          console.log('Previous instance stopped. Restarting...');
+          // Redémarrer l'application
+          require('child_process').exec('node index.js', (err) => {
+            if (err) {
+              console.error('Failed to restart:', err);
+              process.exit(1);
+            }
+          });
+        });
+      } else {
+        console.error('Server error:', error);
+        process.exit(1);
+      }
+    });
+
+      // Gestion des erreurs de serveur
+      server.on('error', (error) => {
         console.error('Server error:', error);
         if (error.code === 'EADDRINUSE') {
-          console.error(`Port ${PORT} is already in use. Stopping previous instance...`);
+          console.error(`Port 8080 is already in use. Stopping previous instance...`);
           // Essayez de tuer le processus précédent
           require('child_process').exec('pkill -f "node index.js"', (err) => {
             if (err) {
               console.error('Failed to kill previous instance:', err);
+              process.exit(1);
             }
             console.log('Previous instance stopped. Restarting...');
             // Redémarrer l'application
@@ -255,14 +282,11 @@ const initializeApp = async () => {
             });
           });
         } else {
+          console.error('Server error:', error);
           process.exit(1);
         }
       });
-
-      // Gestion des erreurs de serveur
-      server.on('error', (error) => {
-        console.error('Server error:', error);
-        if (error.code === 'EADDRINUSE') {
+{{ ... }}
           console.error('Port already in use. Trying to stop previous instance...');
           // Essayez de tuer le processus précédent
           require('child_process').exec('pkill -f "node index.js"', (err) => {
