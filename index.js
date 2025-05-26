@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { google } = require('googleapis');
 
 const app = express();
-let PORT = parseInt(process.env.PORT) || 3000; // Port par défaut pour Render
+let PORT = parseInt(process.env.PORT || '3000'); // Port par défaut pour Render
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
@@ -252,16 +252,31 @@ const initializeApp = async () => {
         if (error.code === 'EADDRINUSE') {
           console.error(`Port ${PORT} is already in use. Trying to stop previous instance...`);
           // Essayez de tuer le processus précédent
-          require('child_process').exec('pkill -f "node index.js"', (err) => {
-            if (err) {
-              console.error('Failed to kill previous instance:', err);
-            } else {
+          const killProcess = require('child_process').spawn('pkill', ['-f', 'node index.js']);
+          killProcess.on('exit', (code) => {
+            if (code === 0) {
               console.log('Previous instance stopped. Restarting...');
               // Redémarrer l'application
-              require('child_process').exec('node index.js', (err) => {
+              const restartProcess = require('child_process').spawn('node', ['index.js']);
+              restartProcess.on('error', (err) => {
+                console.error('Failed to restart:', err);
+                process.exit(1);
+              });
+            } else {
+              console.error('Failed to kill previous instance. Trying alternative method...');
+              // Essayez une méthode alternative
+              require('child_process').exec('killall node', (err) => {
                 if (err) {
-                  console.error('Failed to restart:', err);
+                  console.error('Failed to kill processes:', err);
                   process.exit(1);
+                } else {
+                  console.log('Previous processes killed. Restarting...');
+                  require('child_process').exec('node index.js', (err) => {
+                    if (err) {
+                      console.error('Failed to restart:', err);
+                      process.exit(1);
+                    }
+                  });
                 }
               });
             }
