@@ -54,6 +54,7 @@ async function initializeApp() {
 async function loadUserData() {
   try {
     const userId = Telegram.WebApp.initDataUnsafe.user.id;
+    console.log('Fetching user data for:', userId);
     
     const response = await fetch('/api/user-data', {
       method: 'POST',
@@ -64,28 +65,52 @@ async function loadUserData() {
       body: JSON.stringify({ userId })
     });
 
+    console.log('Response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error('Failed to fetch user data');
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+      throw new Error('Failed to fetch user data: ' + errorText);
     }
 
     const userData = await response.json();
-    updateUserUI(userData);
+    console.log('User data received:', userData);
     
-    return userData;
+    if (!userData || !userData.data) {
+      throw new Error('Invalid user data format');
+    }
+
+    updateUserUI(userData.data);
+    
+    return userData.data;
   } catch (error) {
     console.error('Error loading user data:', error);
-    showNotification('Failed to load user data', 'error');
+    showNotification('Failed to load user data: ' + error.message, 'error');
     throw error;
   }
 }
 
 function updateUserUI(userData) {
+  console.log('Updating UI with:', userData);
+  
   const usernameElement = document.getElementById('username');
   const balanceElement = document.getElementById('balance');
   const lastClaimElement = document.getElementById('lastClaim');
 
-  if (usernameElement) usernameElement.textContent = userData.username || 'N/A';
-  if (balanceElement) balanceElement.textContent = userData.balance || '0';
+  if (usernameElement) {
+    usernameElement.textContent = userData.username || 'N/A';
+    console.log('Updated username:', usernameElement.textContent);
+  } else {
+    console.error('Username element not found');
+  }
+
+  if (balanceElement) {
+    balanceElement.textContent = userData.balance || '0';
+    console.log('Updated balance:', balanceElement.textContent);
+  } else {
+    console.error('Balance element not found');
+  }
+
   if (lastClaimElement) {
     lastClaimElement.textContent = userData.lastClaim 
       ? new Date(userData.lastClaim).toLocaleString() 

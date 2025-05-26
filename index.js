@@ -129,21 +129,42 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.post('/api/user-data', async (req, res) => {
   try {
     const userId = req.body.userId;
+    console.log('Request for user data:', userId);
+    
     if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'userId is required' 
+      });
     }
 
-    const userData = await googleSheets.getUserData(userId);
-    if (!userData) {
-      return res.status(404).json({ error: 'User not found' });
+    // Simuler des données si Google Sheets n'est pas configuré
+    let userData;
+    if (!sheetsInitialized) {
+      console.warn('Google Sheets not initialized, returning test data');
+      userData = {
+        userId: userId,
+        username: `user_${userId}`,
+        balance: Math.floor(Math.random() * 100),
+        lastClaim: new Date().toISOString()
+      };
+    } else {
+      userData = await getUserData(userId);
+      if (!userData) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
     }
 
+    console.log('Returning user data:', userData);
     res.json({
       success: true,
       data: userData
     });
   } catch (error) {
-    console.error('Error getting user data:', error);
+    console.error('Error in /api/user-data:', error);
     res.status(500).json({ 
       success: false,
       error: error.message
