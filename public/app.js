@@ -33,6 +33,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     console.log('User authenticated with ID:', userId);
     
+    // Test de la configuration Telegram
+    const testResponse = await fetch('/api/test-telegram');
+    const testData = await testResponse.json();
+    console.log('Telegram test data:', testData);
+    
     // Vérifiez si l'authentification est valide
     const authResponse = await fetch('/api/validate-auth', {
       method: 'POST',
@@ -69,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <p>${error.message}</p>
           <p>Merci d'ouvrir cette application depuis le bot Telegram.</p>
           <p>Si vous êtes déjà dans Telegram, essayez de recharger la page.</p>
+          <p>Configuration Telegram: ${JSON.stringify(window.Telegram?.WebApp?.initData, null, 2)}</p>
         </div>
       `;
     }

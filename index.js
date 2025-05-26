@@ -269,6 +269,21 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+// Endpoint de test pour vérifier la configuration de Telegram
+app.get('/api/test-telegram', (req, res) => {
+  const telegramData = {
+    isTelegram: !!window.Telegram,
+    isWebApp: !!window.Telegram?.WebApp,
+    initData: window.Telegram?.WebApp?.initData,
+    initDataUnsafe: window.Telegram?.WebApp?.initDataUnsafe
+  };
+  
+  res.json({
+    status: 'success',
+    data: telegramData
+  });
+});
+
 app.post('/api/validate-auth', (req, res) => {
   try {
     const { initData } = req.body;
