@@ -92,13 +92,13 @@ async function loadUserData(userId) {
   try {
     console.log(`Fetching user data for ID: ${userId}`);
     
-    const response = await fetch(`/api/user-data`, {
+    const response = await fetch('/api/user-data', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': Telegram.WebApp.initData
+        'Telegram-Data': Telegram.WebApp.initData || ''
       },
-      body: JSON.stringify({ userId })
+      body: JSON.stringify({ userId: Telegram.WebApp.initDataUnsafe.user.id })
     });
 
     if (!response.ok) {
@@ -117,6 +117,11 @@ async function loadUserData(userId) {
     if (username) username.textContent = userData.username || 'Chargement...';
     if (balance) balance.textContent = userData.balance || '--';
     if (lastClaim) lastClaim.textContent = userData.lastClaim || '--';
+
+    // Mettre à jour le compteur de mining
+    if (userData.mining_speed) {
+      document.getElementById('mining-speed').textContent = `${userData.mining_speed} token/min`;
+    }
 
   } catch (error) {
     console.error('Error loading user data:', error);

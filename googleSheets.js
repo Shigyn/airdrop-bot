@@ -111,24 +111,26 @@ class GoogleSheetsService {
 
       // Trouver les transactions de l'utilisateur
       const transactions = (transactionsRes.data.values || []).filter(row => row[1] === userId);
-      
       // Calculer le solde total
-      const balance = transactions.reduce((sum, row) => {
-        const amount = parseFloat(row[3]);
-        return !isNaN(amount) ? sum + amount : sum;
-      }, 0);
+      const balance = transactions.reduce((sum, row) => sum + (parseFloat(row[3]) || 0), 0);
 
-      // Récupérer la dernière réclamation
-      const lastClaim = transactions.length > 0 ? transactions[transactions.length - 1][0] : null;
+      // Trouver les informations utilisateur
+      const userRow = (usersRes.data.values || []).find(row => row[0] === userId);
+      const username = userRow ? userRow[1] : 'Utilisateur';
+      const lastClaim = userRow ? new Date(userRow[2]).toLocaleDateString() : 'Aucun';
+      const miningSpeed = userRow ? parseFloat(userRow[4]) || 0 : 0;
 
       return {
+        userId,
+        username,
         balance: balance.toFixed(2),
-        lastClaim: lastClaim ? new Date(lastClaim).toLocaleString() : 'Aucune',
-        userId: userId
+        lastClaim,
+        mining_speed: miningSpeed
       };
+
     } catch (error) {
-      console.error('Error fetching user data:', error);
-      throw new Error('Failed to fetch user data');
+      console.error('Error getting user data:', error);
+      throw new Error(`Failed to get user data: ${error.message}`);
     }
   }
 

@@ -97,15 +97,8 @@ bot.on('message', async (ctx) => {
   // Ici tu peux gérer d'autres commandes si besoin
 });
 
-// Configuration du webhook
-bot.telegram.setWebhook(webhookUrl)
-  .then(() => {
-    logger.info('Webhook configured successfully');
-  })
-  .catch(err => {
-    logger.error('Webhook configuration failed:', err);
-    process.exit(1);
-  });
+// La configuration du webhook est déjà gérée dans initializeServices()
+// Suppression de la configuration en double
 
 // Exporter le callback du webhook pour l'application
 module.exports = {
