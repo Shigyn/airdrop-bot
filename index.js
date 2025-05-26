@@ -14,20 +14,51 @@ let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
 
 // Middlewares
+// Configuration CORS plus permissive pour le développement
 app.use(cors({
-  origin: [
-    'https://airdrop-bot-soy1.onrender.com',
-    'https://web.telegram.org',
-    'https://t.me/CRYPTORATS_bot'
-  ],
+  origin: true, // Accepte toutes les origines
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Telegram-Data', 'Authorization'],
   credentials: true,
   exposedHeaders: ['Content-Length', 'X-Request-Id']
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Configuration des fichiers statiques
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1d', // Cache pendant 1 jour
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache JS pendant 1 an
+    } else if (path.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache CSS pendant 1 an
+    }
+  }
+}));
+
+// Parser JSON avec taille maximale augmentée
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Middleware de logging amélioré
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  const safeBody = { ...req.body };
+  if (safeBody.tokens) safeBody.tokens = '***';
+  if (safeBody.Authorization) safeBody.Authorization = '***';
+  
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
+    headers: req.headers,
+    body: safeBody,
+    query: req.query
+  });
+  
+  res.on('finish', () => {
+    const responseTime = Date.now() - startTime;
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} completed in ${responseTime}ms`);
+  });
+  
+  next();
+});
 
 app.use((req, res, next) => {
   const safeBody = { ...req.body };
@@ -42,18 +73,50 @@ app.use((req, res, next) => {
 
 const initializeApp = async () => {
   try {
+    // Vérifiez que toutes les variables d'environnement nécessaires sont présentes
+    if (!process.env.GOOGLE_CREDS_B64) {
+      throw new Error('GOOGLE_CREDS_B64 is required');
+    }
+    if (!process.env.BOT_TOKEN) {
+      throw new Error('BOT_TOKEN is required');
+    }
+
+    // Configuration des timeouts
+    app.setTimeout(30000); // 30 secondes
+    app.set('socket timeout', 30000); // 30 secondes
+
+    // Configuration des limites de requêtes
+    app.use(express.json({ limit: '50mb' }));
+    app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+    // Initialisation de Google Sheets
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
-    sheets = google.sheets({ version: 'v4', auth });
 
-    await initGoogleSheets();
-    sheetsInitialized = true;
-    console.log('Server ready');
+    try {
+      sheets = google.sheets({ version: 'v4', auth });
+      await initGoogleSheets();
+      sheetsInitialized = true;
+      console.log('Google Sheets initialized successfully');
+    } catch (error) {
+      console.error('Error initializing Google Sheets:', error);
+      throw error;
+    }
+
+    // Initialisation du bot
+    try {
+      bot.launch();
+      console.log('Bot started successfully');
+    } catch (error) {
+      console.error('Error starting bot:', error);
+      throw error;
+    }
+
+    // Démarrez le serveur
     const server = app.listen(PORT, () => {
-      console.log(`Server ready`);
-      console.log(`Running on port ${PORT}`);
+      console.log(`Server running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
       console.log(`Google Sheets initialized: ${sheetsInitialized}`);
     });
@@ -65,27 +128,52 @@ const initializeApp = async () => {
     });
 
     // Gestion de la fermeture propre
-    process.on('SIGTERM', () => {
+    process.on('SIGTERM', async () => {
       console.log('SIGTERM received. Closing server...');
-      server.close(() => {
-        console.log('Server closed');
+      
+      try {
+        // Fermez le bot
+        await bot.stop('SIGTERM');
+        
+        // Fermez toutes les connexions actives
+        for (const [userId, session] of activeSessions) {
+          if (session?.socket) {
+            session.socket.end();
+          }
+        }
+        
+        // Fermez le serveur
+        await new Promise((resolve) => {
+          server.close(() => {
+            console.log('Server closed');
+            resolve();
+          });
+        });
+
+        // Attendez un peu pour que toutes les opérations se terminent
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         process.exit(0);
-      });
+      } catch (error) {
+        console.error('Error during graceful shutdown:', error);
+        process.exit(1);
+      }
     });
 
-    // Gestion des erreurs non gérées
-    process.on('uncaughtException', (error) => {
-      console.error('Uncaught exception:', error);
-      process.exit(1);
-    });
-
-    // Gestion des rejections de promesses non gérées
+    // Gestion des erreurs
     process.on('unhandledRejection', (reason, promise) => {
-      console.error('Unhandled rejection:', reason);
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
       process.exit(1);
     });
-  } catch (err) {
-    console.error('Init failed:', err);
+
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught Exception:', error);
+      process.exit(1);
+    });
+
+    return { server, auth, sheets };
+  } catch (error) {
+    console.error('Error initializing app:', error);
     process.exit(1);
   }
 };
