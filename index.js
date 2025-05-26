@@ -232,34 +232,34 @@ const initializeApp = async () => {
     // Démarrez le serveur
     try {
       // Utiliser le port 8080 pour Render
-    const server = app.listen(8080, () => {
-      console.log(`Server running on port 8080`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
-      console.log(`Google Sheets initialized: ${sheetsInitialized}`);
-    }).on('error', (error) => {
-      console.error('Server error:', error);
-      if (error.code === 'EADDRINUSE') {
-        console.error(`Port 8080 is already in use. Stopping previous instance...`);
-        // Essayez de tuer le processus précédent
-        require('child_process').exec('pkill -f "node index.js"', (err) => {
-          if (err) {
-            console.error('Failed to kill previous instance:', err);
-            process.exit(1);
-          }
-          console.log('Previous instance stopped. Restarting...');
-          // Redémarrer l'application
-          require('child_process').exec('node index.js', (err) => {
+      const server = app.listen(8080, () => {
+        console.log(`Server running on port 8080`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+        console.log(`Google Sheets initialized: ${sheetsInitialized}`);
+      }).on('error', (error) => {
+        console.error('Server error:', error);
+        if (error.code === 'EADDRINUSE') {
+          console.error(`Port 8080 is already in use. Stopping previous instance...`);
+          // Essayez de tuer le processus précédent
+          require('child_process').exec('pkill -f "node index.js"', (err) => {
             if (err) {
-              console.error('Failed to restart:', err);
+              console.error('Failed to kill previous instance:', err);
               process.exit(1);
             }
+            console.log('Previous instance stopped. Restarting...');
+            // Redémarrer l'application
+            require('child_process').exec('node index.js', (err) => {
+              if (err) {
+                console.error('Failed to restart:', err);
+                process.exit(1);
+              }
+            });
           });
-        });
-      } else {
-        console.error('Server error:', error);
-        process.exit(1);
-      }
-    });
+        } else {
+          console.error('Server error:', error);
+          process.exit(1);
+        }
+      });
 
       // Gestion des erreurs de serveur
       server.on('error', (error) => {

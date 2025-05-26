@@ -81,11 +81,23 @@ googleSheets.initGoogleSheets().catch(err => {
 // Attendre que le webhook soit configuré avant de continuer
 let webhookConfigured = false;
 
-setInterval(() => {
-  if (!webhookConfigured) {
-    logger.info('Waiting for webhook to be configured...');
+// Fonction pour vérifier l'état du webhook
+async function checkWebhookStatus() {
+  try {
+    const webhookInfo = await bot.telegram.getWebhookInfo();
+    if (webhookInfo.url) {
+      webhookConfigured = true;
+      logger.info('Webhook is configured successfully');
+      // Arrêter l'intervalle de vérification
+      clearInterval(webhookCheckInterval);
+    }
+  } catch (err) {
+    logger.error('Error checking webhook status:', err);
   }
-}, 1000);
+}
+
+// Démarrer la vérification du webhook
+const webhookCheckInterval = setInterval(checkWebhookStatus, 5000);
 
 // Gestion des commandes
 bot.start(async (ctx) => {
