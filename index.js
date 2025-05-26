@@ -670,24 +670,6 @@ app.get('/api/user-data', async (req, res) => {
   }
 });
 
-// Route pour récupérer les tâches
-app.get('/api/tasks', async (req, res) => {
-  try {
-    const tasks = await googleSheets.readTasks();
-    res.json({
-      success: true,
-      data: tasks
-    });
-  } catch (error) {
-    console.error('Error fetching tasks:', error);
-    res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "Failed to fetch tasks",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
 // Route pour le dashboard
 app.get('/api/dashboard', async (req, res) => {
   try {
@@ -739,28 +721,6 @@ app.get('/api/dashboard', async (req, res) => {
       message: "Failed to fetch dashboard data",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
-  }
-});
-
-app.get('/api/tasks', async (req, res) => {
-  try {
-    const tasksData = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Tasks!A2:E"
-    });
-
-    const tasks = (tasksData.data.values || []).map(row => ({
-      id: row[0],
-      title: row[1],
-      image: row[2],
-      reward: row[3],
-      status: row[4]
-    })).filter(task => task.status === 'ACTIVE');
-
-    res.json(tasks);
-  } catch (err) {
-    console.error('Tasks error:', err);
-    res.status(500).json({ error: "Failed to load tasks" });
   }
 });
 
@@ -884,3 +844,5 @@ app.use((err, req, res, next) => {
 
 // Initialisation de l'application
 initializeApp().catch(console.error);
+
+module.exports = app;
