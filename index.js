@@ -11,11 +11,8 @@ const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
 
-const { bot, webhookCallback } = require('./bot');
-const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
-
-// Configuration du bot
 const { bot } = require('./bot');
+const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
 
 // Middlewares
 // Configuration CORS plus restrictive mais correcte
