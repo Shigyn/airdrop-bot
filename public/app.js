@@ -92,14 +92,18 @@ async function loadUserData(userId) {
   try {
     console.log(`Fetching user data for ID: ${userId}`);
     
-    const response = await fetch(`/api/user-data?userId=${userId}`, {
+    const response = await fetch(`/api/user-data`, {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Telegram-Data': Telegram.WebApp.initData
-      }
+      },
+      body: JSON.stringify({ userId })
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch user data');
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch user data');
     }
 
     const userData = await response.json();
@@ -116,7 +120,9 @@ async function loadUserData(userId) {
 
   } catch (error) {
     console.error('Error loading user data:', error);
-    showNotification('Erreur lors du chargement des données utilisateur', 'error');
+    showNotification(`Erreur: ${error.message}`, 'error');
+    // Réessayer après une erreur
+    setTimeout(() => loadUserData(userId), 5000);
   }
 }
 
@@ -552,16 +558,14 @@ async function showClaimView() {
   // Gestionnaire pour le bouton Claim
   document.getElementById('claim-tokens').addEventListener('click', async () => {
     try {
-      const response = await fetch('/claim', {
+      const response = await fetch('/api/claim', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Telegram-Data': Telegram.WebApp.initData || ''
+          'Telegram-Data': Telegram.WebApp.initData
         },
         body: JSON.stringify({
-          userId,
-          deviceId: generateDeviceId(),
-          miningTime: getCurrentMiningTime()
+          userId: Telegram.WebApp.initDataUnsafe.user.id
         })
       });
 

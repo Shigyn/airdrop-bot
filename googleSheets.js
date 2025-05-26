@@ -98,13 +98,19 @@ class GoogleSheetsService {
   async getUserData(userId) {
     try {
       // Récupérer les transactions de l'utilisateur
-      const res = await this.sheets.spreadsheets.values.get({
+      const transactionsRes = await this.sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: process.env.TRANSACTIONS_RANGE || 'Transactions!A2:E',
-        majorDimension: 'ROWS'
       });
 
-      const transactions = (res.data.values || []).filter(row => row[1] === userId);
+      // Récupérer les informations utilisateur
+      const usersRes = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: 'Users!A2:F',
+      });
+
+      // Trouver les transactions de l'utilisateur
+      const transactions = (transactionsRes.data.values || []).filter(row => row[1] === userId);
       
       // Calculer le solde total
       const balance = transactions.reduce((sum, row) => {

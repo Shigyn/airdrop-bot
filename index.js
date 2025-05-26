@@ -124,18 +124,73 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Routes API
-app.get('/api/user-data', async (req, res) => {
+app.post('/api/user-data', async (req, res) => {
   try {
-    const userId = req.query.userId;
+    const userId = req.body.userId;
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    const userData = await getUserData(userId);
+    const userData = await googleSheets.getUserData(userId);
     res.json(userData);
   } catch (error) {
     console.error('Error getting user data:', error);
-    res.status(500).json({ error: 'Failed to get user data' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/claim', async (req, res) => {
+  try {
+    const userId = req.body.userId;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const result = await googleSheets.claimTask(userId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error claiming:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/tasks', async (req, res) => {
+  try {
+    const tasks = await googleSheets.getAvailableTasks();
+    res.json(tasks);
+  } catch (error) {
+    console.error('Error getting tasks:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/claim-task', async (req, res) => {
+  try {
+    const { userId, taskId } = req.body;
+    if (!userId || !taskId) {
+      return res.status(400).json({ error: 'userId and taskId are required' });
+    }
+
+    const result = await googleSheets.claimSpecificTask(userId, taskId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error claiming task:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/referral', async (req, res) => {
+  try {
+    const userId = req.telegramUser?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
+    const referralInfo = await googleSheets.getReferralInfo(userId);
+    res.json(referralInfo);
+  } catch (error) {
+    console.error('Error getting referral info:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
