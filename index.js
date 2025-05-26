@@ -14,19 +14,8 @@ let sheetsInitialized = false; // ajouté pour la santé du service
 const { bot, webhookCallback } = require('./bot');
 const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
 
-// Configuration du webhook pour l'application
-app.post('/webhook/:token', (req, res) => {
-  const { body } = req;
-  const token = req.params.token;
-  
-  // Vérifiez que le token correspond au token du bot
-  if (token !== process.env.TELEGRAM_BOT_TOKEN) {
-    return res.status(403).send('Unauthorized');
-  }
-
-  // Gestion du webhook
-  webhookCallback(req, res);
-});
+// Configuration du bot
+const { bot } = require('./bot');
 
 // Middlewares
 // Configuration CORS plus restrictive mais correcte

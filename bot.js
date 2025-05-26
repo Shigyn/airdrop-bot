@@ -6,23 +6,16 @@ const logger = require('./logger');
 const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
 const webhookUrl = `https://airdrop-bot-soy1.onrender.com${webhookPath}`;
 
-// Créer le bot en mode webhook
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
-  telegram: {
-    webhook: {
-      domain: 'airdrop-bot-soy1.onrender.com',
-      hookPath: webhookPath
-    }
-  }
-});
+// Créer le bot en mode polling
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
-// Configuration du webhook
-bot.telegram.setWebhook(webhookUrl)
+// Démarrer le polling
+bot.launch()
   .then(() => {
-    logger.info('Webhook configured successfully');
+    logger.info('Bot started successfully in polling mode');
   })
   .catch(err => {
-    logger.error('Webhook configuration failed:', err);
+    logger.error('Failed to start bot:', err);
     process.exit(1);
   });
 
@@ -31,13 +24,13 @@ googleSheets.initGoogleSheets().catch(err => {
   process.exit(1);
 });
 
-// Attendre que le webhook soit configuré avant de continuer
-let webhookConfigured = false;
+// Démarrer le bot
+let botStarted = false;
 
-// Attendre que le webhook soit configuré avant de continuer
+// Vérifier le statut du bot
 setInterval(() => {
-  if (!webhookConfigured) {
-    logger.info('Waiting for webhook to be configured...');
+  if (!botStarted) {
+    logger.info('Bot is starting...');
   }
 }, 5000); // 5 secondes entre les logs
 
