@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { google } = require('googleapis');
 
 const app = express();
-let PORT = parseInt(process.env.PORT || '3000'); // Port par défaut pour Render
+let PORT = parseInt(process.env.PORT || '8080'); // Port par défaut pour Render
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
@@ -231,58 +231,30 @@ const initializeApp = async () => {
 
     // Démarrez le serveur
     try {
-      // Vérification du port
-      if (PORT === 10000) {
-        console.error('Port 10000 is reserved. Using port 3000 instead');
-        PORT = 3000;
-      }
-
-      // Vérification que le port est un nombre valide
-      if (typeof PORT !== 'number' || PORT <= 0 || PORT > 65535) {
-        console.error('Invalid port. Using default port 3000');
-        PORT = 3000;
-      }
-
-      // Vérification si le port est déjà utilisé
+      // Utiliser le port fourni par Render
       const server = app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
         console.log(`Google Sheets initialized: ${sheetsInitialized}`);
       }).on('error', (error) => {
+        console.error('Server error:', error);
         if (error.code === 'EADDRINUSE') {
-          console.error(`Port ${PORT} is already in use. Trying to stop previous instance...`);
+          console.error(`Port ${PORT} is already in use. Stopping previous instance...`);
           // Essayez de tuer le processus précédent
-          const killProcess = require('child_process').spawn('pkill', ['-f', 'node index.js']);
-          killProcess.on('exit', (code) => {
-            if (code === 0) {
-              console.log('Previous instance stopped. Restarting...');
-              // Redémarrer l'application
-              const restartProcess = require('child_process').spawn('node', ['index.js']);
-              restartProcess.on('error', (err) => {
+          require('child_process').exec('pkill -f "node index.js"', (err) => {
+            if (err) {
+              console.error('Failed to kill previous instance:', err);
+            }
+            console.log('Previous instance stopped. Restarting...');
+            // Redémarrer l'application
+            require('child_process').exec('node index.js', (err) => {
+              if (err) {
                 console.error('Failed to restart:', err);
                 process.exit(1);
-              });
-            } else {
-              console.error('Failed to kill previous instance. Trying alternative method...');
-              // Essayez une méthode alternative
-              require('child_process').exec('killall node', (err) => {
-                if (err) {
-                  console.error('Failed to kill processes:', err);
-                  process.exit(1);
-                } else {
-                  console.log('Previous processes killed. Restarting...');
-                  require('child_process').exec('node index.js', (err) => {
-                    if (err) {
-                      console.error('Failed to restart:', err);
-                      process.exit(1);
-                    }
-                  });
-                }
-              });
-            }
+              }
+            });
           });
         } else {
-          console.error('Server error:', error);
           process.exit(1);
         }
       });

@@ -13,20 +13,65 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
       domain: 'airdrop-bot-soy1.onrender.com',
       hookPath: webhookPath,
       // Désactiver le webhook initial pour éviter les erreurs 429
-      enabled: false
+      enabled: false,
+      // Configuration pour éviter les erreurs 429
+      maxAttempts: 3,
+      retryAfter: 5000 // 5 secondes entre les tentatives
     }
   }
 });
 
-// Configuration du webhook
-bot.telegram.setWebhook(webhookUrl)
-  .then(() => {
+// Fonction pour configurer le webhook avec retry
+async function configureWebhook(retryCount = 0) {
+  try {
+    // D'abord vérifier l'état actuel du webhook
+    const webhookInfo = await bot.telegram.getWebhookInfo();
+    
+    // Si le webhook existe déjà, le supprimer
+    if (webhookInfo.url) {
+      logger.info('Deleting existing webhook...');
+      await bot.telegram.deleteWebhook();
+      
+      // Attendre un peu après la suppression
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    // Configurer le nouveau webhook
+    logger.info('Setting up new webhook...');
+    await bot.telegram.setWebhook(webhookUrl);
     logger.info('Webhook configured successfully');
-  })
-  .catch(err => {
+  } catch (err) {
     logger.error('Webhook configuration failed:', err);
-    process.exit(1);
-  });
+    
+    // Si c'est une erreur 429
+    if (err.response && err.response.error_code === 429) {
+      const retryAfter = err.response.parameters?.retry_after || 1;
+      logger.info(`Waiting ${retryAfter} seconds before retrying webhook configuration...`);
+      
+      // Limiter le nombre de tentatives
+      if (retryCount < 3) {
+        setTimeout(() => configureWebhook(retryCount + 1), retryAfter * 1000);
+      } else {
+        logger.error('Max retries reached. Giving up.');
+        process.exit(1);
+      }
+    } else {
+      // Pour d'autres erreurs, réessayer après 5 secondes
+      logger.info('Retrying webhook configuration in 5 seconds...');
+      
+      // Limiter le nombre de tentatives
+      if (retryCount < 3) {
+        setTimeout(() => configureWebhook(retryCount + 1), 5000);
+      } else {
+        logger.error('Max retries reached. Giving up.');
+        process.exit(1);
+      }
+    }
+  }
+}
+
+// Démarrer la configuration du webhook après un délai initial plus long
+setTimeout(() => configureWebhook(), 5000);
 
 googleSheets.initGoogleSheets().catch(err => {
   logger.error('Sheets initialization failed:', err);
@@ -36,13 +81,6 @@ googleSheets.initGoogleSheets().catch(err => {
 // Attendre que le webhook soit configuré avant de continuer
 let webhookConfigured = false;
 
-setInterval(() => {
-  if (!webhookConfigured) {
-    logger.info('Waiting for webhook to be configured...');
-  }
-}, 1000);
-
-// Attendre que le webhook soit configuré avant de continuer
 setInterval(() => {
   if (!webhookConfigured) {
     logger.info('Waiting for webhook to be configured...');
