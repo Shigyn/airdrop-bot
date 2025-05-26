@@ -211,10 +211,10 @@ const initializeApp = async () => {
 
     // Initialisation du bot
     try {
-      bot.launch();
-      console.log('Bot started successfully');
+      // Le bot est déjà configuré avec le webhook dans bot.js
+      console.log('Bot initialized successfully');
     } catch (error) {
-      console.error('Error starting bot:', error);
+      console.error('Error initializing bot:', error);
     }
 
     // Démarrez le serveur
@@ -222,6 +222,12 @@ const initializeApp = async () => {
       console.log(`Server running on port ${process.env.PORT || 8080}`);
       console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
       console.log(`Google Sheets initialized: ${sheetsInitialized}`);
+    });
+
+    // Gestion des erreurs de serveur
+    server.on('error', (error) => {
+      console.error('Server error:', error);
+      process.exit(1);
     });
 
     // Export the server for testing
