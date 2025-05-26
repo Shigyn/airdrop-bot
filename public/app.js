@@ -21,38 +21,76 @@ function showNotification(message, type = 'info') {
 // Fonctions de données utilisateur
 async function loadUserData() {
   try {
-    // Récupérer l'ID de l'utilisateur Telegram
     const userId = Telegram.WebApp.initDataUnsafe.user.id;
     console.log('Loading data for user:', userId);
 
-    // Appeler l'API pour obtenir les données utilisateur
+    // Vérifier que l'ID utilisateur existe
+    if (!userId) {
+      throw new Error('User ID not found in Telegram data');
+    }
+
+    // Vérifier que les éléments DOM existent
+    const usernameElement = document.getElementById('username');
+    const balanceElement = document.getElementById('balance');
+    
+    if (!usernameElement || !balanceElement) {
+      console.error('DOM elements not found:', {
+        username: !!usernameElement, 
+        balance: !!balanceElement
+      });
+      throw new Error('UI elements not found');
+    }
+
+    // Appeler l'API avec les bons headers
     const response = await fetch('/api/user-data', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Telegram-Data': Telegram.WebApp.initData
+      },
       body: JSON.stringify({ userId })
     });
 
+    console.log('API response status:', response.status);
+
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to load user data');
+      const errorText = await response.text();
+      console.error('API error response:', errorText);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
-    const data = await response.json();
-    console.log('User data:', data);
+    const result = await response.json();
+    console.log('API response data:', result);
 
-    // Mettre à jour l'UI avec les données
-    const username = document.getElementById('username');
-    const balance = document.getElementById('balance');
-    const lastClaim = document.getElementById('lastClaim');
+    // Vérifier la structure des données
+    if (!result || !result.data) {
+      throw new Error('Invalid data format from API');
+    }
 
-    if (username) username.textContent = data.username || 'User';
-    if (balance) balance.textContent = data.balance || '0';
-    if (lastClaim) lastClaim.textContent = data.lastClaim || 'Never claimed';
+    const userData = result.data;
+    
+    // Mettre à jour l'UI avec vérification
+    if (usernameElement) {
+      usernameElement.textContent = userData.username || 'User';
+      console.log('Username set:', usernameElement.textContent);
+    }
+    
+    if (balanceElement) {
+      balanceElement.textContent = userData.balance || '0';
+      console.log('Balance set:', balanceElement.textContent);
+    }
 
-    return data;
+    return userData;
   } catch (error) {
-    console.error('Error loading user data:', error);
-    showNotification('Error loading user data: ' + error.message, 'error');
+    console.error('Error in loadUserData:', error);
+    showNotification('Failed to load user data: ' + error.message, 'error');
+    
+    // Mettre des valeurs par défaut en cas d'erreur
+    const usernameElement = document.getElementById('username');
+    const balanceElement = document.getElementById('balance');
+    if (usernameElement) usernameElement.textContent = 'User';
+    if (balanceElement) balanceElement.textContent = '0';
+    
     throw error;
   }
 }

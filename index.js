@@ -128,23 +128,58 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Routes API
 app.post('/api/user-data', async (req, res) => {
   try {
+    console.log('Headers received:', req.headers);
+    console.log('Body received:', req.body);
+
     const userId = req.body.userId;
-    console.log('Fetching user data for:', userId);
-
     if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
+      console.error('userId is required');
+      return res.status(400).json({ 
+        success: false,
+        error: 'userId is required' 
+      });
     }
 
-    const userData = await getUserData(userId);
+    // Simuler des données si Google Sheets n'est pas configuré
+    let userData;
+    if (!sheetsInitialized) {
+      console.warn('Using mock data - Google Sheets not initialized');
+      userData = {
+        username: `user_${userId}`,
+        balance: Math.floor(Math.random() * 100),
+        lastClaim: new Date().toISOString()
+      };
+    } else {
+      try {
+        userData = await getUserData(userId);
+      } catch (error) {
+        console.error('Error fetching from Google Sheets:', error);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to fetch user data'
+        });
+      }
+    }
+
     if (!userData) {
-      return res.status(404).json({ error: 'User not found' });
+      console.error('User not found:', userId);
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
     }
 
-    console.log('User data:', userData);
-    res.json(userData);
+    console.log('Returning user data:', userData);
+    res.json({
+      success: true,
+      data: userData
+    });
   } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Error in /api/user-data:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error'
+    });
   }
 });
 
