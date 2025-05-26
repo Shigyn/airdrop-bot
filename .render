@@ -1,0 +1,10 @@
+{
+  "web": {
+    "startCommand": "node index.js",
+    "buildCommand": "npm install",
+    "root": ".",
+    "env": {
+      "NODE_ENV": "production"
+    }
+  }
+}
