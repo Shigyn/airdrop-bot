@@ -6,48 +6,14 @@ let sessionStartTime = Date.now();
 let tokens = 0;
 let deviceId;
 let Mining_Speed = 1;
-
-// ==============================================
-// SYSTEME DE PARTICULES COSMIQUES
-// ==============================================
-
-function createParticles() {
-  let container = document.getElementById('particles');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'particles';
-    container.className = 'particles';
-    document.body.appendChild(container);
-  }
-
-  const particleCount = window.innerWidth < 768 ? 25 : 40;
-  container.innerHTML = '';
-
-  for (let i = 0; i < particleCount; i++) {
-    const particle = document.createElement('div');
-    particle.className = 'particle';
-
-    Object.assign(particle.style, {
-      width: `${Math.random() * 3 + 1}px`,
-      height: '100%',
-      left: `${Math.random() * 100}%`,
-      top: `${Math.random() * 100}%`,
-      opacity: Math.random() * 0.7 + 0.3,
-      animation: `float ${Math.random() * 25 + 15}s linear ${Math.random() * 10}s infinite`
-    });
-
-    container.appendChild(particle);
-  }
-}
-
-function initParticles() {
-  createParticles();
-  window.addEventListener('resize', createParticles);
-}
+deviceId = generateDeviceId();
 
 // ==============================================
 // GESTION DE SESSION
 // ==============================================
+function generateDeviceId() {
+  return 'device_' + Math.random().toString(36).substr(2, 9);
+}
 
 function sauvegarderSession() {
   if (typeof localStorage !== 'undefined') {
@@ -61,17 +27,29 @@ function sauvegarderSession() {
 }
 
 async function chargerSession() {
-  if (typeof localStorage !== 'undefined' && userId) {
+  if (typeof localStorage !== 'undefined' && userId && deviceId) {
     const session = localStorage.getItem('miningSession');
     if (session) {
-      const parsed = JSON.parse(session);
-      if (parsed.userId === userId && parsed.deviceId === deviceId) {
-        sessionStartTime = parsed.sessionStartTime;
-        tokens = parsed.tokens;
-        return true;
+      try {
+        const parsed = JSON.parse(session);
+        if (parsed.userId === userId && parsed.deviceId === deviceId) {
+          sessionStartTime = parsed.sessionStartTime;
+          tokens = parsed.tokens;
+          
+          // Vérifier si la session est encore valide (moins de 60 minutes)
+          const elapsedMinutes = (Date.now() - sessionStartTime) / (1000 * 60);
+          if (elapsedMinutes < 60) {
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing session:', e);
       }
     }
   }
+  
+  // Si on arrive ici, la session est invalide ou inexistante
+  localStorage.removeItem('miningSession');
   return false;
 }
 
@@ -80,59 +58,55 @@ async function chargerSession() {
 // ==============================================
 
 async function initTelegramWebApp() {
+  if (!window.Telegram?.WebApp) {
+    console.error('Telegram WebApp SDK not loaded');
+    return;
+  }
+
   window.Telegram.WebApp.ready();
+  window.Telegram.WebApp.expand();
 
   const user = window.Telegram.WebApp.initDataUnsafe?.user || {};
-  userId = user.id || null;  // <-- Assignation de userId ici
-  Mining_Speed = 1; // peut être calculé dynamiquement ici
+  userId = user.id || null;
+  deviceId = deviceId || generateDeviceId();
 
-  // Met à jour le header avec un placeholder initial
+  // Initialiser l'UI de base
   updateUserInfo({
     username: user.username || "Utilisateur",
     balance: "0"
   });
 
-  // Affiche un contenu basique dans #content pour tokens et bouton claim
-  const content = document.getElementById('content');
-  content.innerHTML = `
-    <div class="claim-container">
-      <div class="token-display">
-        <span id="tokens">0.00</span> tokens
-      </div>
-      <button id="main-claim-btn" disabled>
-        <span id="claim-text">00:00</span>
-      </button>
-    </div>
-  `;
-
-  demarrerMinage();
+  // Afficher le contenu de base
+  showClaim();
 }
-
 
 window.addEventListener('DOMContentLoaded', async () => {
   initTelegramWebApp();
   initParticles();
   initNavigation();
   
-  if (userId) {
-    try {
-      const userData = await loadUserData();
-      Mining_Speed = userData.mining_speed || 1;
-
-      // Met à jour l'UI avec username et balance depuis userData
-      updateUserInfo({
-        username: userData.username || "Utilisateur",
-        balance: (userData.balance !== undefined) ? userData.balance.toString() : "0"
-      });
-
-      if (!(await chargerSession())) {
-        await startNewSession();
-      } else {
-        await demarrerMinage();
+  // Attendre que userId soit défini par initTelegramWebApp()
+  await new Promise(resolve => {
+    const checkUserId = setInterval(() => {
+      if (userId) {
+        clearInterval(checkUserId);
+        resolve();
       }
-    } catch (error) {
-      console.error('Initialization error:', error);
+    }, 100);
+  });
+
+  try {
+    const userData = await loadUserData();
+    Mining_Speed = userData.mining_speed || 1;
+    updateUserInfo(userData);
+
+    if (!(await chargerSession())) {
+      await startNewSession();
+    } else {
+      await demarrerMinage();
     }
+  } catch (error) {
+    console.error('Initialization error:', error);
   }
 
   showClaim();
@@ -162,7 +136,27 @@ function updateUserInfo({ username, balance }) {
   if (speedEl) speedEl.textContent = `Vitesse de minage : x${Mining_Speed}`;
 }
 
+async function syncWithServer() {
+  try {
+    const response = await fetch('/check-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, deviceId })
+    });
 
+    const data = await response.json();
+    
+    if (data.valid) {
+      // Mettre à jour les valeurs locales avec celles du serveur
+      sessionStartTime = data.startTime;
+      tokens = data.tokens || 0;
+      return true;
+    }
+  } catch (error) {
+    console.error('Sync error:', error);
+  }
+  return false;
+}
 // ==============================================
 // FONCTIONS MINAGE
 // ==============================================
@@ -449,20 +443,24 @@ window.addEventListener('DOMContentLoaded', async () => {
   initNavigation();
   
   if (userId) {
-    try {
-      const userData = await loadUserData();
-      Mining_Speed = userData.mining_speed || 1;
-      updateUserInfo(userData);
+  try {
+    const userData = await loadUserData();
+    Mining_Speed = userData.mining_speed || 1;
+    updateUserInfo(userData);
 
-      if (!(await chargerSession())) {
-        await startNewSession();
-      } else {
-        await demarrerMinage();
-      }
-    } catch (error) {
-      console.error('Initialization error:', error);
+    // Essayer de synchroniser avec le serveur d'abord
+    const serverSessionValid = await syncWithServer();
+    
+    // Si pas de session serveur, essayer le local storage
+    if (!serverSessionValid && !(await chargerSession())) {
+      await startNewSession();
     }
+    
+    await demarrerMinage();
+  } catch (error) {
+    console.error('Initialization error:', error);
   }
+}
 
   showClaim();
 });

@@ -86,6 +86,40 @@ app.post('/sync-session', (req, res) => {
   });
 });
 
+app.post('/check-session', (req, res) => {
+  const { userId, deviceId } = req.body;
+  
+  if (!userId || !deviceId) {
+    return res.status(400).json({ error: "Missing parameters" });
+  }
+
+  const session = activeSessions.get(userId);
+  
+  if (!session) {
+    return res.json({ valid: false, message: "No active session" });
+  }
+
+  if (session.deviceId !== deviceId) {
+    return res.json({ 
+      valid: false, 
+      message: "Device mismatch",
+      sessionDevice: session.deviceId,
+      requestDevice: deviceId
+    });
+  }
+
+  // Vérifier si la session est toujours valide (moins de 60 minutes)
+  const elapsedMinutes = (Date.now() - session.startTime) / (1000 * 60);
+  const remaining = Math.max(0, 60 - elapsedMinutes);
+
+  res.json({
+    valid: remaining > 0,
+    startTime: session.startTime,
+    remainingMinutes: remaining,
+    tokens: session.tokens || 0
+  });
+});
+
 app.post('/start-session', (req, res) => {
   const { userId, deviceId } = req.body;
   const MAX_MINUTES = 60; // Durée max totale
