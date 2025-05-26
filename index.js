@@ -129,30 +129,21 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.post('/api/user-data', async (req, res) => {
   try {
     const userId = req.body.userId;
-    console.log('Request for user data:', userId);
+    console.log('Fetching user data for:', userId);
 
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Récupérer les données de l'utilisateur depuis Google Sheets
     const userData = await getUserData(userId);
-    
     if (!userData) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Formater les données pour l'interface
-    const formattedData = {
-      username: userData.username || `user_${userId}`,
-      balance: userData.balance || '0',
-      lastClaim: userData.lastClaim || 'Never claimed'
-    };
-
-    console.log('Returning formatted user data:', formattedData);
-    res.json(formattedData);
+    console.log('User data:', userData);
+    res.json(userData);
   } catch (error) {
-    console.error('Error in /api/user-data:', error);
+    console.error('Error fetching user data:', error);
     res.status(500).json({ error: error.message });
   }
 });

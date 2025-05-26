@@ -52,6 +52,33 @@ class GoogleSheetsService {
     return allTasks.filter(task => !task.completed);
   }
 
+  async getUserData(userId) {
+    try {
+      const res = await this.sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: 'Users!A2:G', // Date_Inscription, Username, user_id, Balance, Last_Claim_Time, Referral_Code, Mining_Speed
+      });
+
+      const rows = res.data.values || [];
+      const userData = rows.find(row => row[2] === userId.toString()); // Cherche par user_id
+
+      if (!userData) {
+        return null;
+      }
+
+      return {
+        username: userData[1], // Username
+        balance: userData[3], // Balance
+        lastClaim: userData[4], // Last_Claim_Time
+        referralCode: userData[5], // Referral_Code
+        miningSpeed: userData[6] // Mining_Speed
+      };
+    } catch (error) {
+      console.error('Error getting user data:', error);
+      throw new Error('Failed to fetch user data');
+    }
+  }
+
   async claimTask(userId, taskId) {
     try {
       const tasks = await this.readTasks();
