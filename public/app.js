@@ -96,32 +96,61 @@ async function loadUserData(userId) {
     }
 
     // Mise à jour de l'UI
-    document.getElementById('username').textContent = data.username || 'Anonymous';
-    document.getElementById('balance').textContent = data.balance ?? '0';
-    document.getElementById('lastClaim').textContent = data.lastClaim || 'Never';
+    const usernameElement = document.getElementById('username');
+    const balanceElement = document.getElementById('balance');
+    const lastClaimElement = document.getElementById('lastClaim');
+
+    if (usernameElement) usernameElement.textContent = data.username || 'Anonymous';
+    if (balanceElement) balanceElement.textContent = data.balance ?? '0';
+    if (lastClaimElement) lastClaimElement.textContent = data.lastClaim || 'Never';
+
+    // Mettre à jour la vitesse de minage si disponible
+    if (data.mining_speed) {
+      const miningSpeedElement = document.getElementById('mining-speed');
+      if (miningSpeedElement) {
+        miningSpeedElement.textContent = `${data.mining_speed} token/min`;
+      }
+    }
 
     return data;
   } catch (error) {
     console.error('Error in loadUserData:', error);
     
     // Fallback UI update
-    document.getElementById('username').textContent = 'Error';
-    document.getElementById('balance').textContent = '0';
-    document.getElementById('lastClaim').textContent = 'Unknown';
+    const usernameElement = document.getElementById('username');
+    const balanceElement = document.getElementById('balance');
+    const lastClaimElement = document.getElementById('lastClaim');
+
+    if (usernameElement) usernameElement.textContent = 'Error';
+    if (balanceElement) balanceElement.textContent = '0';
+    if (lastClaimElement) lastClaimElement.textContent = 'Unknown';
     
     showNotification('Failed to load user data. Please try again.', 'error');
     throw error;
   }
 }
 
-// Configuration de la navigation
+// Configuration de la navigation avec gestion d'erreurs
 function setupNavigation() {
   try {
     const navButtons = document.querySelectorAll('.nav-btn');
+    if (!navButtons || navButtons.length === 0) {
+      throw new Error('Navigation buttons not found');
+    }
+
     navButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        const viewId = button.id.replace('nav-', '');
-        showView(viewId);
+      button.addEventListener('click', async () => {
+        try {
+          const viewId = button.id.replace('nav-', '');
+          const activeBtn = document.querySelector('.nav-btn.active');
+          if (activeBtn) activeBtn.classList.remove('active');
+          button.classList.add('active');
+
+          await showView(viewId);
+        } catch (error) {
+          console.error('Error handling navigation:', error);
+          showNotification('Error switching view', 'error');
+        }
       });
     });
   } catch (error) {
@@ -130,35 +159,42 @@ function setupNavigation() {
   }
 }
 
-function showView(viewId) {
+async function showView(viewId) {
   try {
-    const activeBtn = document.querySelector('.nav-btn.active');
-    if (activeBtn) activeBtn.classList.remove('active');
-    document.getElementById(`nav-${viewId}`).classList.add('active');
-
     const content = document.getElementById('content');
     if (!content) {
       throw new Error('Content container not found');
     }
 
-    content.innerHTML = '';
+    content.innerHTML = '<div class="loading-spinner"></div>';
 
     switch (viewId) {
       case 'claim':
-        showClaimView();
+        await showClaimView();
         break;
       case 'tasks':
-        showTasksView();
+        await showTasksView();
         break;
       case 'referral':
-        showReferralView();
+        await showReferralView();
         break;
       default:
         throw new Error(`Unknown view: ${viewId}`);
     }
   } catch (error) {
-    console.error('Error switching view:', error);
-    showNotification('Error switching view', 'error');
+    console.error('Error displaying view:', error);
+    showNotification('Error displaying view', 'error');
+    
+    // Afficher un message d'erreur dans le contenu
+    const content = document.getElementById('content');
+    if (content) {
+      content.innerHTML = `
+        <div class="error-message">
+          <h3>Error</h3>
+          <p>${error.message}</p>
+        </div>
+      `;
+    }
   }
 }
 
