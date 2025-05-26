@@ -4,11 +4,17 @@ const logger = require('./logger');
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 
+// Configuration du webhook
+const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;
+const webhookUrl = `https://airdrop-bot-soy1.onrender.com${webhookPath}`;
+
+// Initialisation de Google Sheets
 googleSheets.initGoogleSheets().catch(err => {
   logger.error('Sheets initialization failed:', err);
   process.exit(1);
 });
 
+// Gestion des commandes
 bot.start(async (ctx) => {
   try {
     await ctx.reply(
@@ -41,7 +47,17 @@ bot.on('message', async (ctx) => {
   // Ici tu peux gérer d'autres commandes si besoin
 });
 
-const webhookCallback = bot.webhookCallback(`/webhook/${process.env.TELEGRAM_BOT_TOKEN}`);
+// Configuration du webhook
+bot.telegram.setWebhook(webhookUrl)
+  .then(() => {
+    logger.info('Webhook configured successfully');
+  })
+  .catch(err => {
+    logger.error('Webhook configuration failed:', err);
+    process.exit(1);
+  });
+
+const webhookCallback = bot.webhookCallback(webhookPath);
 
 module.exports = {
   bot,
