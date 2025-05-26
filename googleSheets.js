@@ -135,15 +135,7 @@ class GoogleSheetsService {
     }
   }
 
-  async claimRandomTask(userId) {
-    const availableTasks = await this.getAvailableTasks();
-    
-    if (!availableTasks.length) {
-      return { 
-        success: false,
-        error: "No available tasks",
-        message: "Aucune tâche disponible actuellement"
-      };
+  async getReferralInfo(code) {
     try {
       const response = await this.sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
@@ -151,10 +143,10 @@ class GoogleSheetsService {
       });
       
       // Trouver les références de l'utilisateur
-      const referrals = (response.data.values || []).filter(row => row[0] === userId);
+      const referrals = (response.data.values || []).filter(row => row[0] === code);
       
       return {
-        referralCode: userId,  // Utiliser l'ID utilisateur comme code
+        referralCode: code,
         pointsEarned: referrals.reduce((sum, row) => sum + (parseFloat(row[1]) || 0), 0),
         referralsCount: referrals.length,
         referrals: referrals.map(row => ({
@@ -168,6 +160,21 @@ class GoogleSheetsService {
       throw error;
     }
   }
+
+  async claimRandomTask(userId) {
+    const availableTasks = await this.getAvailableTasks();
+    
+    if (!availableTasks.length) {
+      return { 
+        success: false,
+        error: "No available tasks",
+        message: "Aucune tâche disponible actuellement"
+      };
+    }
+
+    const task = availableTasks[Math.floor(Math.random() * availableTasks.length)];
+    return this.claimTask(userId, task.id);
+  }
 }
 
 const googleSheetsService = new GoogleSheetsService();
@@ -175,8 +182,8 @@ const googleSheetsService = new GoogleSheetsService();
 module.exports = {
   initGoogleSheets: () => googleSheetsService.init(),
   readTasks: () => googleSheetsService.readTasks(),
-  claimTaskForUser: (userId, taskId) => googleSheetsService.claimTask(userId, taskId),
-  claimRandomTaskForUser: (userId) => googleSheetsService.claimRandomTask(userId),
+  claimTask: (userId, taskId) => googleSheetsService.claimTask(userId, taskId),
+  claimRandomTask: (userId) => googleSheetsService.claimRandomTask(userId),
   getReferralInfo: (code) => googleSheetsService.getReferralInfo(code),
   getAvailableTasks: () => googleSheetsService.getAvailableTasks(),
   getUserData: (userId) => googleSheetsService.getUserData(userId),
