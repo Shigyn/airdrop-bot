@@ -2,7 +2,6 @@ const { Telegraf } = require('telegraf');
 const googleSheets = require('./googleSheets');
 const logger = require('./logger');
 
-const googleSheets = require('./googleSheets');
 const logger = require('./logger');
 
 // Configuration du webhook
