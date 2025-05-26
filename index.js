@@ -121,32 +121,65 @@ app.post('/start-session', async (req, res) => {
   try {
     const { userId, deviceId } = req.body;
     
-    // Validation supplémentaire
+    // Validation
     if (!userId || !deviceId) {
       return res.status(400).json({ 
         error: "INVALID_REQUEST",
-        message: "Missing parameters" 
+        message: "User ID and device ID are required" 
       });
     }
 
-    // Votre logique existante de session...
     const MAX_MINUTES = 60;
     const existingSession = activeSessions.get(userId);
     const now = Date.now();
 
+    // Si session existante
     if (existingSession) {
-      // ... (gardez votre logique existante)
+      // Vérifier si c'est le même appareil
+      if (existingSession.deviceId !== deviceId) {
+        return res.status(403).json({
+          error: "DEVICE_MISMATCH",
+          message: "Session already started on another device"
+        });
+      }
+
+      // Calculer le temps écoulé (en minutes)
+      const elapsedMinutes = (now - existingSession.startTime) / (1000 * 60);
+      
+      // Si la session a dépassé 60 minutes, la réinitialiser
+      if (elapsedMinutes >= MAX_MINUTES) {
+        existingSession.startTime = now; // Reset le timer
+        existingSession.totalMinutes = 0;
+        
+        return res.json({
+          status: "SESSION_RESET",
+          message: "New session started (previous session expired)",
+          startTime: now,
+          remainingMinutes: MAX_MINUTES
+        });
+      }
+
+      // Si la session est toujours active
+      return res.json({
+        status: "SESSION_RESUMED",
+        message: `Existing session (${Math.floor(MAX_MINUTES - elapsedMinutes)} minutes remaining)`,
+        startTime: existingSession.startTime,
+        remainingMinutes: MAX_MINUTES - elapsedMinutes
+      });
     }
 
+    // Nouvelle session
     activeSessions.set(userId, {
       startTime: now,
       lastActive: now,
       deviceId,
-      totalMinutes: 0
+      totalMinutes: 0,
+      tokensMined: 0
     });
 
     res.json({
       status: "SESSION_STARTED",
+      message: "New mining session started",
       startTime: now,
       remainingMinutes: MAX_MINUTES
     });
@@ -155,7 +188,8 @@ app.post('/start-session', async (req, res) => {
     console.error('Start session error:', error);
     res.status(500).json({ 
       error: "SERVER_ERROR",
-      message: "Internal server error" 
+      message: "Internal server error",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -359,33 +393,41 @@ app.get('/api/tasks', async (req, res) => {
 
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, miningTime } = req.body;
-  if (!userId || !deviceId || isNaN(miningTime)) {
-    return res.status(400).json({ error: "Invalid data" });
-  }
-
+  
   try {
+    // Vérifier la session existante
     const session = activeSessions.get(userId);
     if (!session || session.deviceId !== deviceId) {
-      return res.status(403).json({ error: "Invalid or expired session" });
+      return res.status(403).json({ 
+        error: "INVALID_SESSION",
+        message: "Session invalide ou expirée" 
+      });
     }
 
+    // Calculer le temps effectif (max 60mn)
+    const effectiveMinutes = Math.min(parseInt(miningTime), 60);
+    if (effectiveMinutes < 0.5) { // 30 secondes minimum
+      return res.status(400).json({ 
+        error: "MIN_TIME",
+        message: "Minimum 30 secondes pour claim" 
+      });
+    }
+
+    // Récupérer les données utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
     });
 
     const userRow = usersData.data.values.findIndex(row => row[2] === userId);
-    if (userRow === -1) return res.status(404).json({ error: "User not found" });
+    if (userRow === -1) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
     const user = usersData.data.values[userRow];
     const miningSpeed = parseFloat(user[6]) || 1;
-
-    const effectiveMinutes = Math.min(parseInt(miningTime), 60);
     const tokensToClaim = effectiveMinutes * miningSpeed;
+    const newBalance = (parseInt(user[3]) || 0) + tokensToClaim;
 
-    const currentBalance = parseInt(user[3]) || 0;
-    const newBalance = currentBalance + tokensToClaim;
-
+    // Mettre à jour le solde
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: `Users!D${userRow + 2}`,
@@ -393,26 +435,38 @@ app.post('/claim', async (req, res) => {
       resource: { values: [[newBalance]] }
     });
 
+    // Enregistrer la transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:D",
       valueInputOption: "USER_ENTERED",
       resource: {
-        values: [[ userId, tokensToClaim, "CLAIM", new Date().toLocaleString('fr-FR') ]]
+        values: [[
+          userId, 
+          tokensToClaim, 
+          "CLAIM", 
+          new Date().toLocaleString('fr-FR')
+        ]]
       }
     });
 
-    activeSessions.delete(userId);
+    // Ne PAS supprimer la session pour permettre des claims ultérieurs
+    // Mais réinitialiser le timer si besoin
+    session.startTime = Date.now();
 
-    return res.json({
+    res.json({
       status: "OK",
       claimed: tokensToClaim,
       balance: newBalance,
-      message: `Vous avez revendiqué ${tokensToClaim} tokens`
+      message: `${tokensToClaim} tokens claimés`
     });
+
   } catch (err) {
     console.error('Claim error:', err);
-    return res.status(500).json({ error: "Server error" });
+    res.status(500).json({ 
+      error: "SERVER_ERROR",
+      message: "Erreur serveur" 
+    });
   }
 });
 

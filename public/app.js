@@ -135,25 +135,12 @@ function setupNavigation() {
 
 // Vue Claim (Mining)
 async function showClaimView() {
-  const content = document.getElementById('content');
   const userId = Telegram.WebApp.initDataUnsafe?.user?.id;
+  const content = document.getElementById('content');
   
-  if (!userId) {
-    content.innerHTML = '<p class="error">Please open in Telegram</p>';
-    return;
-  }
-
-  // HTML pour la vue Claim
   content.innerHTML = `
     <div class="claim-container">
       <div class="mining-stats">
-        <div class="stat-card">
-          <img src="./images/mining.png" alt="Mining" class="stat-icon" />
-          <div class="stat-info">
-            <span class="stat-label">Mining Session</span>
-            <span id="mining-time" class="stat-value">00:00:00</span>
-          </div>
-        </div>
         <div class="stat-card">
           <img src="./images/speed.png" alt="Speed" class="stat-icon" />
           <div class="stat-info">
@@ -161,28 +148,30 @@ async function showClaimView() {
             <span id="mining-speed" class="stat-value">1 token/min</span>
           </div>
         </div>
+        <div class="stat-card">
+          <img src="./images/time.png" alt="Time" class="stat-icon" />
+          <div class="stat-info">
+            <span class="stat-label">Session Time</span>
+            <span id="mining-time" class="stat-value">00:00:00</span>
+          </div>
+        </div>
       </div>
-      <div id="mining-controls">
-        <button id="start-mining" class="action-btn">
-          <img src="./images/start.png" alt="Start" class="btn-icon" />
-          Start Mining
-        </button>
-        <button id="claim-tokens" class="action-btn claim-btn" disabled>
-          <img src="./images/claim.png" alt="Claim" class="btn-icon" />
-          Claim Tokens (<span id="claim-amount">0</span>)
-        </button>
+      
+      <button id="mining-btn" class="action-btn">
+        <img src="./images/start.png" alt="Start" class="btn-icon" />
+        Start Mining
+      </button>
+      
+      <div class="session-info">
+        <p>• Session max: 60 minutes</p>
+        <p>• Claim possible dès 30 secondes</p>
       </div>
-      <div id="mining-error" class="error-message hidden"></div>
     </div>
   `;
 
-  // Gestion des erreurs
-  const errorDisplay = document.getElementById('mining-error');
-
-  // Récupérer la vitesse de minage
+  // Charger la vitesse de minage
   try {
-    const speedResponse = await fetch(`/api/user-data?userId=${userId}`);
-    const speedData = await speedResponse.json();
+    const speedData = await fetch(`/api/user-data?userId=${userId}`).then(r => r.json());
     if (speedData.mining_speed) {
       document.getElementById('mining-speed').textContent = 
         `${speedData.mining_speed} token/min`;
@@ -191,26 +180,9 @@ async function showClaimView() {
     console.error('Failed to load mining speed:', error);
   }
 
-  // Gestionnaire pour le bouton Start
-  document.getElementById('start-mining').addEventListener('click', async () => {
-    try {
-      const response = await fetch('/start-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Telegram-Data': Telegram.WebApp.initData || ''
-        },
-        body: JSON.stringify({
-          userId,
-          deviceId: generateDeviceId()
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.message || 'Failed to start session');
-      }
+  // Gestionnaire du bouton
+  document.getElementById('mining-btn').addEventListener('click', handleMiningAction);
+}
 
       // Démarrer le minage ici...
       startMiningTimer();
@@ -264,8 +236,89 @@ function updateMiningDisplay(seconds) {
   document.getElementById('mining-time').textContent = 
     `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   
-  const minutesMined = Math.floor(seconds / 60);
-  document.getElementById('claim-amount').textContent = minutesMined;
+  // Mettre à jour le bouton
+  const miningBtn = document.getElementById('mining-btn');
+  if (seconds >= 30) { // 30 secondes minimum pour claim
+    miningBtn.innerHTML = `
+      <img src="./images/claim.png" alt="Claim" class="btn-icon" />
+      Claim (${Math.floor(seconds/60)}m)
+    `;
+    miningBtn.classList.add('claim-ready');
+  } else {
+    miningBtn.innerHTML = `
+      <img src="./images/mining.png" alt="Mining" class="btn-icon" />
+      Mining...
+    `;
+    miningBtn.classList.remove('claim-ready');
+  }
+}
+
+async function handleMiningAction() {
+  const miningBtn = document.getElementById('mining-btn');
+  miningBtn.disabled = true;
+
+  try {
+    if (!isMining) {
+      // Démarrer/reprendre la session
+      const sessionRes = await fetch('/start-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Telegram-Data': Telegram.WebApp.initData || ''
+        },
+        body: JSON.stringify({
+          userId: Telegram.WebApp.initDataUnsafe.user.id,
+          deviceId: generateDeviceId()
+        })
+      });
+
+      const sessionData = await sessionRes.json();
+      if (sessionData.error) throw new Error(sessionData.message);
+
+      // Démarrer le timer visuel
+      isMining = true;
+      miningInterval = setInterval(() => {
+        secondsMined++;
+        updateMiningDisplay(secondsMined);
+        
+        if (secondsMined >= 3600) { // 60 minutes max
+          clearInterval(miningInterval);
+          miningBtn.disabled = false;
+        }
+      }, 1000);
+
+    } else {
+      // Claimer les tokens
+      const claimRes = await fetch('/claim', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Telegram-Data': Telegram.WebApp.initData || ''
+        },
+        body: JSON.stringify({
+          userId: Telegram.WebApp.initDataUnsafe.user.id,
+          deviceId: generateDeviceId(),
+          miningTime: Math.min(Math.floor(secondsMined / 60), 60)
+        })
+      });
+
+      const claimData = await claimRes.json();
+      if (claimData.error) throw new Error(claimData.message);
+
+      // Réinitialiser l'UI
+      clearInterval(miningInterval);
+      isMining = false;
+      secondsMined = 0;
+      updateMiningDisplay(0);
+      document.getElementById('balance').textContent = claimData.balance;
+      showNotification(`Success! Claimed ${claimData.claimed} tokens`, 'success');
+    }
+  } catch (error) {
+    showNotification(error.message, 'error');
+    console.error('Mining action failed:', error);
+  } finally {
+    miningBtn.disabled = false;
+  }
 }
 
 // Vue Tasks
