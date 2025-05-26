@@ -81,8 +81,17 @@ app.use('/api', async (req, res, next) => {
   }
 });
 
+// Route de test pour vérifier la configuration
+app.get('/api/test', (req, res) => {
+  res.json({
+    status: 'ok',
+    time: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'production'
+  });
+});
+
 // Configuration des fichiers statiques
-app.use('/static', express.static(path.join(__dirname, 'public'), {
+app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '1d', // Cache pendant 1 jour
   setHeaders: (res, path) => {
     if (path.endsWith('.js')) {
@@ -93,6 +102,21 @@ app.use('/static', express.static(path.join(__dirname, 'public'), {
   },
   fallthrough: false // Ne passe pas à la prochaine route si le fichier n'est pas trouvé
 }));
+
+// Route pour la page d'accueil
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Route pour le dashboard
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Route pour le bot
+app.get('/bot', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Parser JSON avec taille maximale augmentée
 app.use(express.json({ limit: '50mb' }));
@@ -444,14 +468,6 @@ app.get('/api/user-data', async (req, res) => {
       });
     }
 
-    // Vérifiez que l'utilisateur est authentifié via Telegram
-    if (!req.telegramUser || req.telegramUser.id !== userId) {
-      return res.status(401).json({
-        error: "INVALID_USER",
-        message: "User ID does not match authenticated user"
-      });
-    }
-
     // Récupérez les données utilisateur depuis Google Sheets
     const user = await getUserData(userId);
     if (!user) {
@@ -481,10 +497,82 @@ app.get('/api/user-data', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get user data error:', error);
+    console.error('Error fetching user data:', error);
     res.status(500).json({
-      error: "INTERNAL_ERROR",
+      error: "SERVER_ERROR",
       message: "Failed to fetch user data",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Route pour récupérer les tâches
+app.get('/api/tasks', async (req, res) => {
+  try {
+    const tasks = await googleSheets.readTasks();
+    res.json({
+      success: true,
+      data: tasks
+    });
+  } catch (error) {
+    console.error('Error fetching tasks:', error);
+    res.status(500).json({
+      error: "SERVER_ERROR",
+      message: "Failed to fetch tasks",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Route pour le dashboard
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) {
+      return res.status(400).json({
+        error: "MISSING_USER_ID",
+        message: "User ID is required"
+      });
+    }
+
+    // Récupérez les données utilisateur
+    const user = await getUserData(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: "USER_NOT_FOUND",
+        message: "User not found"
+      });
+    }
+
+    // Récupérez les tâches
+    const tasks = await googleSheets.readTasks();
+
+    // Récupérez les données de session
+    const session = activeSessions.get(userId);
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          username: user.username || `user_${userId}`,
+          balance: parseFloat(user.balance) || 0,
+          lastClaim: user.lastClaim || 'Never',
+          miningSpeed: parseFloat(user.miningSpeed) || 1,
+          miningTime: parseFloat(user.miningTime) || 0
+        },
+        tasks: tasks,
+        session: session ? {
+          startTime: session.startTime,
+          totalTime: session.totalMinutes,
+          tokensMined: session.tokensMined
+        } : null
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+    res.status(500).json({
+      error: "SERVER_ERROR",
+      message: "Failed to fetch dashboard data",
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
