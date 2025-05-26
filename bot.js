@@ -11,7 +11,9 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN, {
   telegram: {
     webhook: {
       domain: 'airdrop-bot-soy1.onrender.com',
-      hookPath: webhookPath
+      hookPath: webhookPath,
+      // Désactiver le webhook initial pour éviter les erreurs 429
+      enabled: false
     }
   }
 });
@@ -30,6 +32,22 @@ googleSheets.initGoogleSheets().catch(err => {
   logger.error('Sheets initialization failed:', err);
   process.exit(1);
 });
+
+// Attendre que le webhook soit configuré avant de continuer
+let webhookConfigured = false;
+
+setInterval(() => {
+  if (!webhookConfigured) {
+    logger.info('Waiting for webhook to be configured...');
+  }
+}, 1000);
+
+// Attendre que le webhook soit configuré avant de continuer
+setInterval(() => {
+  if (!webhookConfigured) {
+    logger.info('Waiting for webhook to be configured...');
+  }
+}, 1000);
 
 // Gestion des commandes
 bot.start(async (ctx) => {
