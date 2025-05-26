@@ -81,37 +81,32 @@ async function initTelegramWebApp() {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  initTelegramWebApp();
+  await initTelegramWebApp();
   initParticles();
   initNavigation();
   
-  // Attendre que userId soit défini par initTelegramWebApp()
-  await new Promise(resolve => {
-    const checkUserId = setInterval(() => {
-      if (userId) {
-        clearInterval(checkUserId);
-        resolve();
-      }
-    }, 100);
-  });
-
+  if (userId) {
   try {
     const userData = await loadUserData();
     Mining_Speed = userData.mining_speed || 1;
     updateUserInfo(userData);
 
-    if (!(await chargerSession())) {
+    // Essayer de synchroniser avec le serveur d'abord
+    const serverSessionValid = await syncWithServer();
+    
+    // Si pas de session serveur, essayer le local storage
+    if (!serverSessionValid && !(await chargerSession())) {
       await startNewSession();
-    } else {
-      await demarrerMinage();
     }
+    
+    await demarrerMinage();
   } catch (error) {
     console.error('Initialization error:', error);
   }
+}
 
   showClaim();
 });
-
 
 function initNavigation() {
   document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -129,13 +124,13 @@ function initNavigation() {
   showClaim();
 }
 
-function updateUserInfo({ username, balance }) {
+function updateUserInfo({ username }) {
   const usernameEl = document.getElementById('username');
   const balanceEl = document.getElementById('balance');
   const speedEl = document.getElementById('mining-speed');
 
   if (usernameEl && username !== undefined) usernameEl.textContent = username;
-  if (balanceEl && balance !== undefined) balanceEl.textContent = balance;
+  if (balanceEl) balanceEl.textContent = balance;
   if (speedEl) speedEl.textContent = `Vitesse de minage : x${Mining_Speed}`;
 }
 
@@ -262,7 +257,7 @@ async function handleClaim() {
     // Mise à jour UI
     if (result.balance !== undefined) {
   balance = result.balance; // Mettre à jour la variable globale
-  updateUserInfo({ balance: result.balance.toString() });
+  updateUserInfo({ balance: result.balance.toString(), username: user.username });
 }
     
     btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
@@ -326,24 +321,6 @@ function updateDisplay() {
     }
   }
 }
-
-async function demarrerMinage() {
-  clearInterval(miningInterval);
-  let lastUpdate = Date.now();
-
-  miningInterval = setInterval(() => {
-    const now = Date.now();
-    const elapsedMs = now - lastUpdate;
-    lastUpdate = now;
-
-    // tokens incrémentés par minute, converti ms->min
-    tokens += (elapsedMs / 60000) * Mining_Speed;
-    if (tokens > 60 * Mining_Speed) tokens = 60 * Mining_Speed; // plafond
-
-    updateDisplay();
-  }, 1000);
-}
-
 
 // ==============================================
 // FONCTIONS PAGES
@@ -468,9 +445,12 @@ async function loadUserData() {
     const response = await fetch(`/api/dashboard?userId=${userId}`);
     if (!response.ok) throw new Error('Failed to load user data');
     const data = await response.json();
+
+    balance = data.balance || 0; // <--- ici tu mets à jour la balance globale
+
     return {
       username: data.username,
-      balance: data.balance,
+      balance: balance, // optionnel car déjà stockée globalement
       lastClaim: data.last_claim,
       mining_speed: data.miningSpeed
     };
@@ -479,35 +459,3 @@ async function loadUserData() {
     return { mining_speed: 1 };
   }
 }
-
-// ==============================================
-// INITIALISATION
-// ==============================================
-
-window.addEventListener('DOMContentLoaded', async () => {
-  initTelegramWebApp();
-  initParticles();
-  initNavigation();
-  
-  if (userId) {
-  try {
-    const userData = await loadUserData();
-    Mining_Speed = userData.mining_speed || 1;
-    updateUserInfo(userData);
-
-    // Essayer de synchroniser avec le serveur d'abord
-    const serverSessionValid = await syncWithServer();
-    
-    // Si pas de session serveur, essayer le local storage
-    if (!serverSessionValid && !(await chargerSession())) {
-      await startNewSession();
-    }
-    
-    await demarrerMinage();
-  } catch (error) {
-    console.error('Initialization error:', error);
-  }
-}
-
-  showClaim();
-});
