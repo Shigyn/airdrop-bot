@@ -163,7 +163,6 @@ async function syncWithServer() {
 
 async function demarrerMinage() {
   clearInterval(miningInterval);
-
   let lastUpdate = Date.now();
 
   miningInterval = setInterval(() => {
@@ -171,13 +170,18 @@ async function demarrerMinage() {
     const elapsedMs = now - lastUpdate;
     lastUpdate = now;
 
-    tokens += (elapsedMs / 60000) * Mining_Speed; // tokens/min converti à ms
-    if (tokens > 60 * Mining_Speed) tokens = 60 * Mining_Speed;
+    // Calcul des tokens gagnés
+    const newTokens = (elapsedMs / 60000) * Mining_Speed;
+    tokens = Math.min(tokens + newTokens, 60 * Mining_Speed); // Plafond à 60 tokens
 
-    updateDisplay();
+    // Sauvegarde et mise à jour
     sauvegarderSession();
+    updateDisplay();
 
   }, 1000);
+
+  // Mise à jour initiale
+  updateDisplay();
 }
 
 
@@ -246,9 +250,10 @@ async function handleClaim() {
     sessionStartTime = Date.now();
     
     // Mise à jour UI
-    if (result.balance) {
-      document.getElementById('balance').textContent = result.balance;
-    }
+    if (result.balance !== undefined) {
+  updateUserInfo({ balance: result.balance.toString() });
+  document.getElementById('balance').textContent = result.balance;
+}
     
     btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
     setTimeout(() => {
@@ -273,21 +278,38 @@ function updateDisplay() {
   const maxTime = 3600; // 1h session max
   const remainingSeconds = Math.max(0, maxTime - elapsedSeconds);
 
+  // Formatage du temps
   const mins = Math.floor(remainingSeconds / 60);
   const secs = Math.floor(remainingSeconds % 60);
   const timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
-  // Mets à jour tokens (affichage ici, tu peux modifier l’endroit d’affichage)
-  // Par exemple, si tu as un élément #tokens dans #content
+  // Mise à jour des éléments UI
   const tokensEl = document.getElementById('tokens');
-  if (tokensEl) tokensEl.textContent = tokens.toFixed(2);
-
-  // Mets à jour bouton claim
   const claimTextEl = document.getElementById('claim-text');
-  if (claimTextEl) claimTextEl.textContent = timeString;
-
   const btn = document.getElementById('main-claim-btn');
-  if (btn) btn.disabled = tokens < 1 || remainingSeconds <= 0;
+
+  if (tokensEl) {
+    tokensEl.textContent = tokens.toFixed(2);
+    tokensEl.style.animation = 'none';
+    setTimeout(() => {
+      tokensEl.style.animation = 'pulse 0.5s';
+    }, 10);
+  }
+
+  if (claimTextEl) {
+    claimTextEl.textContent = timeString;
+  }
+
+  if (btn) {
+    btn.disabled = tokens < 1 || remainingSeconds <= 0;
+    
+    // Mise à jour de la barre de progression
+    const progress = (elapsedSeconds / maxTime) * 100;
+    const progressBar = btn.querySelector('.progress-bar');
+    if (progressBar) {
+      progressBar.style.width = `${Math.min(100, progress)}%`;
+    }
+  }
 }
 
 async function demarrerMinage() {
@@ -317,17 +339,21 @@ function showClaim() {
   content.innerHTML = `
     <div class="claim-container">
       <div class="token-display">
-        <span id="tokens">0.00</span>
+        <span id="tokens">${tokens.toFixed(2)}</span>
         <span class="token-unit">tokens</span>
       </div>
-      <div id="mining-speed" style="margin-bottom:10px; font-weight:bold; color:#2196F3;">Vitesse de minage: x${Mining_Speed}</div>
+      <div id="mining-speed">Vitesse de minage: x${Mining_Speed}</div>
       <button id="main-claim-btn" class="mc-button-anim" disabled>
         <span id="claim-text">00:00</span>
         <div class="progress-bar"></div>
       </button>
     </div>
   `;
+  
+  // Réattacher l'événement
   document.getElementById('main-claim-btn').addEventListener('click', handleClaim);
+  
+  // Forcer la mise à jour initiale
   updateDisplay();
 }
 

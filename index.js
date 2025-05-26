@@ -376,11 +376,11 @@ app.post('/claim', async (req, res) => {
     activeSessions.delete(userId);
 
     return res.json({
-      status: "OK",
-      claimed: tokensToClaim,
-      balance: newBalance,
-      message: `Vous avez revendiqué ${tokensToClaim} tokens pour ${effectiveMinutes} minutes`
-    });
+  status: "OK",
+  claimed: tokensToClaim,
+  balance: newBalance,  // Assurez-vous que cette variable contient le nouveau solde
+  message: `Vous avez revendiqué ${tokensToClaim} tokens`
+});
 
   } catch (err) {
     console.error('Claim error:', err);

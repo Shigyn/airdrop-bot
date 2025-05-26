@@ -568,3 +568,22 @@ body {
 .referral-instructions li {
   margin-bottom: 8px;
 }
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.token-display span {
+  display: inline-block;
+}
+
+.progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background-color: #4CAF50;
+  transition: width 0.5s ease;
+}
