@@ -283,19 +283,15 @@ const initializeApp = async () => {
     app.set('timeout', 30000); // 30 secondes
 
     // Initialisation de Google Sheets
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-
-    try {
-      sheets = google.sheets({ version: 'v4', auth });
-      await initGoogleSheets();
-      sheetsInitialized = true;
-      console.log('Google Sheets initialized successfully');
-    } catch (error) {
-      console.error('Error initializing Google Sheets:', error);
-      throw error;
+    if (!sheetsInitialized) {
+      try {
+        sheets = await initGoogleSheets();
+        sheetsInitialized = true;
+        console.log('Google Sheets initialized successfully');
+      } catch (error) {
+        console.error('Error initializing Google Sheets:', error);
+        process.exit(1);
+      }
     }
 
     // Initialisation du bot
@@ -378,65 +374,40 @@ const initializeApp = async () => {
         }
       });
 
-      // Export the server for testing
-      module.exports = server;
-      return server;
+      // Gestion des erreurs de serveur
+      server.on('error', (error) => {
+        console.error('Server error:', error);
+        process.exit(1);
+      });
+
+      // Gestion de la fermeture propre
+      process.on('SIGTERM', async () => {
+        console.log('SIGTERM received. Closing server...');
+        
+        try {
+          // Fermez le bot
+          await bot.stop('SIGTERM');
+          
+          // Fermez toutes les connexions actives
+          for (const [userId, session] of activeSessions) {
+            session.startTime = Date.now(); // Réinitialiser les timers
+          }
+          
+          // Fermez le serveur
+          await new Promise((resolve) => server.close(resolve));
+          
+          console.log('Server closed successfully');
+        } catch (error) {
+          console.error('Error closing server:', error);
+        }
+        
+        process.exit(0);
+      });
     } catch (error) {
       console.error('Error starting server:', error);
       process.exit(1);
     }
-
-    // Gestion des erreurs de serveur
-    server.on('error', (error) => {
-      console.error('Server error:', error);
-      process.exit(1);
-    });
-
-    // Gestion de la fermeture propre
-    process.on('SIGTERM', async () => {
-      console.log('SIGTERM received. Closing server...');
-      
-      try {
-        // Fermez le bot
-        await bot.stop('SIGTERM');
-        
-        // Fermez toutes les connexions actives
-        for (const [userId, session] of activeSessions) {
-          if (session?.socket) {
-            session.socket.end();
-          }
-        }
-        
-        // Fermez le serveur
-        await new Promise((resolve) => {
-          server.close(() => {
-            console.log('Server closed');
-            resolve();
-          });
-        });
-
-        // Attendez un peu pour que toutes les opérations se terminent
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        process.exit(0);
-      } catch (error) {
-        console.error('Error during graceful shutdown:', error);
-        process.exit(1);
-      }
-    });
-
-    // Gestion des erreurs
-    process.on('unhandledRejection', (reason, promise) => {
-      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-      process.exit(1);
-    });
-
-    process.on('uncaughtException', (error) => {
-      console.error('Uncaught Exception:', error);
-      process.exit(1);
-    });
-
-    return { server, auth, sheets };
+    return server;
   } catch (error) {
     console.error('Error initializing app:', error);
     process.exit(1);
@@ -611,210 +582,6 @@ app.post('/update-session', async (req, res) => {
   }
 });
 
-app.use('/api', (req, res, next) => {
-  if (!req.headers['telegram-data']) {
-    return res.status(401).json({
-      error: "TELEGRAM_AUTH_REQUIRED",
-      message: "Telegram authentication data missing"
-    });
-  }
-  next();
-});
-
-// Route pour récupérer les données utilisateur
-app.get('/api/user-data', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    if (!userId) {
-      return res.status(400).json({
-        error: "MISSING_USER_ID",
-        message: "User ID is required"
-      });
-    }
-
-    // Récupérez les données utilisateur depuis Google Sheets
-    const user = await getUserData(userId);
-    if (!user) {
-      return res.status(404).json({
-        error: "USER_NOT_FOUND",
-        message: "User not found"
-      });
-    }
-
-    // Ajoutez les données de session si elles existent
-    const session = activeSessions.get(userId);
-    const sessionData = session ? {
-      startTime: session.startTime,
-      totalTime: session.totalMinutes,
-      tokensMined: session.tokensMined
-    } : null;
-
-    res.json({
-      success: true,
-      data: {
-        username: user.username || `user_${userId}`,
-        balance: parseFloat(user.balance) || 0,
-        lastClaim: user.lastClaim || 'Never',
-        miningSpeed: parseFloat(user.miningSpeed) || 1,
-        miningTime: parseFloat(user.miningTime) || 0,
-        session: sessionData
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "Failed to fetch user data",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Route pour le dashboard
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    const userId = req.query.userId;
-    if (!userId) {
-      return res.status(400).json({
-        error: "MISSING_USER_ID",
-        message: "User ID is required"
-      });
-    }
-
-    // Récupérez les données utilisateur
-    const user = await getUserData(userId);
-    if (!user) {
-      return res.status(404).json({
-        error: "USER_NOT_FOUND",
-        message: "User not found"
-      });
-    }
-
-    // Récupérez les tâches
-    const tasks = await googleSheets.readTasks();
-
-    // Récupérez les données de session
-    const session = activeSessions.get(userId);
-
-    res.json({
-      success: true,
-      data: {
-        user: {
-          username: user.username || `user_${userId}`,
-          balance: parseFloat(user.balance) || 0,
-          lastClaim: user.lastClaim || 'Never',
-          miningSpeed: parseFloat(user.miningSpeed) || 1,
-          miningTime: parseFloat(user.miningTime) || 0
-        },
-        tasks: tasks,
-        session: session ? {
-          startTime: session.startTime,
-          totalTime: session.totalMinutes,
-          tokensMined: session.tokensMined
-        } : null
-      }
-    });
-  } catch (error) {
-    console.error('Error fetching dashboard data:', error);
-    res.status(500).json({
-      error: "SERVER_ERROR",
-      message: "Failed to fetch dashboard data",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-app.post('/claim', async (req, res) => {
-  const { userId, deviceId, miningTime } = req.body;
-  
-  try {
-    // Vérifier la session existante
-    const session = activeSessions.get(userId);
-    if (!session) {
-      return res.status(403).json({
-        error: "NO_ACTIVE_SESSION",
-        message: "No active mining session"
-      });
-    }
-
-    // Vérifier l'appareil
-    if (session.deviceId !== deviceId) {
-      return res.status(403).json({
-        error: "DEVICE_MISMATCH",
-        message: "Different device"
-      });
-    }
-
-    // Calculer les tokens basés sur le temps de minage
-    const tokens = Math.floor(miningTime * 1); // 1 token par minute
-    session.tokensMined += tokens;
-    session.totalMinutes += miningTime;
-
-    // Mettre à jour les données utilisateur
-    const userData = await getUserData(userId);
-    if (!userData) {
-      return res.status(404).json({
-        error: "USER_NOT_FOUND",
-        message: "User data not found"
-      });
-    }
-
-    // Mettre à jour le solde
-    userData.balance = (userData.balance || 0) + tokens;
-    userData.lastClaim = new Date().toISOString();
-
-    // Sauvegarder les données
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:Z",
-      valueInputOption: "RAW",
-      resource: {
-        values: [[
-          userId,
-          userData.username,
-          userData.balance,
-          userData.lastClaim,
-          userData.referralCount,
-          userData.totalTokens
-        ]]
-      }
-    });
-
-    // Enregistrer la transaction
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Transactions!A2:D",
-      valueInputOption: "USER_ENTERED",
-      resource: {
-        values: [[
-          userId,
-          tokens,
-          "CLAIM",
-          new Date().toISOString()
-        ]]
-      }
-    });
-
-    // Réinitialiser le timer de la session
-    session.startTime = Date.now();
-
-    res.json({
-      success: true,
-      claimed: tokens,
-      balance: userData.balance,
-      message: `${tokens} tokens claimés`
-    });
-
-  } catch (error) {
-    console.error('Claim error:', error);
-    res.status(500).json({ 
-      error: "SERVER_ERROR",
-      message: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-});
-
 app.use(bot.webhookCallback('/bot'));
 
 // Configuration des fichiers statiques
@@ -843,6 +610,126 @@ app.use((err, req, res, next) => {
 });
 
 // Initialisation de l'application
+async function initializeApp() {
+  try {
+    // Initialisation de Google Sheets
+    if (!sheetsInitialized) {
+      try {
+        sheets = await initGoogleSheets();
+        sheetsInitialized = true;
+        console.log('Google Sheets initialized successfully');
+      } catch (error) {
+        console.error('Error initializing Google Sheets:', error);
+        process.exit(1);
+      }
+    }
+
+    // Initialisation du bot
+    try {
+      console.log('Bot initialized successfully');
+    } catch (error) {
+      console.error('Error initializing bot:', error);
+    }
+
+    // Gestion du verrou de démarrage
+    const fs = require('fs');
+    const lockFilePath = '.lock';
+    
+    try {
+      if (!fs.existsSync('.temp')) {
+        fs.mkdirSync('.temp');
+      }
+      
+      const lockFile = path.join('.temp', lockFilePath);
+      if (fs.existsSync(lockFile)) {
+        const lockContent = fs.readFileSync(lockFile, 'utf8');
+        const [pid, timestamp] = lockContent.split('|');
+        
+        try {
+          process.kill(parseInt(pid), 0);
+          console.error('Another instance is already running. Exiting...');
+          process.exit(1);
+        } catch (e) {
+          fs.unlinkSync(lockFile);
+        }
+      }
+      
+      const currentPid = process.pid;
+      const currentTimestamp = Date.now();
+      fs.writeFileSync(lockFile, `${currentPid}|${currentTimestamp}`);
+      
+      process.on('exit', () => {
+        if (fs.existsSync(lockFile)) {
+          fs.unlinkSync(lockFile);
+        }
+      });
+      process.on('SIGINT', () => process.exit(0));
+      process.on('SIGTERM', () => process.exit(0));
+    } catch (err) {
+      console.error('Error managing lock file:', err);
+      process.exit(1);
+    }
+
+    // Démarrez le serveur
+    try {
+      const server = app.listen(8080, () => {
+        console.log(`Server running on port 8080`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+        console.log(`Google Sheets initialized: ${sheetsInitialized}`);
+      }).on('error', (error) => {
+        console.error('Server error:', error);
+        if (error.code === 'EADDRINUSE') {
+          console.error(`Port 8080 is already in use. Stopping previous instance...`);
+          require('child_process').exec('pkill -f "node index.js"', (err) => {
+            if (err) {
+              console.error('Failed to kill previous instance:', err);
+              process.exit(1);
+            }
+            console.log('Previous instance stopped. Restarting...');
+            process.exit(0);
+          });
+        } else {
+          console.error('Server error:', error);
+          process.exit(1);
+        }
+      });
+
+      server.on('error', (error) => {
+        console.error('Server error:', error);
+        process.exit(1);
+      });
+
+      process.on('SIGTERM', async () => {
+        console.log('SIGTERM received. Closing server...');
+        
+        try {
+          await bot.stop('SIGTERM');
+          
+          for (const [userId, session] of activeSessions) {
+            session.startTime = Date.now();
+          }
+          
+          await new Promise((resolve) => server.close(resolve));
+          
+          console.log('Server closed successfully');
+        } catch (error) {
+          console.error('Error closing server:', error);
+        }
+        
+        process.exit(0);
+      });
+
+      return server;
+    } catch (error) {
+      console.error('Error starting server:', error);
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error('Error initializing app:', error);
+    process.exit(1);
+  }
+}
+
 initializeApp().catch(console.error);
 
 module.exports = app;
