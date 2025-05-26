@@ -261,46 +261,6 @@ const initializeApp = async () => {
         }
       });
 
-      // Gestion des erreurs de serveur
-      server.on('error', (error) => {
-        console.error('Server error:', error);
-        if (error.code === 'EADDRINUSE') {
-          console.error(`Port 8080 is already in use. Stopping previous instance...`);
-          // Essayez de tuer le processus précédent
-          require('child_process').exec('pkill -f "node index.js"', (err) => {
-            if (err) {
-              console.error('Failed to kill previous instance:', err);
-              process.exit(1);
-            }
-            console.log('Previous instance stopped. Restarting...');
-            // Redémarrer l'application
-            require('child_process').exec('node index.js', (err) => {
-              if (err) {
-                console.error('Failed to restart:', err);
-                process.exit(1);
-              }
-            });
-          });
-        } else {
-          console.error('Server error:', error);
-          process.exit(1);
-        }
-      });
-{{ ... }}
-          console.error('Port already in use. Trying to stop previous instance...');
-          // Essayez de tuer le processus précédent
-          require('child_process').exec('pkill -f "node index.js"', (err) => {
-            if (err) {
-              console.error('Failed to kill previous instance:', err);
-            }
-            console.log('Previous instance stopped. Restarting...');
-            process.exit(1);
-          });
-        } else {
-          process.exit(1);
-        }
-      });
-
       // Export the server for testing
       module.exports = server;
       return server;
@@ -308,7 +268,6 @@ const initializeApp = async () => {
       console.error('Error starting server:', error);
       process.exit(1);
     }
-    module.exports = server;
 
     // Gestion des erreurs de serveur
     server.on('error', (error) => {
