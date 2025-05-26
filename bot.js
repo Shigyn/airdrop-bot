@@ -30,7 +30,7 @@ let lastLogTime = 0;
 const LOG_INTERVAL = 30000; // 30 secondes entre les logs
 
 // Vérifier le statut du bot
-setInterval(() => {
+const checkBotStatus = () => {
   if (!botStarted) {
     const currentTime = Date.now();
     if (currentTime - lastLogTime >= LOG_INTERVAL) {
@@ -38,7 +38,21 @@ setInterval(() => {
       lastLogTime = currentTime;
     }
   }
-}, 5000); // 5 secondes entre les vérifications
+};
+
+// Démarrer la vérification du statut du bot
+setInterval(checkBotStatus, 5000); // 5 secondes entre les vérifications
+
+// Démarrer le bot
+bot.launch()
+  .then(() => {
+    logger.info('Bot started successfully in polling mode');
+    botStarted = true;
+  })
+  .catch(err => {
+    logger.error('Failed to start bot:', err);
+    process.exit(1);
+  });
 
 // Gestion des commandes
 bot.start(async (ctx) => {

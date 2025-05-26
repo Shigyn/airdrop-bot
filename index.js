@@ -216,9 +216,14 @@ const initializeApp = async () => {
     }
 
     // Vérifier si une instance est déjà en cours
-    const isAlreadyRunning = require('child_process').spawnSync('pkill', ['-0', '-f', 'node index.js']);
-    if (isAlreadyRunning.status === 0) {
-      console.error('Another instance is already running. Exiting...');
+    try {
+      const isAlreadyRunning = require('child_process').spawnSync('pkill', ['-0', '-f', 'node index.js']);
+      if (isAlreadyRunning.status === 0) {
+        console.error('Another instance is already running. Exiting...');
+        process.exit(1);
+      }
+    } catch (err) {
+      console.error('Error checking for existing instance:', err);
       process.exit(1);
     }
 
@@ -241,12 +246,7 @@ const initializeApp = async () => {
             }
             console.log('Previous instance stopped. Restarting...');
             // Redémarrer l'application
-            require('child_process').exec('node index.js', (err) => {
-              if (err) {
-                console.error('Failed to restart:', err);
-                process.exit(1);
-              }
-            });
+            process.exit(0); // Sortir proprement au lieu de redémarrer
           });
         } else {
           console.error('Server error:', error);
