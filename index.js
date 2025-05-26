@@ -267,6 +267,8 @@ app.post('/api/claim-task', async (req, res) => {
 // Middleware de logging
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
 const initializeApp = async () => {
   try {
     // Vérifiez que toutes les variables d'environnement nécessaires sont présentes
