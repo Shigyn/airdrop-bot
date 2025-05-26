@@ -1,461 +1,343 @@
-// Variables globales
-let tg, userId;
-let balance = 0;
-let miningInterval;
-let sessionStartTime = Date.now();
-let tokens = 0;
-let deviceId;
-let Mining_Speed = 1;
-deviceId = generateDeviceId();
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const { bot, webhookCallback } = require('./bot');
+const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
+const { google } = require('googleapis');
 
-// ==============================================
-// GESTION DE SESSION
-// ==============================================
-function generateDeviceId() {
-  return 'device_' + Math.random().toString(36).substr(2, 9);
-}
+const app = express();
+const PORT = process.env.PORT || 10000;
+const activeSessions = new Map();
+let sheets;
+let sheetsInitialized = false;
 
-function sauvegarderSession() {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem('miningSession', JSON.stringify({
-      sessionStartTime,
-      tokens,
-      userId,
-      deviceId
-    }));
-  }
-}
+// Middlewares
+app.use(cors({
+  origin: [
+    'https://airdrop-bot-soy1.onrender.com',
+    'https://web.telegram.org',
+    'https://t.me/CRYPTORATS_bot'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Telegram-Data', 'Authorization'],
+  credentials: true,
+  exposedHeaders: ['Content-Length', 'X-Request-Id']
+}));
 
-async function chargerSession() {
-  if (typeof localStorage !== 'undefined' && userId && deviceId) {
-    const session = localStorage.getItem('miningSession');
-    if (session) {
-      try {
-        const parsed = JSON.parse(session);
-        if (parsed.userId === userId && parsed.deviceId === deviceId) {
-          sessionStartTime = parsed.sessionStartTime;
-          tokens = parsed.tokens;
-          
-          // Vérifier si la session est encore valide (moins de 60 minutes)
-          const elapsedMinutes = (Date.now() - sessionStartTime) / (1000 * 60);
-          if (elapsedMinutes < 60) {
-            return true;
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing session:', e);
-      }
-    }
-  }
-  
-  // Si on arrive ici, la session est invalide ou inexistante
-  localStorage.removeItem('miningSession');
-  return false;
-}
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ==============================================
-// FONCTIONS PRINCIPALES
-// ==============================================
-
-async function initTelegramWebApp() {
-  if (!window.Telegram?.WebApp) {
-    console.error('Telegram WebApp SDK not loaded');
-    return;
-  }
-
-  window.Telegram.WebApp.ready();
-  window.Telegram.WebApp.expand();
-
-  const user = window.Telegram.WebApp.initDataUnsafe?.user || {};
-  userId = user.id || null;
-  deviceId = deviceId || generateDeviceId();
-
-  // Initialiser l'UI de base
-  updateUserInfo({
-    username: user.username || "Utilisateur",
-    balance: "0"
+app.use((req, res, next) => {
+  const safeBody = { ...req.body };
+  if (safeBody.tokens) safeBody.tokens = "***";
+  if (safeBody.Authorization) safeBody.Authorization = "***";
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`, {
+    headers: req.headers,
+    body: safeBody
   });
-
-  // Afficher le contenu de base
-  showClaim();
-}
-
-window.addEventListener('DOMContentLoaded', async () => {
-  await initTelegramWebApp();
-  initParticles();
-  initNavigation();
-  
-  if (userId) {
-  try {
-    const userData = await loadUserData();
-    Mining_Speed = userData.mining_speed || 1;
-    updateUserInfo(userData);
-
-    // Essayer de synchroniser avec le serveur d'abord
-    const serverSessionValid = await syncWithServer();
-    
-    // Si pas de session serveur, essayer le local storage
-    if (!serverSessionValid && !(await chargerSession())) {
-      await startNewSession();
-    }
-    
-    await demarrerMinage();
-  } catch (error) {
-    console.error('Initialization error:', error);
-  }
-}
-
-  showClaim();
+  next();
 });
 
-function initNavigation() {
-  document.querySelectorAll('.nav-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-      this.classList.add('active');
-      
-      if (this.id === 'nav-claim') showClaim();
-      if (this.id === 'nav-tasks') loadTasks();
-      if (this.id === 'nav-referral') loadReferrals();
+const initializeApp = async () => {
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
+    sheets = google.sheets({ version: 'v4', auth });
+    await initGoogleSheets();
+    sheetsInitialized = true;
+    console.log('Server ready');
+    app.listen(PORT, () => console.log(`Running on port ${PORT}`));
+  } catch (err) {
+    console.error('Init failed:', err);
+    process.exit(1);
+  }
+};
+
+// ROUTES
+
+app.post('/sync-session', (req, res) => {
+  const { userId, deviceId } = req.body;
+  const session = activeSessions.get(userId);
+
+  if (!session) return res.json({ status: 'NO_SESSION' });
+  if (session.deviceId !== deviceId) {
+    return res.json({
+      status: 'DEVICE_MISMATCH',
+      sessionStart: session.startTime
+    });
+  }
+
+  session.lastActive = new Date();
+  res.json({
+    status: 'SYNCED',
+    sessionStart: session.startTime,
+    tokens: session.tokens
   });
-  
-  // Charger la page initiale
-  showClaim();
-}
+});
 
-function updateUserInfo({ username }) {
-  const usernameEl = document.getElementById('username');
-  const balanceEl = document.getElementById('balance');
-  const speedEl = document.getElementById('mining-speed');
-
-  if (usernameEl && username !== undefined) usernameEl.textContent = username;
-  if (balanceEl) balanceEl.textContent = balance;
-  if (speedEl) speedEl.textContent = `Vitesse de minage : x${Mining_Speed}`;
-}
-
-async function syncWithServer() {
-  try {
-    const response = await fetch('/check-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, deviceId })
-    });
-
-    const data = await response.json();
-    
-    if (data.valid) {
-      // Mettre à jour les valeurs locales avec celles du serveur
-      sessionStartTime = data.startTime;
-      tokens = data.tokens || 0;
-      return true;
-    }
-  } catch (error) {
-    console.error('Sync error:', error);
+app.post('/check-session', (req, res) => {
+  const { userId, deviceId } = req.body;
+  if (!userId || !deviceId) {
+    return res.status(400).json({ error: "Missing parameters" });
   }
-  return false;
-}
-// ==============================================
-// FONCTIONS MINAGE
-// ==============================================
 
-async function demarrerMinage() {
-  clearInterval(miningInterval);
-  let lastUpdate = Date.now();
+  const session = activeSessions.get(userId);
+  if (!session) return res.json({ valid: false, message: "No active session" });
 
-  miningInterval = setInterval(() => {
-    const now = Date.now();
-    const elapsedMs = now - lastUpdate;
-    lastUpdate = now;
-
-    const elapsedMinutes = (now - sessionStartTime) / (1000 * 60);
-    if (elapsedMinutes >= 60) {
-      clearInterval(miningInterval);
-      return;
-    }
-
-    // Calcul des tokens gagnés
-    const newTokens = (elapsedMs / 60000) * Mining_Speed;
-    tokens = Math.min(tokens + newTokens, 60 * Mining_Speed); // Plafond à 60 tokens
-
-    // Sauvegarde et mise à jour
-    sauvegarderSession();
-    updateDisplay();
-
-  }, 1000);
-}
-
-  // Mise à jour initiale
-  updateDisplay();
-}
-
-
-async function startNewSession() {
-  try {
-    const response = await fetch('/start-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, deviceId })
+  if (session.deviceId !== deviceId) {
+    return res.json({
+      valid: false,
+      message: "Device mismatch",
+      sessionDevice: session.deviceId,
+      requestDevice: deviceId
     });
-
-    if (!response.ok) throw new Error('Failed to start session');
-
-    sessionStartTime = Date.now();
-    tokens = 0;
-    await demarrerMinage();
-    
-  } catch (error) {
-    console.error('Session error:', error);
-    showErrorState();
   }
-}
 
-// ==============================================
-// FONCTIONS CLAIM
-// ==============================================
+  const elapsedMinutes = (Date.now() - session.startTime) / (1000 * 60);
+  const remaining = Math.max(0, 60 - elapsedMinutes);
 
-async function handleClaim() {
-  const btn = document.getElementById('main-claim-btn');
-  if (!btn || btn.disabled) return;
+  res.json({
+    valid: remaining > 0,
+    startTime: session.startTime,
+    remainingMinutes: remaining,
+    tokens: session.tokens || 0
+  });
+});
 
-  btn.disabled = true;
-  const originalHTML = btn.innerHTML;
-  btn.innerHTML = '<div class="spinner-mini"></div>';
-
-  try {
-    const elapsedMinutes = (Date.now() - sessionStartTime) / (1000 * 60);
-    const tokensToClaim = Math.floor(tokens);
-
-    if (tokensToClaim < 1) throw new Error('NOTHING_TO_CLAIM');
-
-    const response = await fetch('/claim', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      },
-      body: JSON.stringify({
-        userId,
-        deviceId,
-        tokens: tokensToClaim,
-        miningTime: elapsedMinutes,
-        username: window.Telegram?.WebApp?.initDataUnsafe?.user?.username
-      })
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'CLAIM_FAILED');
-    }
-
-    const result = await response.json();
-    
-    // Réinitialisation après claim
-    tokens = 0;
-    sessionStartTime = Date.now();
-    
-    // Mise à jour UI
-    if (result.balance !== undefined) {
-  balance = result.balance; // Mettre à jour la variable globale
-  updateUserInfo({ balance: result.balance.toString(), username: user.username });
-}
-    
-    btn.innerHTML = `<span style="color:#4CAF50">✓ ${tokensToClaim} tokens claimés</span>`;
-    setTimeout(() => {
-      btn.innerHTML = originalHTML;
-      btn.disabled = false;
-      updateDisplay();
-    }, 2000);
-
-  } catch (error) {
-    console.error('Claim error:', error);
-    btn.innerHTML = `<span style="color:#FF5252">⚠️ ${error.message === 'NOTHING_TO_CLAIM' ? 'Min 1 token requis' : 'Erreur'}</span>`;
-    setTimeout(() => {
-      btn.innerHTML = originalHTML;
-      btn.disabled = false;
-    }, 3000);
-  }
-}
-
-function updateDisplay() {
+app.post('/start-session', (req, res) => {
+  const { userId, deviceId } = req.body;
+  const MAX_MINUTES = 60;
+  const existingSession = activeSessions.get(userId);
   const now = Date.now();
-  const elapsedSeconds = (now - sessionStartTime) / 1000;
-  const maxTime = 3600; // 1h session max
-  const remainingSeconds = Math.max(0, maxTime - elapsedSeconds);
 
-  // Arrêter le minage si le temps est écoulé
-  if (remainingSeconds <= 0) {
-    clearInterval(miningInterval);
-  }
+  if (existingSession) {
+    const minutesUsed = (now - existingSession.startTime) / (1000 * 60);
+    const remaining = MAX_MINUTES - minutesUsed;
 
-  // Formatage du temps
-  const mins = Math.floor(remainingSeconds / 60);
-  const secs = Math.floor(remainingSeconds % 60);
-  const timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-
-  // Mise à jour des éléments UI
-  const tokensEl = document.getElementById('tokens');
-  const claimTextEl = document.getElementById('claim-text');
-  const btn = document.getElementById('main-claim-btn');
-
-  if (tokensEl) {
-    tokensEl.textContent = tokens.toFixed(2);
-    tokensEl.style.animation = 'none';
-    setTimeout(() => {
-      tokensEl.style.animation = 'pulse 0.5s';
-    }, 10);
-  }
-
-  if (claimTextEl) {
-    claimTextEl.textContent = timeString;
-  }
-
-  if (btn) {
-    btn.disabled = tokens < 1 || remainingSeconds <= 0;
-    
-    // Mise à jour de la barre de progression
-    const progress = (elapsedSeconds / maxTime) * 100;
-    const progressBar = btn.querySelector('.progress-bar');
-    if (progressBar) {
-      progressBar.style.width = `${Math.min(100, progress)}%`;
+    if (remaining > 0) {
+      return res.json({
+        status: "SESSION_RESUMED",
+        message: `Session reprise (${Math.floor(remaining)} minutes restantes)`,
+        startTime: existingSession.startTime,
+        remainingMinutes: Math.floor(remaining)
+      });
     }
+
+    activeSessions.delete(userId);
+    return res.status(403).json({
+      error: "LIMIT_REACHED",
+      message: "Vous avez déjà utilisé vos 60 minutes de minage"
+    });
   }
-}
 
-// ==============================================
-// FONCTIONS PAGES
-// ==============================================
+  activeSessions.set(userId, {
+    startTime: now,
+    lastActive: now,
+    deviceId,
+    totalMinutes: 0
+  });
 
-function showClaim() {
-  const content = document.getElementById('content');
-  content.innerHTML = `
-    <div class="claim-container">
-      <div class="token-display">
-        <span id="tokens">${tokens.toFixed(2)}</span>
-        <span class="token-unit">tokens</span>
-      </div>
-      <div id="mining-speed">Vitesse de minage: x${Mining_Speed}</div>
-      <button id="main-claim-btn" class="mc-button-anim" disabled>
-        <span id="claim-text">00:00</span>
-        <div class="progress-bar"></div>
-      </button>
-    </div>
-  `;
-  
-  // Réattacher l'événement
-  document.getElementById('main-claim-btn').addEventListener('click', handleClaim);
-  
-  // Forcer la mise à jour initiale
-  updateDisplay();
-}
+  res.json({
+    status: "SESSION_STARTED",
+    startTime: now,
+    remainingMinutes: MAX_MINUTES
+  });
+});
 
-async function loadReferrals() {
-  const content = document.getElementById('content');
-  content.innerHTML = '<div class="loader">Chargement...</div>';
+app.post('/update-session', async (req, res) => {
+  const { userId, tokens, deviceId } = req.body;
 
   try {
-    const response = await fetch('/api/referrals', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': window.Telegram?.WebApp?.initData || '{}'
-      },
-      body: JSON.stringify({ userId })
+    if (!userId || !tokens || !deviceId) {
+      return res.status(400).json({ error: "Missing parameters" });
+    }
+
+    const session = activeSessions.get(userId);
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.deviceId !== deviceId) return res.status(403).json({ error: "Device mismatch" });
+
+    session.tokens = parseFloat(tokens);
+    session.lastActive = new Date();
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Sessions!A2:D",
+      valueInputOption: "USER_ENTERED",
+      resource: {
+        values: [[userId, tokens, new Date().toISOString(), deviceId]]
+      }
     });
 
-    if (!response.ok) throw new Error(await response.text());
-
-    const data = await response.json();
-
-    content.innerHTML = `
-      <div class="referral-card">
-        <h2>Programme de Parrainage</h2>
-        <div class="referral-section">
-          <h3>Lien de Parrainage</h3>
-          <div class="referral-url">${data.referralUrl}</div>
-          <button onclick="copyToClipboard('${data.referralUrl}')">Copier</button>
-        </div>
-        <div class="referral-stats">
-          <div class="stat-item">
-            <span>Filleuls</span>
-            <strong>${data.totalReferrals || 0}</strong>
-          </div>
-          <div class="stat-item">
-            <span>Gains</span>
-            <strong>${data.totalEarned || 0} tokens</strong>
-          </div>
-        </div>
-      </div>
-    `;
-
+    res.json({ success: true });
   } catch (error) {
-    content.innerHTML = `
-      <div class="error">
-        <p>Erreur de chargement</p>
-        <button onclick="loadReferrals()">Réessayer</button>
-      </div>
-    `;
+    console.error('Update session error:', error);
+    res.status(500).json({ error: "Internal server error" });
   }
-}
+});
 
-async function loadTasks() {
-  const content = document.getElementById('content');
-  content.innerHTML = '<div class="loader">Chargement...</div>';
+app.post('/api/referrals', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
 
   try {
-    const response = await fetch('/api/tasks');
-    if (!response.ok) throw new Error('Failed to load tasks');
-    
-    const tasks = await response.json();
-    content.innerHTML = tasks.length ? `
-      <div class="tasks-container">
-        ${tasks.map(task => `
-          <div class="task-item">
-            <h3>${task.title}</h3>
-            ${task.image ? `<img src="${task.image}">` : ''}
-            <p>Récompense: ${task.reward} tokens</p>
-            <button class="task-button">Commencer</button>
-          </div>
-        `).join('')}
-      </div>
-    ` : '<p class="no-tasks">Aucune tâche disponible</p>';
+    const user = await getUserData(userId);
+    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
-  } catch (error) {
-    content.innerHTML = `
-      <div class="error">
-        <p>Erreur de chargement</p>
-        <button onclick="loadTasks()">Réessayer</button>
-      </div>
-    `;
+    const referralsData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Referrals!A2:D"
+    });
+
+    const referrals = referralsData.data.values?.filter(row => row[0] === user.referralCode) || [];
+
+    res.json({
+      referralUrl: `https://t.me/${process.env.BOT_USERNAME}?start=ref_${userId}`,
+      totalReferrals: referrals.length,
+      totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0),
+      referralCode: user.referralCode
+    });
+
+  } catch (err) {
+    console.error('Referrals error:', err);
+    res.status(500).json({ error: "LOAD_FAILED", message: "Échec du chargement" });
   }
-}
+});
 
-// ==============================================
-// FONCTIONS UTILITAIRES
-// ==============================================
-
-function copyToClipboard(text) {
-  navigator.clipboard.writeText(text)
-    .then(() => alert('Lien copié!'))
-    .catch(err => console.error('Copy failed:', err));
-}
-
-async function loadUserData() {
+app.get('/api/user-data', async (req, res) => {
   try {
-    const response = await fetch(`/api/dashboard?userId=${userId}`);
-    if (!response.ok) throw new Error('Failed to load user data');
-    const data = await response.json();
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
 
-    balance = data.balance || 0; // <--- ici tu mets à jour la balance globale
+    const usersData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:G"
+    });
 
-    return {
-      username: data.username,
-      balance: balance, // optionnel car déjà stockée globalement
-      lastClaim: data.last_claim,
-      mining_speed: data.miningSpeed
-    };
-  } catch (error) {
-    console.error('Error loading user data:', error);
-    return { mining_speed: 1 };
+    const user = usersData.data.values?.find(row => row[2]?.toString() === userId.toString());
+    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
+
+    res.json({
+      username: user[1],
+      balance: user[3],
+      lastClaim: user[4],
+      mining_speed: parseFloat(user[6]) || 1
+    });
+  } catch (err) {
+    console.error('User data error:', err);
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
-}
+});
+
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
+
+    const userData = await getUserData(userId);
+    if (!userData) return res.status(404).json({ error: "USER_NOT_FOUND" });
+
+    res.json({
+      username: userData.username,
+      balance: userData.balance,
+      last_claim: userData.lastClaim,
+      miningSpeed: userData.mining_speed
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/tasks', async (req, res) => {
+  try {
+    const tasksData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Tasks!A2:E"
+    });
+
+    const tasks = (tasksData.data.values || []).map(row => ({
+      id: row[0],
+      title: row[1],
+      image: row[2],
+      reward: row[3],
+      status: row[4]
+    })).filter(task => task.status === 'ACTIVE');
+
+    res.json(tasks);
+  } catch (err) {
+    console.error('Tasks error:', err);
+    res.status(500).json({ error: "Failed to load tasks" });
+  }
+});
+
+app.post('/claim', async (req, res) => {
+  const { userId, deviceId, miningTime } = req.body;
+
+  if (!userId || !deviceId || isNaN(miningTime)) {
+    return res.status(400).json({ error: "Invalid data" });
+  }
+
+  try {
+    const session = activeSessions.get(userId);
+    if (!session || session.deviceId !== deviceId) {
+      return res.status(403).json({ error: "Invalid or expired session" });
+    }
+
+    const usersData = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Users!A2:G"
+    });
+
+    const userRow = usersData.data.values.findIndex(row => row[2] === userId);
+    if (userRow === -1) return res.status(404).json({ error: "User not found" });
+
+    const user = usersData.data.values[userRow];
+    const miningSpeed = parseFloat(user[6]) || 1;
+    const effectiveMinutes = Math.min(parseInt(miningTime), 60);
+    const tokensToClaim = effectiveMinutes * miningSpeed;
+
+    const currentBalance = parseInt(user[3]) || 0;
+    const newBalance = currentBalance + tokensToClaim;
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `Users!D${userRow + 2}`,
+      valueInputOption: "USER_ENTERED",
+      resource: { values: [[newBalance]] }
+    });
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: "Transactions!A2:D",
+      valueInputOption: "USER_ENTERED",
+      resource: {
+        values: [[userId, tokensToClaim, "CLAIM", new Date().toLocaleString('fr-FR')]]
+      }
+    });
+
+    activeSessions.delete(userId);
+
+    return res.json({
+      status: "OK",
+      claimed: tokensToClaim,
+      balance: newBalance,
+      message: `Vous avez revendiqué ${tokensToClaim} tokens`
+    });
+
+  } catch (err) {
+    console.error('Claim error:', err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Webhook (FIX: utiliser la fonction webhookCallback)
+app.use('/bot', webhookCallback(bot));
+
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// Start server
+initializeApp();

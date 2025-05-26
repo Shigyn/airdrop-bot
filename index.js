@@ -17,7 +17,7 @@ app.use(cors({
   origin: [
     'https://airdrop-bot-soy1.onrender.com',
     'https://web.telegram.org',
-    'https://t.me/CRYPTORATS_bot' // Assure-toi que c'est bien la bonne URL Telegram WebApp
+    'https://t.me/CRYPTORATS_bot'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Telegram-Data', 'Authorization'],
@@ -28,7 +28,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Middleware de log (éviter de logger des données sensibles en prod)
 app.use((req, res, next) => {
   const safeBody = { ...req.body };
   if (safeBody.tokens) safeBody.tokens = "***";
@@ -40,14 +39,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Initialisation
 const initializeApp = async () => {
   try {
     const auth = new google.auth.GoogleAuth({
       credentials: JSON.parse(Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString()),
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
-    sheets = google.sheets({ version: 'v4', auth }); // Initialisation globale
+    sheets = google.sheets({ version: 'v4', auth });
 
     await initGoogleSheets();
     sheetsInitialized = true;
@@ -59,17 +57,11 @@ const initializeApp = async () => {
   }
 };
 
-// ===== [ROUTES] =====
-
-// [SESSION] Synchronisation
 app.post('/sync-session', (req, res) => {
   const { userId, deviceId } = req.body;
   const session = activeSessions.get(userId);
 
-  if (!session) {
-    return res.json({ status: 'NO_SESSION' });
-  }
-
+  if (!session) return res.json({ status: 'NO_SESSION' });
   if (session.deviceId !== deviceId) {
     return res.json({
       status: 'DEVICE_MISMATCH',
@@ -77,7 +69,6 @@ app.post('/sync-session', (req, res) => {
     });
   }
 
-  // Mettre à jour le timestamp
   session.lastActive = new Date();
   res.json({
     status: 'SYNCED',
@@ -88,27 +79,21 @@ app.post('/sync-session', (req, res) => {
 
 app.post('/check-session', (req, res) => {
   const { userId, deviceId } = req.body;
-  
-  if (!userId || !deviceId) {
-    return res.status(400).json({ error: "Missing parameters" });
-  }
+
+  if (!userId || !deviceId) return res.status(400).json({ error: "Missing parameters" });
 
   const session = activeSessions.get(userId);
-  
-  if (!session) {
-    return res.json({ valid: false, message: "No active session" });
-  }
+  if (!session) return res.json({ valid: false, message: "No active session" });
 
   if (session.deviceId !== deviceId) {
-    return res.json({ 
-      valid: false, 
+    return res.json({
+      valid: false,
       message: "Device mismatch",
       sessionDevice: session.deviceId,
       requestDevice: deviceId
     });
   }
 
-  // Vérifier si la session est toujours valide (moins de 60 minutes)
   const elapsedMinutes = (Date.now() - session.startTime) / (1000 * 60);
   const remaining = Math.max(0, 60 - elapsedMinutes);
 
@@ -122,28 +107,24 @@ app.post('/check-session', (req, res) => {
 
 app.post('/start-session', (req, res) => {
   const { userId, deviceId } = req.body;
-  const MAX_MINUTES = 60; // Durée max totale
+  const MAX_MINUTES = 60;
 
-  // 1. Vérifier si session existe déjà
   const existingSession = activeSessions.get(userId);
   const now = Date.now();
 
   if (existingSession) {
-    // 2. Calculer le temps déjà consommé
     const minutesUsed = (now - existingSession.startTime) / (1000 * 60);
     const remaining = MAX_MINUTES - minutesUsed;
 
-    // 3. Si temps restant
     if (remaining > 0) {
       return res.json({
         status: "SESSION_RESUMED",
-        message: `Session reprise (${Math.floor(remaining)} minutes restantes)`,
+        message: `Session reprise (${Math.floor(remaining)} minutes restantes)` ,
         startTime: existingSession.startTime,
         remainingMinutes: Math.floor(remaining)
       });
     }
 
-    // 4. Si limite atteinte
     activeSessions.delete(userId);
     return res.status(403).json({
       error: "LIMIT_REACHED",
@@ -151,12 +132,11 @@ app.post('/start-session', (req, res) => {
     });
   }
 
-  // 5. Nouvelle session
   activeSessions.set(userId, {
-    startTime: now,       // Timestamp de démarrage
-    lastActive: now,      // Dernière activité
-    deviceId,             // Verrouillage appareil
-    totalMinutes: 0       // Compteur de temps effectif
+    startTime: now,
+    lastActive: now,
+    deviceId,
+    totalMinutes: 0
   });
 
   res.json({
@@ -168,39 +148,25 @@ app.post('/start-session', (req, res) => {
 
 app.post('/update-session', async (req, res) => {
   const { userId, tokens, deviceId } = req.body;
-  
+
   try {
-    // Vérifier que tous les champs sont présents
     if (!userId || !tokens || !deviceId) {
       return res.status(400).json({ error: "Missing parameters" });
     }
 
     const session = activeSessions.get(userId);
-    
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
+    if (!session) return res.status(404).json({ error: "Session not found" });
+    if (session.deviceId !== deviceId) return res.status(403).json({ error: "Device mismatch" });
 
-    if (session.deviceId !== deviceId) {
-      return res.status(403).json({ error: "Device mismatch" });
-    }
-
-    // Mettre à jour la session
     session.tokens = parseFloat(tokens);
     session.lastActive = new Date();
-    
-    // Sauvegarder dans Google Sheets
+
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Sessions!A2:D",
       valueInputOption: "USER_ENTERED",
       resource: {
-        values: [[
-          userId,
-          tokens,
-          new Date().toISOString(),
-          deviceId
-        ]]
+        values: [[ userId, tokens, new Date().toISOString(), deviceId ]]
       }
     });
 
@@ -211,22 +177,14 @@ app.post('/update-session', async (req, res) => {
   }
 });
 
-// Ajoutez cette route avant le endpoint /claim
 app.post('/api/referrals', async (req, res) => {
   const { userId } = req.body;
-
-  if (!userId) {
-    return res.status(400).json({ error: "USER_ID_REQUIRED" });
-  }
+  if (!userId) return res.status(400).json({ error: "USER_ID_REQUIRED" });
 
   try {
-    // Récupération données utilisateur
     const user = await getUserData(userId);
-    if (!user) {
-      return res.status(404).json({ error: "USER_NOT_FOUND" });
-    }
+    if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
-    // Récupération parrainages
     const referralsData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Referrals!A2:D"
@@ -240,13 +198,9 @@ app.post('/api/referrals', async (req, res) => {
       totalEarned: referrals.reduce((sum, r) => sum + (parseInt(r[1]) || 0), 0),
       referralCode: user.referralCode
     });
-
   } catch (err) {
     console.error('Referrals error:', err);
-    res.status(500).json({ 
-      error: "LOAD_FAILED",
-      message: "Échec du chargement" 
-    });
+    res.status(500).json({ error: "LOAD_FAILED", message: "Échec du chargement" });
   }
 });
 
@@ -257,17 +211,17 @@ app.get('/api/user-data', async (req, res) => {
 
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Users!A2:G" // Colonnes A à G
+      range: "Users!A2:G"
     });
 
     const user = usersData.data.values?.find(row => row[2]?.toString() === userId.toString());
     if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
 
     res.json({
-      username: user[1], // Colonne B (Username)
-      balance: user[3],  // Colonne D (Balance)
-      lastClaim: user[4], // Colonne E (Last_Claim_Time)
-      mining_speed: parseFloat(user[6]) || 1 // Colonne G (Mining_Speed)
+      username: user[1],
+      balance: parseInt(user[3]) || 0,
+      lastClaim: user[4],
+      mining_speed: parseFloat(user[6]) || 1
     });
   } catch (err) {
     console.error('User data error:', err);
@@ -275,7 +229,6 @@ app.get('/api/user-data', async (req, res) => {
   }
 });
 
-// Endpoint Dashboard
 app.get('/api/dashboard', async (req, res) => {
   try {
     const userId = req.query.userId;
@@ -286,7 +239,7 @@ app.get('/api/dashboard', async (req, res) => {
 
     res.json({
       username: userData.username,
-      balance: userData.balance,
+      balance: parseInt(userData.balance) || 0,
       last_claim: userData.lastClaim,
       miningSpeed: userData.mining_speed
     });
@@ -295,12 +248,11 @@ app.get('/api/dashboard', async (req, res) => {
   }
 });
 
-// Endpoint Tasks
 app.get('/api/tasks', async (req, res) => {
   try {
     const tasksData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Tasks!A2:E" // ID, Description, Image, Reward, Statut
+      range: "Tasks!A2:E"
     });
 
     const tasks = (tasksData.data.values || []).map(row => ({
@@ -309,7 +261,7 @@ app.get('/api/tasks', async (req, res) => {
       image: row[2],
       reward: row[3],
       status: row[4]
-    })).filter(task => task.status === 'ACTIVE'); // Filtrer seulement les tâches actives
+    })).filter(task => task.status === 'ACTIVE');
 
     res.json(tasks);
   } catch (err) {
@@ -318,11 +270,8 @@ app.get('/api/tasks', async (req, res) => {
   }
 });
 
-// [CLAIM] Enregistrement avec limite de 60 minutes
 app.post('/claim', async (req, res) => {
   const { userId, deviceId, miningTime } = req.body;
-
-  // Validation
   if (!userId || !deviceId || isNaN(miningTime)) {
     return res.status(400).json({ error: "Invalid data" });
   }
@@ -333,7 +282,6 @@ app.post('/claim', async (req, res) => {
       return res.status(403).json({ error: "Invalid or expired session" });
     }
 
-    // Récupération des données utilisateur
     const usersData = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Users!A2:G"
@@ -345,60 +293,44 @@ app.post('/claim', async (req, res) => {
     const user = usersData.data.values[userRow];
     const miningSpeed = parseFloat(user[6]) || 1;
 
-    // Appliquer limite à 60 minutes
     const effectiveMinutes = Math.min(parseInt(miningTime), 60);
     const tokensToClaim = effectiveMinutes * miningSpeed;
 
-    // Mettre à jour solde
     const currentBalance = parseInt(user[3]) || 0;
     const newBalance = currentBalance + tokensToClaim;
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: `Users!D${userRow + 2}`, // Colonne D = solde
+      range: `Users!D${userRow + 2}`,
       valueInputOption: "USER_ENTERED",
       resource: { values: [[newBalance]] }
     });
 
-    // Enregistrement transaction
     await sheets.spreadsheets.values.append({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
       range: "Transactions!A2:D",
       valueInputOption: "USER_ENTERED",
       resource: {
-        values: [[
-          userId,
-          tokensToClaim,
-          "CLAIM",
-          new Date().toLocaleString('fr-FR')
-        ]]
+        values: [[ userId, tokensToClaim, "CLAIM", new Date().toLocaleString('fr-FR') ]]
       }
     });
 
-    // Supprimer la session car déjà utilisée
     activeSessions.delete(userId);
 
     return res.json({
-  status: "OK",
-  claimed: tokensToClaim,
-  balance: newBalance,  // Assurez-vous que cette variable contient le nouveau solde
-  message: `Vous avez revendiqué ${tokensToClaim} tokens`
-});
-
+      status: "OK",
+      claimed: tokensToClaim,
+      balance: newBalance,
+      message: `Vous avez revendiqué ${tokensToClaim} tokens`
+    });
   } catch (err) {
     console.error('Claim error:', err);
     return res.status(500).json({ error: "Server error" });
   }
 });
 
-
-
-// Webhook bot
 app.use(bot.webhookCallback('/bot'));
-
-// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-// Start server
 initializeApp();
