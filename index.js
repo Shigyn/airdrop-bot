@@ -81,13 +81,31 @@ const initializeApp = async () => {
       throw new Error('TELEGRAM_BOT_TOKEN is required');
     }
 
-    // Configuration des timeouts
-    app.setTimeout(30000); // 30 secondes
-    app.set('socket timeout', 30000); // 30 secondes
+    // Configuration des timeouts et des limites
+    app.set('trust proxy', true);
+    app.set('keep-alive-timeout', 30000); // 30 secondes
+    app.set('timeout', 30000); // 30 secondes
 
     // Configuration des limites de requêtes
-    app.use(express.json({ limit: '50mb' }));
-    app.use(express.urlencoded({ limit: '50mb', extended: true }));
+    app.use(express.json({ 
+      limit: '50mb',
+      verify: (req, res, buf) => {
+        // Log des requêtes trop grandes
+        if (buf.length > 50 * 1024 * 1024) {
+          console.warn(`Large request body: ${buf.length} bytes`);
+        }
+      }
+    }));
+    app.use(express.urlencoded({ 
+      limit: '50mb',
+      extended: true,
+      verify: (req, res, buf) => {
+        // Log des requêtes trop grandes
+        if (buf.length > 50 * 1024 * 1024) {
+          console.warn(`Large request body: ${buf.length} bytes`);
+        }
+      }
+    }));
 
     // Initialisation de Google Sheets
     const auth = new google.auth.GoogleAuth({
