@@ -7,7 +7,7 @@ const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
 const { google } = require('googleapis');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 8080; // Port par défaut pour Render
 const activeSessions = new Map();
 let sheets;
 let sheetsInitialized = false; // ajouté pour la santé du service
@@ -50,7 +50,39 @@ const initializeApp = async () => {
     await initGoogleSheets();
     sheetsInitialized = true;
     console.log('Server ready');
-    app.listen(PORT, () => console.log(`Running on port ${PORT}`));
+    const server = app.listen(PORT, () => {
+      console.log(`Server ready`);
+      console.log(`Running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+      console.log(`Google Sheets initialized: ${sheetsInitialized}`);
+    });
+
+    // Gestion des erreurs de serveur
+    server.on('error', (error) => {
+      console.error('Server error:', error);
+      process.exit(1);
+    });
+
+    // Gestion de la fermeture propre
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM received. Closing server...');
+      server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+      });
+    });
+
+    // Gestion des erreurs non gérées
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught exception:', error);
+      process.exit(1);
+    });
+
+    // Gestion des rejections de promesses non gérées
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled rejection:', reason);
+      process.exit(1);
+    });
   } catch (err) {
     console.error('Init failed:', err);
     process.exit(1);
