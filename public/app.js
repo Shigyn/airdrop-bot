@@ -4,6 +4,7 @@
 let miningInterval;
 let secondsMined = 0;
 let isMining = false;
+let miningSpeed = 0; // Nouvelle variable pour la vitesse de minage (exemple)
 
 // Fonctions utilitaires
 function showNotification(message, type = 'info') {
@@ -15,6 +16,25 @@ function showNotification(message, type = 'info') {
     setTimeout(() => notification.remove(), 3000);
   } catch (error) {
     console.error('Error showing notification:', error);
+  }
+}
+
+// Fonction pour envoyer les données au dashboard (exemple d'implémentation)
+function sendDataToDashboard(data) {
+  try {
+    // Exemple : si tu as un élément dashboard spécifique, on met à jour ses enfants
+    const dashboardUsername = document.getElementById('dashboard-username');
+    const dashboardBalance = document.getElementById('dashboard-balance');
+    const dashboardSpeed = document.getElementById('dashboard-speed');
+
+    if (dashboardUsername) dashboardUsername.textContent = data.username;
+    if (dashboardBalance) dashboardBalance.textContent = data.balance.toFixed(2);
+    if (dashboardSpeed) dashboardSpeed.textContent = `${data.miningSpeed.toFixed(2)} units/min`;
+
+    // Si tu as une API ou websocket pour envoyer, fais-le ici
+    // ex: websocket.send(JSON.stringify(data));
+  } catch (error) {
+    console.error('Error sending data to dashboard:', error);
   }
 }
 
@@ -88,12 +108,22 @@ async function loadUserData() {
     const userData = result.data;
     console.log('[loadUserData] Received user data:', userData);
 
+    // Calcul simple de Mining_Speed (exemple : base fixe ou calcul dynamique)
+    miningSpeed = userData.miningSpeed ? parseFloat(userData.miningSpeed) : 1.0;
+
     // 7. Mise à jour de l'interface utilisateur
     try {
       requiredElements.username.textContent = userData.username || 'User';
       requiredElements.balance.textContent = userData.balance?.toString() || '0';
       
       console.log('[loadUserData] UI updated successfully');
+
+      // Envoi des données vers le dashboard
+      sendDataToDashboard({
+        username: userData.username || `user_${userId}`,
+        balance: parseFloat(userData.balance) || 0,
+        miningSpeed: miningSpeed
+      });
     } catch (uiError) {
       console.error('[loadUserData] UI update error:', uiError);
       throw new Error('Failed to update UI elements');
@@ -104,6 +134,7 @@ async function loadUserData() {
       id: userId,
       username: userData.username || `user_${userId}`,
       balance: parseFloat(userData.balance) || 0,
+      miningSpeed: miningSpeed,
       lastClaim: userData.lastClaim || null,
       rawData: userData // Conserve toutes les données originales
     };
@@ -134,6 +165,7 @@ async function loadUserData() {
       id: fallbackUserId,
       username: `user_${fallbackUserId}`,
       balance: 0,
+      miningSpeed: 0,
       lastClaim: null,
       error: error.message
     };
