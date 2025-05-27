@@ -300,7 +300,7 @@ const initializeApp = async () => {
     }
 
     // Configuration du webhook
-    await bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/bot`);
+	await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
 
     // Démarrage du serveur
     const server = app.listen(port, () => {
