@@ -623,6 +623,25 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+// Route pour les données utilisateur
+app.post('/api/user-data', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    // Ici vous devrez implémenter la logique pour récupérer les données de l'utilisateur
+    // Par exemple depuis votre feuille Google Sheets
+    const userData = await getUserData(userId);
+
+    res.json({ data: userData });
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).json({ error: 'Failed to fetch user data' });
+  }
+});
+
 // Route par défaut
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
