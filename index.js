@@ -667,11 +667,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
-// Call the existing initializeApp function
-async function initializeApp() {
-  // Attendre 5 secondes avant de configurer le webhook
-  await new Promise(resolve => setTimeout(resolve, 5000));
-}
-initializeApp().catch(console.error);
+// Ajouter un délai avant la configuration du webhook
+await new Promise(resolve => setTimeout(resolve, 5000));
+
+// Appeler la fonction initiale
+await initializeApp();
+
+// Exporter l'application
+module.exports = app;
 
 module.exports = app;
