@@ -124,11 +124,30 @@ body {
 }
 
 /* === USER CARD === */
-/* Suppression cadre gris & bordure */
 .user-info-card {
-  background-color: transparent; /* plus de fond */
-  border: none;                  /* plus de bordure */
-  padding: 0;                   /* enlever padding si tu veux */
+  background-color: var(--mc-stone);
+  border: var(--mc-border);
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background-color: var(--mc-dirt);
+  border-radius: 4px;
+  width: 100%;
+  justify-content: center;
+}
+
+.user-info-row:last-child {
   margin-bottom: 0;
 }
 

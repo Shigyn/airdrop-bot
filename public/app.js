@@ -99,7 +99,7 @@ async function loadUserData() {
 // Fonctions de minage
 function startMining() {
   try {
-    const userId = Telegram.WebApp.initData?.user?.id;
+    const userId = Telegram.WebApp.initData.user?.id;
     if (!userId) throw new Error('User not authenticated');
 
     const miningBtn = document.getElementById('mining-btn');
@@ -218,8 +218,8 @@ function setupNavigation() {
 // Fonction principale d'initialisation
 async function initializeApp() {
   try {
-    if (!Telegram.WebApp.initData) {
-      throw new Error('Telegram Web App not initialized');
+    if (!Telegram.WebApp.initData || !Telegram.WebApp.initData.user || !Telegram.WebApp.initData.user.id) {
+      throw new Error('Telegram Web App data not properly initialized');
     }
 
     await loadUserData();
