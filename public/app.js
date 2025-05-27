@@ -21,7 +21,8 @@ function showNotification(message, type = 'info') {
 // Fonctions de données utilisateur
 async function loadUserData() {
   try {
-    const userId = Telegram.WebApp.initDataUnsafe.user.id;
+    const initData = await Telegram.WebApp.init();
+    const userId = initData.user.id;
     console.log('Loading data for user:', userId);
 
     // Vérifier que l'ID utilisateur existe
@@ -176,15 +177,36 @@ function updateMiningDisplay(seconds) {
 function setupNavigation() {
   try {
     const navButtons = document.querySelectorAll('.nav-btn');
+    if (!navButtons || navButtons.length === 0) {
+      throw new Error('No navigation buttons found');
+    }
+
     navButtons.forEach(button => {
       button.addEventListener('click', async (e) => {
         e.preventDefault();
         const viewId = button.dataset.view;
-        
+        if (!viewId) {
+          console.error('Navigation button missing view ID');
+          return;
+        }
+
+        // Vérifier si la vue existe
+        const viewElement = document.getElementById(viewId);
+        if (!viewElement) {
+          console.error(`View element not found: ${viewId}`);
+          showNotification(`Page non trouvée: ${viewId}`, 'error');
+          return;
+        }
+
         // Gérer la navigation
         navButtons.forEach(btn => btn.classList.remove('active'));
         button.classList.add('active');
-        await showView(viewId);
+        
+        // Masquer toutes les vues
+        document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+        
+        // Afficher la vue sélectionnée
+        viewElement.classList.add('active');
       });
     });
   } catch (error) {
