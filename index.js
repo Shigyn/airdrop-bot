@@ -40,6 +40,15 @@ app.use(cors({
   exposedHeaders: ['Content-Length', 'X-Request-Id', 'Cache-Control']
 }));
 
+// Servir les fichiers statiques depuis le dossier public
+app.use(express.static('public', {
+  setHeaders: (res, path) => {
+    // Cache pendant 1 jour
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  },
+  fallthrough: false // Ne passe pas à la prochaine route si le fichier n'est pas trouvé
+}));
+
 // Middleware de vérification de l'authentification Telegram
 app.use('/api', async (req, res, next) => {
   try {
@@ -659,6 +668,10 @@ app.use((err, req, res, next) => {
 });
 
 // Call the existing initializeApp function
+async function initializeApp() {
+  // Attendre 5 secondes avant de configurer le webhook
+  await new Promise(resolve => setTimeout(resolve, 5000));
+}
 initializeApp().catch(console.error);
 
 module.exports = app;
