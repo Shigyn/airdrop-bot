@@ -41,134 +41,33 @@ function sendDataToDashboard(data) {
 // Fonctions de données utilisateur
 async function loadUserData() {
   try {
-    console.log('[loadUserData] Starting to load user data...');
-    
-    // 1. Vérification initiale des données Telegram
-    if (!window.Telegram || !Telegram.WebApp || !Telegram.WebApp.initData) {
-      throw new Error('Telegram WebApp SDK not properly loaded');
-    }
-
-    const initData = Telegram.WebApp.initData;
-    console.log('[loadUserData] Telegram initData:', initData);
-
-    // 2. Extraction de l'ID utilisateur
-    const userId = initData.user?.id;
-    if (!userId) {
-      throw new Error('User ID not found in Telegram data');
-    }
-    console.log('[loadUserData] User ID:', userId);
-
-    // 3. Vérification des éléments DOM critiques
-    const requiredElements = {
-      username: document.getElementById('username'),
-      balance: document.getElementById('balance'),
-      miningBtn: document.getElementById('mining-btn'),
-      miningTime: document.getElementById('mining-time')
-    };
-
-    console.log('[loadUserData] Checking DOM elements:', requiredElements);
-
-    for (const [name, element] of Object.entries(requiredElements)) {
-      if (!element) {
-        throw new Error(`Required element not found: ${name}`);
-      }
-    }
-
-    // 4. Préparation de la requête API
-    const apiUrl = '/api/user-data';
-    const requestOptions = {
+    const response = await fetch('/api/user-data', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Telegram-Data': JSON.stringify(initData)
-      },
-      body: JSON.stringify({ userId })
-    };
-
-    console.log('[loadUserData] Making API request to:', apiUrl, requestOptions);
-
-    // 5. Exécution de la requête
-    const response = await fetch(apiUrl, requestOptions);
-    console.log('[loadUserData] API response status:', response.status);
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: window.Telegram.WebApp.initDataUnsafe.user.id, username: window.Telegram.WebApp.initDataUnsafe.user.username })
+    });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[loadUserData] API error response:', errorText);
-      throw new Error(`API error: ${response.status} - ${errorText}`);
+      throw new Error('Erreur HTTP ' + response.status);
     }
 
-    const result = await response.json();
-    console.log('[loadUserData] API response data:', result);
+    const data = await response.json();
 
-    // 6. Validation des données reçues
-    if (!result || !result.success || !result.data) {
-      throw new Error('Invalid API response format');
+    if (!data || !data.balance) {
+      throw new Error('Données utilisateur invalides');
     }
 
-    const userData = result.data;
-    console.log('[loadUserData] Received user data:', userData);
+    // Affiche les données dans le dashboard
+    document.getElementById('user-balance').innerText = data.balance;
+    document.getElementById('user-mining-time').innerText = data.miningTime;
 
-    // Calcul simple de Mining_Speed (exemple : base fixe ou calcul dynamique)
-    miningSpeed = userData.miningSpeed ? parseFloat(userData.miningSpeed) : 1.0;
-
-    // 7. Mise à jour de l'interface utilisateur
-    try {
-      requiredElements.username.textContent = userData.username || 'User';
-      requiredElements.balance.textContent = userData.balance?.toString() || '0';
-      
-      console.log('[loadUserData] UI updated successfully');
-
-      // Envoi des données vers le dashboard
-      sendDataToDashboard({
-        username: userData.username || `user_${userId}`,
-        balance: parseFloat(userData.balance) || 0,
-        miningSpeed: miningSpeed
-      });
-    } catch (uiError) {
-      console.error('[loadUserData] UI update error:', uiError);
-      throw new Error('Failed to update UI elements');
-    }
-
-    // 8. Retour des données utilisateur
-    return {
-      id: userId,
-      username: userData.username || `user_${userId}`,
-      balance: parseFloat(userData.balance) || 0,
-      miningSpeed: miningSpeed,
-      lastClaim: userData.lastClaim || null,
-      rawData: userData // Conserve toutes les données originales
-    };
+    // Affiche bouton claim et compteur
+    document.getElementById('claim-button').style.display = 'block';
+    document.getElementById('mining-counter').style.display = 'block';
 
   } catch (error) {
-    console.error('[loadUserData] Critical error:', error);
-    
-    // Fallback UI update
-    try {
-      const usernameEl = document.getElementById('username');
-      const balanceEl = document.getElementById('balance');
-      
-      if (usernameEl) usernameEl.textContent = 'User';
-      if (balanceEl) balanceEl.textContent = '0';
-    } catch (fallbackError) {
-      console.error('[loadUserData] Fallback UI update failed:', fallbackError);
-    }
-
-    // Envoyer une notification d'erreur claire
-    showNotification(
-      'Erreur de chargement des données. Veuillez rafraîchir la page.', 
-      'error'
-    );
-
-    // Retourner des données par défaut pour permettre au reste de l'application de fonctionner
-    const fallbackUserId = Telegram.WebApp.initData?.user?.id || '0';
-    return {
-      id: fallbackUserId,
-      username: `user_${fallbackUserId}`,
-      balance: 0,
-      miningSpeed: 0,
-      lastClaim: null,
-      error: error.message
-    };
+    console.error('Erreur de chargement des données:', error);
+    alert('Erreur de chargement des données. Veuillez rafraîchir la page.');
   }
 }
 
