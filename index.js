@@ -7,8 +7,8 @@ const { google } = require('googleapis');
 
 const app = express();
 const activeSessions = new Map();
-let sheets;
-let sheetsInitialized = false; // ajouté pour la santé du service
+let sheets = null;
+let sheetsInitialized = false
 
 const { bot } = require('./bot');
 const { initGoogleSheets, readTasks, getUserData } = require('./googleSheets');
@@ -52,7 +52,6 @@ app.use(express.static('public', {
 // Middleware de vérification de l'authentification Telegram
 app.use('/api', async (req, res, next) => {
   try {
-    // Vérifie si les données Telegram sont présentes
     const telegramData = req.headers['telegram-data'];
     if (!telegramData) {
       return res.status(401).json({
@@ -61,34 +60,31 @@ app.use('/api', async (req, res, next) => {
       });
     }
 
-    // Parse les données Telegram
-    const initData = JSON.parse(telegramData);
-    if (!initData.auth_date || !initData.user) {
+    // Essayez de parser les données
+    let initData;
+    try {
+      initData = JSON.parse(telegramData);
+    } catch (e) {
+      return res.status(401).json({
+        error: "INVALID_AUTH_FORMAT",
+        message: "Telegram data is not valid JSON"
+      });
+    }
+
+    if (!initData || !initData.user || !initData.user.id) {
       return res.status(401).json({
         error: "INVALID_AUTH_DATA",
-        message: "Invalid Telegram authentication data"
+        message: "Invalid Telegram user data"
       });
     }
 
-    // Vérifie si l'auth_date est récent (moins de 10 minutes)
-    const authDate = parseInt(initData.auth_date);
-    const now = Math.floor(Date.now() / 1000);
-    if (now - authDate > 600) {
-      return res.status(401).json({
-        error: "AUTH_EXPIRED",
-        message: "Authentication expired"
-      });
-    }
-
-    // Ajoute les données utilisateur à la requête
     req.telegramUser = initData.user;
     next();
   } catch (error) {
     console.error('Telegram auth error:', error);
     res.status(401).json({
       error: "AUTH_VALIDATION_FAILED",
-      message: "Failed to validate Telegram authentication",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      message: "Failed to validate Telegram authentication"
     });
   }
 });
@@ -151,13 +147,14 @@ app.post('/api/user-data', async (req, res) => {
 
     // Simuler des données si Google Sheets n'est pas configuré
     let userData;
-    if (!sheetsInitialized) {
-      console.warn('Using mock data - Google Sheets not initialized');
-      userData = {
-        username: `user_${userId}`,
-        balance: Math.floor(Math.random() * 100),
-        lastClaim: new Date().toISOString()
-      };
+    if (!sheets || !sheetsInitialized) {
+  console.warn('Using mock data - Google Sheets not initialized');
+  userData = {
+    username: `user_${userId}`,
+    balance: Math.floor(Math.random() * 100),
+    lastClaim: new Date().toISOString()
+  };
+}
     } else {
       try {
         userData = await getUserData(userId);
@@ -271,16 +268,6 @@ app.post('/api/claim', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Error claiming:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.get('/api/tasks', async (req, res) => {
-  try {
-    const tasks = await googleSheets.getAvailableTasks();
-    res.json(tasks);
-  } catch (error) {
-    console.error('Error getting tasks:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -632,25 +619,6 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
-// Route pour les données utilisateur
-app.post('/api/user-data', async (req, res) => {
-  try {
-    const { userId } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: 'User ID is required' });
-    }
-
-    // Ici vous devrez implémenter la logique pour récupérer les données de l'utilisateur
-    // Par exemple depuis votre feuille Google Sheets
-    const userData = await getUserData(userId);
-
-    res.json({ data: userData });
-  } catch (error) {
-    console.error('Error fetching user data:', error);
-    res.status(500).json({ error: 'Failed to fetch user data' });
-  }
-});
-
 // Route par défaut
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -674,6 +642,4 @@ await new Promise(resolve => setTimeout(resolve, 5000));
 await initializeApp();
 
 // Exporter l'application
-module.exports = app;
-
 module.exports = app;

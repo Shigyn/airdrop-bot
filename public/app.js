@@ -21,78 +21,122 @@ function showNotification(message, type = 'info') {
 // Fonctions de données utilisateur
 async function loadUserData() {
   try {
-    const initData = await Telegram.WebApp.init();
-    const userId = initData.user.id;
-    console.log('Loading data for user:', userId);
+    console.log('[loadUserData] Starting to load user data...');
+    
+    // 1. Vérification initiale des données Telegram
+    if (!window.Telegram || !Telegram.WebApp || !Telegram.WebApp.initData) {
+      throw new Error('Telegram WebApp SDK not properly loaded');
+    }
 
-    // Vérifier que l'ID utilisateur existe
+    const initData = Telegram.WebApp.initData;
+    console.log('[loadUserData] Telegram initData:', initData);
+
+    // 2. Extraction de l'ID utilisateur
+    const userId = initData.user?.id;
     if (!userId) {
       throw new Error('User ID not found in Telegram data');
     }
+    console.log('[loadUserData] User ID:', userId);
 
-    // Vérifier que les éléments DOM existent
-    const usernameElement = document.getElementById('username');
-    const balanceElement = document.getElementById('balance');
-    
-    if (!usernameElement || !balanceElement) {
-      console.error('DOM elements not found:', {
-        username: !!usernameElement, 
-        balance: !!balanceElement
-      });
-      throw new Error('UI elements not found');
+    // 3. Vérification des éléments DOM critiques
+    const requiredElements = {
+      username: document.getElementById('username'),
+      balance: document.getElementById('balance'),
+      miningBtn: document.getElementById('mining-btn'),
+      miningTime: document.getElementById('mining-time')
+    };
+
+    console.log('[loadUserData] Checking DOM elements:', requiredElements);
+
+    for (const [name, element] of Object.entries(requiredElements)) {
+      if (!element) {
+        throw new Error(`Required element not found: ${name}`);
+      }
     }
 
-    // Appeler l'API avec les bons headers
-    const response = await fetch('/api/user-data', {
+    // 4. Préparation de la requête API
+    const apiUrl = '/api/user-data';
+    const requestOptions = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Telegram-Data': Telegram.WebApp.initData
+        'Telegram-Data': JSON.stringify(initData)
       },
       body: JSON.stringify({ userId })
-    });
+    };
 
-    console.log('API response status:', response.status);
+    console.log('[loadUserData] Making API request to:', apiUrl, requestOptions);
+
+    // 5. Exécution de la requête
+    const response = await fetch(apiUrl, requestOptions);
+    console.log('[loadUserData] API response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('API error response:', errorText);
+      console.error('[loadUserData] API error response:', errorText);
       throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
     const result = await response.json();
-    console.log('API response data:', result);
+    console.log('[loadUserData] API response data:', result);
 
-    // Vérifier la structure des données
-    if (!result || !result.data) {
-      throw new Error('Invalid data format from API');
+    // 6. Validation des données reçues
+    if (!result || !result.success || !result.data) {
+      throw new Error('Invalid API response format');
     }
 
     const userData = result.data;
-    
-    // Mettre à jour l'UI avec vérification
-    if (usernameElement) {
-      usernameElement.textContent = userData.username || 'User';
-      console.log('Username set:', usernameElement.textContent);
-    }
-    
-    if (balanceElement) {
-      balanceElement.textContent = userData.balance || '0';
-      console.log('Balance set:', balanceElement.textContent);
+    console.log('[loadUserData] Received user data:', userData);
+
+    // 7. Mise à jour de l'interface utilisateur
+    try {
+      requiredElements.username.textContent = userData.username || 'User';
+      requiredElements.balance.textContent = userData.balance?.toString() || '0';
+      
+      console.log('[loadUserData] UI updated successfully');
+    } catch (uiError) {
+      console.error('[loadUserData] UI update error:', uiError);
+      throw new Error('Failed to update UI elements');
     }
 
-    return userData;
+    // 8. Retour des données utilisateur
+    return {
+      id: userId,
+      username: userData.username || `user_${userId}`,
+      balance: parseFloat(userData.balance) || 0,
+      lastClaim: userData.lastClaim || null,
+      rawData: userData // Conserve toutes les données originales
+    };
+
   } catch (error) {
-    console.error('Error in loadUserData:', error);
-    showNotification('Failed to load user data: ' + error.message, 'error');
+    console.error('[loadUserData] Critical error:', error);
     
-    // Mettre des valeurs par défaut en cas d'erreur
-    const usernameElement = document.getElementById('username');
-    const balanceElement = document.getElementById('balance');
-    if (usernameElement) usernameElement.textContent = 'User';
-    if (balanceElement) balanceElement.textContent = '0';
-    
-    throw error;
+    // Fallback UI update
+    try {
+      const usernameEl = document.getElementById('username');
+      const balanceEl = document.getElementById('balance');
+      
+      if (usernameEl) usernameEl.textContent = 'User';
+      if (balanceEl) balanceEl.textContent = '0';
+    } catch (fallbackError) {
+      console.error('[loadUserData] Fallback UI update failed:', fallbackError);
+    }
+
+    // Envoyer une notification d'erreur claire
+    showNotification(
+      'Erreur de chargement des données. Veuillez rafraîchir la page.', 
+      'error'
+    );
+
+    // Retourner des données par défaut pour permettre au reste de l'application de fonctionner
+    const fallbackUserId = Telegram.WebApp.initData?.user?.id || '0';
+    return {
+      id: fallbackUserId,
+      username: `user_${fallbackUserId}`,
+      balance: 0,
+      lastClaim: null,
+      error: error.message
+    };
   }
 }
 
@@ -218,16 +262,35 @@ function setupNavigation() {
 // Fonction principale d'initialisation
 async function initializeApp() {
   try {
-    if (!Telegram.WebApp.initData || !Telegram.WebApp.initData.user || !Telegram.WebApp.initData.user.id) {
-      throw new Error('Telegram Web App data not properly initialized');
+    // Vérifiez que Telegram.WebApp est disponible
+    if (!window.Telegram || !Telegram.WebApp || !Telegram.WebApp.initData) {
+      throw new Error('Telegram WebApp SDK not properly loaded');
+    }
+
+    // Attendez que le DOM soit complètement chargé
+    if (document.readyState !== 'complete') {
+      await new Promise(resolve => {
+        window.addEventListener('load', resolve);
+      });
     }
 
     await loadUserData();
     setupNavigation();
-    await showView('claim');
+    
+    // Gestion des erreurs pour showView
+    try {
+      await showView('claim');
+    } catch (error) {
+      console.error('Error showing initial view:', error);
+      showNotification('Failed to load initial view', 'error');
+    }
   } catch (error) {
     console.error('Error initializing app:', error);
-    showNotification('Erreur lors de l\'initialisation de l\'application', 'error');
+    showNotification('Erreur lors de l\'initialisation: ' + error.message, 'error');
+    
+    // Solution de repli - charger au moins la vue de base
+    const defaultView = document.getElementById('claim');
+    if (defaultView) defaultView.classList.add('active');
   }
 }
 
