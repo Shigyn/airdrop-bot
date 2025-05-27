@@ -290,51 +290,27 @@ const initializeApp = async () => {
       process.exit(1);
     }
 
-    // Initialisation de Google Sheets (version optimisée)
-    try {
+    // Initialisation unique de Google Sheets
+    if (!sheetsInitialized) {
       sheets = await initGoogleSheets();
       sheetsInitialized = true;
+      console.log('Google Sheets initialized successfully');
       
       // Test de connexion
       await sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: 'Users!A1'
       });
-      
-      console.log('Google Sheets initialized and connection verified');
-    } catch (sheetsError) {
-      console.error('Google Sheets initialization failed:', sheetsError);
-      sheetsInitialized = false;
-      // Vous pouvez choisir de continuer en mode dégradé ou arrêter l'application
-      // throw sheetsError; // Décommentez pour arrêter si Sheets est essentiel
     }
 
-    // Configuration du webhook
-    await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
-
-    // Démarrage du serveur
-    const server = app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
-      console.log(`Sheets initialized: ${sheetsInitialized}`);
-    });
-
-    // Gestion des signaux
-    process.on('SIGTERM', async () => {
-      console.log('SIGTERM received. Closing server...');
-      await new Promise(resolve => server.close(resolve));
-      process.exit(0);
-    });
-
-    return server;
-  } catch (error) {
-    console.error('Error initializing app:', error);
-    process.exit(1);
-  }
-};
-
-    // Configuration du webhook
-	await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
+    // Configuration du webhook (déplacée dans le bloc async)
+    try {
+      await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
+      console.log('Webhook configured successfully');
+    } catch (webhookError) {
+      console.error('Webhook configuration failed:', webhookError);
+      throw webhookError; // Optionnel : arrêter si le webhook est critique
+    }
 
     // Démarrage du serveur
     const server = app.listen(port, () => {
@@ -356,27 +332,15 @@ const initializeApp = async () => {
   }
 };
 
-// Middleware final
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
-
-app.use(bot.webhookCallback('/bot'));
-
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not Found' });
-});
-
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
-// Démarrer l'application
+// Démarrer l'application correctement
 (async () => {
-  await new Promise(resolve => setTimeout(resolve, 5000));
-  await initializeApp();
+  try {
+    await initializeApp();
+    console.log('Application started successfully');
+  } catch (startupError) {
+    console.error('Failed to start application:', startupError);
+    process.exit(1);
+  }
 })();
 
 module.exports = app;
