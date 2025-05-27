@@ -1,6 +1,6 @@
-const { Telegraf } = require('telegraf');
-const googleSheets = require('./googleSheets');
-const logger = require('./logger');
+import { Telegraf } from 'telegraf';
+import googleSheets from './googleSheets.js';
+import logger from './logger.js';
 
 // Configuration du webhook
 const webhookPath = `/webhook/${process.env.TELEGRAM_BOT_TOKEN}`;

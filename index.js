@@ -1,9 +1,12 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
-const crypto = require('crypto');
-const { google } = require('googleapis');
+import dotenv from 'dotenv';
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import crypto from 'crypto';
+import { google } from 'googleapis';
+
+// Configuration des modules
+dotenv.config();
 
 const app = express();
 const activeSessions = new Map();
