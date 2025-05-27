@@ -259,22 +259,10 @@ app.post('/sync-session', (req, res) => {
 // Initialisation de l'application
 const initializeApp = async () => {
   try {
-    // Vérification des variables d'environnement
-    if (!process.env.GOOGLE_CREDS_B64 || !process.env.TELEGRAM_BOT_TOKEN) {
-      throw new Error('Missing required environment variables');
-    }
-
     // Configuration du serveur
     app.set('trust proxy', true);
     app.set('keep-alive-timeout', 30000);
     app.set('timeout', 30000);
-
-    // Initialisation de Google Sheets
-    if (!sheetsInitialized) {
-      sheets = await initGoogleSheets();
-      sheetsInitialized = true;
-      console.log('Google Sheets initialized successfully');
-    }
 
     // Gestion du verrou d'instance
     const lockFile = path.join('.temp', '.lock');
@@ -301,6 +289,49 @@ const initializeApp = async () => {
       console.error('Error managing lock file:', err);
       process.exit(1);
     }
+
+    // Initialisation de Google Sheets (version optimisée)
+    try {
+      sheets = await initGoogleSheets();
+      sheetsInitialized = true;
+      
+      // Test de connexion
+      await sheets.spreadsheets.values.get({
+        spreadsheetId: process.env.GOOGLE_SHEET_ID,
+        range: 'Users!A1'
+      });
+      
+      console.log('Google Sheets initialized and connection verified');
+    } catch (sheetsError) {
+      console.error('Google Sheets initialization failed:', sheetsError);
+      sheetsInitialized = false;
+      // Vous pouvez choisir de continuer en mode dégradé ou arrêter l'application
+      // throw sheetsError; // Décommentez pour arrêter si Sheets est essentiel
+    }
+
+    // Configuration du webhook
+    await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
+
+    // Démarrage du serveur
+    const server = app.listen(port, () => {
+      console.log(`Server running on port ${port}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+      console.log(`Sheets initialized: ${sheetsInitialized}`);
+    });
+
+    // Gestion des signaux
+    process.on('SIGTERM', async () => {
+      console.log('SIGTERM received. Closing server...');
+      await new Promise(resolve => server.close(resolve));
+      process.exit(0);
+    });
+
+    return server;
+  } catch (error) {
+    console.error('Error initializing app:', error);
+    process.exit(1);
+  }
+};
 
     // Configuration du webhook
 	await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);

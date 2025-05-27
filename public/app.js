@@ -69,7 +69,10 @@ async function loadUserData() {
     }
 
     // Mise à jour de l'interface
-    document.getElementById('user-balance').innerText = data.data.balance || '0';
+    document.getElementById('balance').innerText = data.balance;
+
+// Et ajoutez ceci après le chargement des données :
+document.getElementById('mining-section').style.display = 'block';
     document.getElementById('username').innerText = data.data.username || 'Utilisateur';
     
     // Afficher les éléments cachés
