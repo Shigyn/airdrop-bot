@@ -118,50 +118,53 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Route API user-data corrigée
 app.post('/api/user-data', async (req, res) => {
   try {
-    const userId = req.body.userId;
-    if (!userId) {
+    const telegramData = req.headers['telegram-data'];
+    if (!telegramData) {
+      return res.status(401).json({ 
+        success: false,
+        error: 'AUTH_REQUIRED',
+        message: 'Telegram authentication data is required'
+      });
+    }
+
+    let initData;
+    try {
+      initData = JSON.parse(telegramData);
+    } catch (e) {
       return res.status(400).json({ 
         success: false,
-        error: 'userId is required' 
+        error: 'INVALID_DATA',
+        message: 'Invalid Telegram data format'
       });
     }
 
-    let userData;
-    if (!sheets || !sheetsInitialized) {
-      console.warn('Using mock data - Google Sheets not initialized');
-      userData = {
-        username: `user_${userId}`,
-        balance: Math.floor(Math.random() * 100),
-        lastClaim: new Date().toISOString()
-      };
-    } else {
-      try {
-        userData = await getUserData(userId);
-      } catch (error) {
-        console.error('Error fetching from Google Sheets:', error);
-        return res.status(500).json({
-          success: false,
-          error: 'Failed to fetch user data'
-        });
-      }
-    }
-
-    if (!userData) {
-      return res.status(404).json({
+    const userId = initData?.user?.id;
+    if (!userId) {
+      return res.status(401).json({ 
         success: false,
-        error: 'User not found'
+        error: 'INVALID_USER',
+        message: 'Invalid user data'
       });
     }
+
+    // Logique de récupération des données utilisateur...
+    const userData = await getUserData(userId) || {
+      username: initData.user?.username || `user_${userId}`,
+      balance: 0,
+      miningSpeed: 0
+    };
 
     res.json({
       success: true,
       data: userData
     });
+
   } catch (error) {
-    console.error('Error in /api/user-data:', error);
+    console.error('User data endpoint error:', error);
     res.status(500).json({
       success: false,
-      error: 'Internal server error'
+      error: 'SERVER_ERROR',
+      message: 'Internal server error'
     });
   }
 });
