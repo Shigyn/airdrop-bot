@@ -341,7 +341,10 @@ if (!testResponse.data || !testResponse.data.values) {
     await initializeApp();
     console.log('Application started successfully');
   } catch (startupError) {
-    console.error('Failed to start application:', startupError);
+    console.error('Failed to start application:', {
+      error: startupError.message,
+      stack: startupError.stack
+    });
     process.exit(1);
   }
 })();
