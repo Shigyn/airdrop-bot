@@ -308,12 +308,13 @@ if (!testResponse.data || !testResponse.data.values) {
 }
 
     // Configuration du webhook (déplacée dans le bloc async)
+        // Configuration du webhook
     try {
       await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
       console.log('Webhook configured successfully');
     } catch (webhookError) {
       console.error('Webhook configuration failed:', webhookError);
-      throw webhookError; // Optionnel : arrêter si le webhook est critique
+      throw webhookError;
     }
 
     // Démarrage du serveur
@@ -322,7 +323,6 @@ if (!testResponse.data || !testResponse.data.values) {
       console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
     });
 
-    // Gestion des signaux
     process.on('SIGTERM', async () => {
       console.log('SIGTERM received. Closing server...');
       await new Promise(resolve => server.close(resolve));
@@ -336,16 +336,13 @@ if (!testResponse.data || !testResponse.data.values) {
   }
 };
 
-// Démarrer l'application correctement
+// Démarrage de l'application
 (async () => {
   try {
     await initializeApp();
     console.log('Application started successfully');
   } catch (startupError) {
-    console.error('Failed to start application:', {
-      error: startupError.message,
-      stack: startupError.stack
-    });
+    console.error('Failed to start application:', startupError);
     process.exit(1);
   }
 })();
