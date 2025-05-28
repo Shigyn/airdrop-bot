@@ -305,6 +305,7 @@ const initializeApp = async () => {
 if (!testResponse.data || !testResponse.data.values) {
   throw new Error('Google Sheets API returned invalid response - check sheet permissions');
 }
+}
 
     // Configuration du webhook (déplacée dans le bloc async)
     try {
