@@ -39,6 +39,7 @@ class GoogleSheetsService {
       }),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Google Sheets timeout')), 5000)
+    )
     ]);
 
     if (!testResponse.data) {
