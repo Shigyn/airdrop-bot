@@ -292,19 +292,30 @@ const initializeApp = async () => {
 
     // Initialisation unique de Google Sheets
     if (!sheetsInitialized) {
-      sheets = await initGoogleSheets();
-      sheetsInitialized = true;
-      console.log('Google Sheets initialized successfully');
-      
-      // Test de connexion
-      const testResponse = await sheets.spreadsheets.values.get({
-  spreadsheetId: process.env.GOOGLE_SHEET_ID,
-  range: 'Users!A1'
-});
+  try {
+    sheets = await initGoogleSheets();
+    
+    // Test de connexion amélioré
+    const testResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: 'Users!A1'
+    });
 
-if (!testResponse.data || !testResponse.data.values) {
-  throw new Error('Google Sheets API returned invalid response - check sheet permissions');
-}
+    if (!testResponse?.data) {
+      console.error('Google Sheets test failed - Response:', testResponse);
+      throw new Error('Google Sheets returned empty response - Check permissions and sheet ID');
+    }
+
+    sheetsInitialized = true;
+    console.log('Google Sheets initialized and tested successfully');
+  } catch (error) {
+    console.error('Google Sheets initialization failed:', {
+      error: error.message,
+      sheetId: process.env.GOOGLE_SHEET_ID,
+      credsPresent: !!process.env.GOOGLE_CREDS_B64
+    });
+    throw error;
+  }
 }
 
     // Configuration du webhook (déplacée dans le bloc async)

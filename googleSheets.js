@@ -7,37 +7,53 @@ class GoogleSheetsService {
   }
 
   async init() {
-    try {
-      if (!process.env.GOOGLE_CREDS_B64) {
-        throw new Error('GOOGLE_CREDS_B64 environment variable is not defined');
-      }
+  try {
+    if (!process.env.GOOGLE_CREDS_B64) {
+      throw new Error('GOOGLE_CREDS_B64 is required');
+    }
 
-      const credentials = JSON.parse(
-        Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString('utf-8')
-      );
+    const credentials = JSON.parse(
+      Buffer.from(process.env.GOOGLE_CREDS_B64, 'base64').toString('utf-8')
+    );
 
-      this.authClient = new google.auth.GoogleAuth({
-        credentials,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      });
+    // Vérification des champs obligatoires
+    if (!credentials.client_email || !credentials.private_key) {
+      throw new Error('Google credentials are incomplete');
+    }
 
-      this.sheets = google.sheets({ 
-        version: 'v4', 
-        auth: await this.authClient.getClient() 
-      });
+    this.authClient = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
 
-      // Test connection
-      await this.sheets.spreadsheets.values.get({
+    this.sheets = google.sheets({
+      version: 'v4',
+      auth: await this.authClient.getClient()
+    });
+
+    // Test de connexion avec timeout
+    const testResponse = await Promise.race([
+      this.sheets.spreadsheets.values.get({
         spreadsheetId: process.env.GOOGLE_SHEET_ID,
         range: 'Users!A1'
-      });
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Google Sheets timeout')), 5000)
+    ]);
 
-      return this;
-    } catch (error) {
-      console.error('Google Sheets initialization error:', error);
-      throw new Error(`Failed to initialize Google Sheets: ${error.message}`);
+    if (!testResponse.data) {
+      throw new Error('Empty response from Google Sheets');
     }
+
+    return this;
+  } catch (error) {
+    console.error('Google Sheets init error:', {
+      message: error.message,
+      stack: error.stack
+    });
+    throw error;
   }
+}
 
   async readTasks() {
     try {
