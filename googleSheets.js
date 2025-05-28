@@ -79,7 +79,7 @@ class GoogleSheetsService {
       const transactions = (transactionsRes.data.values || [])
         .filter(row => row[0] === userId.toString());
       
-      const balance = transactions.reduce((sum, row) => sum + (parseFloat(row[1]) || 0, 0);
+      const balance = transactions.reduce((sum, row) => sum + (parseFloat(row[1]) || 0), 0);
 
       return {
         username: userRow[1] || `user_${userId}`,
