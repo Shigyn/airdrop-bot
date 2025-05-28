@@ -297,11 +297,14 @@ const initializeApp = async () => {
       console.log('Google Sheets initialized successfully');
       
       // Test de connexion
-      await sheets.spreadsheets.values.get({
-        spreadsheetId: process.env.GOOGLE_SHEET_ID,
-        range: 'Users!A1'
-      });
-    }
+      const testResponse = await sheets.spreadsheets.values.get({
+  spreadsheetId: process.env.GOOGLE_SHEET_ID,
+  range: 'Users!A1'
+});
+
+if (!testResponse.data || !testResponse.data.values) {
+  throw new Error('Google Sheets API returned invalid response - check sheet permissions');
+}
 
     // Configuration du webhook (déplacée dans le bloc async)
     try {
