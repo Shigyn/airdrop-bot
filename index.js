@@ -296,28 +296,29 @@ const initializeApp = async () => {
     sheets = await initGoogleSheets();
     
     // Test de connexion amélioré
-    const testResponse = await sheets.spreadsheets.values.get({
-  spreadsheetId: process.env.GOOGLE_SHEET_ID,
-  range: 'Users!A1:Z1' // ou plus large si tu as plus de colonnes
-});
+    let testResponse;
+try {
+  testResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: 'Users!A1:Z1'
+  });
 
-
-    if (!testResponse?.data) {
-      console.error('Google Sheets test failed - Response:', testResponse);
-      throw new Error('Google Sheets returned empty response - Check permissions and sheet ID');
-    }
-
-    sheetsInitialized = true;
-    console.log('Google Sheets initialized and tested successfully');
-  } catch (error) {
-    console.error('Google Sheets initialization failed:', {
-      error: error.message,
-      sheetId: process.env.GOOGLE_SHEET_ID,
-      credsPresent: !!process.env.GOOGLE_CREDS_B64
-    });
-    throw error;
+  const values = testResponse?.data?.values;
+  if (!values || !values.length || !values[0].length) {
+    console.error('Google Sheets test failed - No values found in A1:Z1');
+    throw new Error('Google Sheets returned no values – check sheet name and range');
   }
+
+  console.log('Google Sheets initialized and tested successfully');
+} catch (err) {
+  console.error('Google Sheets test query failed:', {
+    message: err.message,
+    fullError: err,
+    response: testResponse
+  });
+  throw err;
 }
+
 
     // Configuration du webhook (déplacée dans le bloc async)
         // Configuration du webhook
