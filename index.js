@@ -297,9 +297,10 @@ const initializeApp = async () => {
     
     // Test de connexion amélioré
     const testResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: 'Users!A1'
-    });
+  spreadsheetId: process.env.GOOGLE_SHEET_ID,
+  range: 'Users!A1:Z1' // ou plus large si tu as plus de colonnes
+});
+
 
     if (!testResponse?.data) {
       console.error('Google Sheets test failed - Response:', testResponse);
