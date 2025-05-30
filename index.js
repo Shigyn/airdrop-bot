@@ -265,28 +265,35 @@ const initializeApp = async () => {
       sheets = await initGoogleSheets();
 
       // Test de connexion amélioré
-      let testResponse;
-      try {
-        testResponse = await sheets.spreadsheets.values.get({
-          spreadsheetId: process.env.GOOGLE_SHEET_ID,
-          range: 'Users!A1:Z1'
-        });
+      // Test de connexion amélioré
+let testResponse;
+try {
+  testResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: 'Users!A1:Z1'
+  });
 
-        const values = testResponse?.data?.values;
-        if (!values || !values.length || !values[0].length) {
-          console.error('Google Sheets test failed - No values found in A1:Z1');
-          throw new Error('Google Sheets returned no values – check sheet name and range');
-        }
+  // Vérification plus robuste de la réponse
+  if (!testResponse || !testResponse.data) {
+    console.error('Google Sheets test failed - No response data');
+    throw new Error('Google Sheets returned no data - check your API credentials');
+  }
 
-        console.log('Google Sheets initialized and tested successfully');
-      } catch (err) {
-        console.error('Google Sheets test query failed:', {
-          message: err.message,
-          fullError: err,
-          response: testResponse
-        });
-        throw err;
-      }
+  const values = testResponse.data.values;
+  if (!values || !Array.isArray(values)) {
+    console.error('Google Sheets test failed - Invalid values format');
+    throw new Error('Google Sheets returned invalid data format');
+  }
+
+  console.log('Google Sheets initialized and tested successfully');
+} catch (err) {
+  console.error('Google Sheets test query failed:', {
+    message: err.message,
+    fullError: err,
+    response: testResponse ? testResponse.data : null
+  });
+  throw err;
+}
 
       try {
         await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
