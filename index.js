@@ -259,95 +259,64 @@ app.post('/sync-session', (req, res) => {
 // Initialisation de l'application
 const initializeApp = async () => {
   try {
-    // Configuration du serveur
-    app.set('trust proxy', true);
-    app.set('keep-alive-timeout', 30000);
-    app.set('timeout', 30000);
+    // Config serveur, lockfile, etc...
 
-    // Gestion du verrou d'instance
-    const lockFile = path.join('.temp', '.lock');
-    try {
-      if (!fs.existsSync('.temp')) fs.mkdirSync('.temp');
-      
-      if (fs.existsSync(lockFile)) {
-        const [pid] = fs.readFileSync(lockFile, 'utf8').split('|');
-        try {
-          process.kill(parseInt(pid), 0);
-          console.error('Another instance is already running. Exiting...');
-          process.exit(1);
-        } catch (e) {
-          fs.unlinkSync(lockFile);
-        }
-      }
-      
-      fs.writeFileSync(lockFile, `${process.pid}|${Date.now()}`);
-      
-      process.on('exit', () => {
-        if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
-      });
-    } catch (err) {
-      console.error('Error managing lock file:', err);
-      process.exit(1);
-    }
-
-    // Initialisation unique de Google Sheets
     if (!sheetsInitialized) {
-  try {
-    sheets = await initGoogleSheets();
-    
-    // Test de connexion amélioré
-    let testResponse;
-try {
-  testResponse = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: 'Users!A1:Z1'
-  });
+      sheets = await initGoogleSheets();
 
-  const values = testResponse?.data?.values;
-  if (!values || !values.length || !values[0].length) {
-    console.error('Google Sheets test failed - No values found in A1:Z1');
-    throw new Error('Google Sheets returned no values – check sheet name and range');
-  }
+      // Test de connexion amélioré
+      let testResponse;
+      try {
+        testResponse = await sheets.spreadsheets.values.get({
+          spreadsheetId: process.env.GOOGLE_SHEET_ID,
+          range: 'Users!A1:Z1'
+        });
 
-  console.log('Google Sheets initialized and tested successfully');
-} catch (err) {
-  console.error('Google Sheets test query failed:', {
-    message: err.message,
-    fullError: err,
-    response: testResponse
-  });
-  throw err;
-}
+        const values = testResponse?.data?.values;
+        if (!values || !values.length || !values[0].length) {
+          console.error('Google Sheets test failed - No values found in A1:Z1');
+          throw new Error('Google Sheets returned no values – check sheet name and range');
+        }
 
-    // Configuration du webhook (déplacée dans le bloc async)
-        // Configuration du webhook
-    try {
-      await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
-      console.log('Webhook configured successfully');
-    } catch (webhookError) {
-      console.error('Webhook configuration failed:', webhookError);
-      throw webhookError;
+        console.log('Google Sheets initialized and tested successfully');
+      } catch (err) {
+        console.error('Google Sheets test query failed:', {
+          message: err.message,
+          fullError: err,
+          response: testResponse
+        });
+        throw err;
+      }
+
+      try {
+        await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
+        console.log('Webhook configured successfully');
+      } catch (webhookError) {
+        console.error('Webhook configuration failed:', webhookError);
+        throw webhookError;
+      }
+
+      // Démarrage serveur
+      const server = app.listen(port, () => {
+        console.log(`Server running on port ${port}`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
+      });
+
+      process.on('SIGTERM', async () => {
+        console.log('SIGTERM received. Closing server...');
+        await new Promise(resolve => server.close(resolve));
+        process.exit(0);
+      });
+
+      sheetsInitialized = true; // n’oublie pas ça
+
+      return server;
     }
 
-    // Démarrage du serveur
-    // Démarrage du serveur
-    const server = app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
-    });
-
-    process.on('SIGTERM', async () => {
-      console.log('SIGTERM received. Closing server...');
-      await new Promise(resolve => server.close(resolve));
-      process.exit(0);
-    });
-
-    return server;
   } catch (error) {
     console.error('Error initializing app:', error);
     process.exit(1);
   }
-} 
 }
 
 // Démarrage de l'application
