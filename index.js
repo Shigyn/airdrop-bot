@@ -259,12 +259,15 @@ app.post('/sync-session', (req, res) => {
 // Initialisation de l'application
 const initializeApp = async () => {
   try {
-    // Config serveur, lockfile, etc...
+    // Vérifications initiales
+    if (!process.env.GOOGLE_SHEET_ID) {
+      throw new Error('GOOGLE_SHEET_ID environment variable is missing');
+    }
+    
+    if (!sheets) {
+      throw new Error('Google Sheets client not initialized');
+    }
 
-    if (!sheetsInitialized) {
-      sheets = await initGoogleSheets();
-
-      // Test de connexion amélioré
       // Test de connexion amélioré
 let testResponse;
 try {
