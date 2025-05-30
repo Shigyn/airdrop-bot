@@ -319,7 +319,6 @@ try {
   throw err;
 }
 
-
     // Configuration du webhook (déplacée dans le bloc async)
         // Configuration du webhook
     try {
@@ -330,6 +329,7 @@ try {
       throw webhookError;
     }
 
+    // Démarrage du serveur
     // Démarrage du serveur
     const server = app.listen(port, () => {
       console.log(`Server running on port ${port}`);
@@ -347,7 +347,8 @@ try {
     console.error('Error initializing app:', error);
     process.exit(1);
   }
-};
+} 
+}
 
 // Démarrage de l'application
 (async () => {
