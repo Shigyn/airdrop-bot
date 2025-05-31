@@ -41,34 +41,51 @@ function sendDataToDashboard(data) {
 // Fonctions de données utilisateur
 async function loadUserData() {
   try {
+    const initData = window.Telegram.WebApp.initDataUnsafe || {};
+    const userId = initData.user?.id;
+    
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+
     const response = await fetch('/api/user-data', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: window.Telegram.WebApp.initDataUnsafe.user.id, username: window.Telegram.WebApp.initDataUnsafe.user.username })
+      headers: { 
+        'Content-Type': 'application/json',
+        'Telegram-Data': JSON.stringify(initData)
+      },
+      body: JSON.stringify({ userId })
     });
 
     if (!response.ok) {
-      throw new Error('Erreur HTTP ' + response.status);
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Erreur HTTP ' + response.status);
     }
 
     const data = await response.json();
 
-    if (!data || !data.balance) {
-      throw new Error('Données utilisateur invalides');
+    if (!data.success) {
+      throw new Error(data.error || 'Données invalides');
     }
 
-    // Affiche les données dans le dashboard
-    document.getElementById('user-balance').innerText = data.balance;
-    document.getElementById('user-mining-time').innerText = data.miningTime;
-
-    // Affiche bouton claim et compteur
-    document.getElementById('claim-button').style.display = 'block';
-    document.getElementById('mining-counter').style.display = 'block';
-
+    // Mettre à jour l'UI
+    updateDashboard(data.data);
+    
   } catch (error) {
     console.error('Erreur de chargement des données:', error);
-    alert('Erreur de chargement des données. Veuillez rafraîchir la page.');
+    document.getElementById('dashboard-status').textContent = 
+      'Erreur de chargement des données: ' + error.message;
   }
+}
+
+function updateDashboard(userData) {
+  document.getElementById('user-balance').textContent = userData.balance || '0';
+  document.getElementById('user-mining-time').textContent = userData.miningTime || '00:00:00';
+  
+  // Afficher les éléments UI
+  document.getElementById('claim-button').style.display = 'block';
+  document.getElementById('mining-counter').style.display = 'block';
+  document.getElementById('dashboard-status').textContent = '';
 }
 
 // Fonctions de minage

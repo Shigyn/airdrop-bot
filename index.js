@@ -118,7 +118,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Route API user-data corrigée
 app.post('/api/user-data', async (req, res) => {
   try {
-    const userId = req.body.userId;
+    // Récupérer l'ID utilisateur de Telegram WebApp
+    const userId = req.body.userId || req.body.id;
     if (!userId) {
       return res.status(400).json({ 
         success: false,
@@ -128,22 +129,20 @@ app.post('/api/user-data', async (req, res) => {
 
     let userData;
     if (!sheets || !sheetsInitialized) {
-      console.warn('Using mock data - Google Sheets not initialized');
-      userData = {
-        username: `user_${userId}`,
-        balance: Math.floor(Math.random() * 100),
-        lastClaim: new Date().toISOString()
-      };
-    } else {
+      console.warn('Google Sheets not initialized - trying to initialize again');
       try {
+        sheets = await initGoogleSheets();
+        sheetsInitialized = true;
         userData = await getUserData(userId);
-      } catch (error) {
-        console.error('Error fetching from Google Sheets:', error);
+      } catch (sheetsError) {
+        console.error('Failed to initialize Google Sheets:', sheetsError);
         return res.status(500).json({
           success: false,
-          error: 'Failed to fetch user data'
+          error: 'Service temporarily unavailable'
         });
       }
+    } else {
+      userData = await getUserData(userId);
     }
 
     if (!userData) {
@@ -155,7 +154,11 @@ app.post('/api/user-data', async (req, res) => {
 
     res.json({
       success: true,
-      data: userData
+      data: {
+        ...userData,
+        miningSpeed: 10, // Valeur par défaut
+        miningTime: "00:00:00" // Valeur par défaut
+      }
     });
   } catch (error) {
     console.error('Error in /api/user-data:', error);
