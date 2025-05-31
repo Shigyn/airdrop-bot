@@ -118,53 +118,50 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Route API user-data corrigée
 app.post('/api/user-data', async (req, res) => {
   try {
-    const telegramData = req.headers['telegram-data'];
-    if (!telegramData) {
-      return res.status(401).json({ 
-        success: false,
-        error: 'AUTH_REQUIRED',
-        message: 'Telegram authentication data is required'
-      });
-    }
-
-    let initData;
-    try {
-      initData = JSON.parse(telegramData);
-    } catch (e) {
+    const userId = req.body.userId;
+    if (!userId) {
       return res.status(400).json({ 
         success: false,
-        error: 'INVALID_DATA',
-        message: 'Invalid Telegram data format'
+        error: 'userId is required' 
       });
     }
 
-    const userId = initData?.user?.id;
-    if (!userId) {
-      return res.status(401).json({ 
+    let userData;
+    if (!sheets || !sheetsInitialized) {
+      console.warn('Using mock data - Google Sheets not initialized');
+      userData = {
+        username: `user_${userId}`,
+        balance: Math.floor(Math.random() * 100),
+        lastClaim: new Date().toISOString()
+      };
+    } else {
+      try {
+        userData = await getUserData(userId);
+      } catch (error) {
+        console.error('Error fetching from Google Sheets:', error);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to fetch user data'
+        });
+      }
+    }
+
+    if (!userData) {
+      return res.status(404).json({
         success: false,
-        error: 'INVALID_USER',
-        message: 'Invalid user data'
+        error: 'User not found'
       });
     }
-
-    // Logique de récupération des données utilisateur...
-    const userData = await getUserData(userId) || {
-      username: initData.user?.username || `user_${userId}`,
-      balance: 0,
-      miningSpeed: 0
-    };
 
     res.json({
       success: true,
       data: userData
     });
-
   } catch (error) {
-    console.error('User data endpoint error:', error);
+    console.error('Error in /api/user-data:', error);
     res.status(500).json({
       success: false,
-      error: 'SERVER_ERROR',
-      message: 'Internal server error'
+      error: 'Internal server error'
     });
   }
 });
@@ -257,68 +254,61 @@ app.post('/sync-session', (req, res) => {
 });
 
 // Initialisation de l'application
-// Initialisation de l'application
 const initializeApp = async () => {
   try {
-    // Vérifications initiales
-    if (!process.env.GOOGLE_SHEET_ID) {
-      throw new Error('GOOGLE_SHEET_ID environment variable is missing');
+    // Vérification des variables d'environnement
+    if (!process.env.GOOGLE_CREDS_B64 || !process.env.TELEGRAM_BOT_TOKEN) {
+      throw new Error('Missing required environment variables');
     }
-    
+
+    // Configuration du serveur
+    app.set('trust proxy', true);
+    app.set('keep-alive-timeout', 30000);
+    app.set('timeout', 30000);
+
+    // Initialisation de Google Sheets
     if (!sheetsInitialized) {
       sheets = await initGoogleSheets();
-      
-      if (!sheets) {
-        throw new Error('Google Sheets client not initialized');
-      }
-
-      // Test de connexion amélioré
-      let testResponse;
-      try {
-        testResponse = await sheets.spreadsheets.values.get({
-          spreadsheetId: process.env.GOOGLE_SHEET_ID,
-          range: 'Users!A1:Z1'
-        });
-
-        // Vérification plus robuste de la réponse
-        if (!testResponse || !testResponse.data) {
-          console.error('Google Sheets test failed - No response data');
-          throw new Error('Google Sheets returned no data - check your API credentials');
-        }
-
-        const values = testResponse.data.values;
-        if (!values || !Array.isArray(values)) {
-          console.error('Google Sheets test failed - Invalid values format');
-          throw new Error('Google Sheets returned invalid data format');
-        }
-
-        console.log('Google Sheets initialized and tested successfully');
-      } catch (err) {
-        console.error('Google Sheets test query failed:', {
-          message: err.message,
-          fullError: err,
-          response: testResponse ? testResponse.data : null
-        });
-        throw err;
-      }
-
-      try {
-        await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
-        console.log('Webhook configured successfully');
-      } catch (webhookError) {
-        console.error('Webhook configuration failed:', webhookError);
-        throw webhookError;
-      }
-
       sheetsInitialized = true;
+      console.log('Google Sheets initialized successfully');
     }
 
-    // Démarrage serveur
-    const server = app.listen(port, '0.0.0.0', () => {
+    // Gestion du verrou d'instance
+    const lockFile = path.join('.temp', '.lock');
+    try {
+      if (!fs.existsSync('.temp')) fs.mkdirSync('.temp');
+      
+      if (fs.existsSync(lockFile)) {
+        const [pid] = fs.readFileSync(lockFile, 'utf8').split('|');
+        try {
+          process.kill(parseInt(pid), 0);
+          console.error('Another instance is already running. Exiting...');
+          process.exit(1);
+        } catch (e) {
+          fs.unlinkSync(lockFile);
+        }
+      }
+      
+      fs.writeFileSync(lockFile, `${process.pid}|${Date.now()}`);
+      
+      process.on('exit', () => {
+        if (fs.existsSync(lockFile)) fs.unlinkSync(lockFile);
+      });
+    } catch (err) {
+      console.error('Error managing lock file:', err);
+      process.exit(1);
+    }
+
+    // Configuration du webhook
+	await bot.telegram.setWebhook(`${process.env.PUBLIC_URL}/bot`);
+
+    // Démarrage du serveur
+    const server = app.listen(port, () => {
       console.log(`Server running on port ${port}`);
       console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
     });
 
+    // Gestion des signaux
     process.on('SIGTERM', async () => {
       console.log('SIGTERM received. Closing server...');
       await new Promise(resolve => server.close(resolve));
@@ -330,17 +320,29 @@ const initializeApp = async () => {
     console.error('Error initializing app:', error);
     process.exit(1);
   }
-}
+};
 
-// Démarrage de l'application
+// Middleware final
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+app.use(bot.webhookCallback('/bot'));
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' });
+});
+
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// Démarrer l'application
 (async () => {
-  try {
-    await initializeApp();
-    console.log('Application started successfully');
-  } catch (startupError) {
-    console.error('Failed to start application:', startupError);
-    process.exit(1);
-  }
+  await new Promise(resolve => setTimeout(resolve, 5000));
+  await initializeApp();
 })();
 
 module.exports = app;

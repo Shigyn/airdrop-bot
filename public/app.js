@@ -41,50 +41,33 @@ function sendDataToDashboard(data) {
 // Fonctions de données utilisateur
 async function loadUserData() {
   try {
-    const initData = window.Telegram.WebApp.initDataUnsafe || {};
-    const userId = initData.user?.id;
-    
-    if (!userId) {
-      throw new Error('User not authenticated');
-    }
-
     const response = await fetch('/api/user-data', {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Telegram-Data': JSON.stringify(initData)
-      },
-      body: JSON.stringify({ userId })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: window.Telegram.WebApp.initDataUnsafe.user.id, username: window.Telegram.WebApp.initDataUnsafe.user.username })
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Erreur HTTP ' + response.status);
+      throw new Error('Erreur HTTP ' + response.status);
     }
 
     const data = await response.json();
 
-    if (!data.success) {
-      throw new Error(data.error || 'Données utilisateur invalides');
+    if (!data || !data.balance) {
+      throw new Error('Données utilisateur invalides');
     }
 
-    // Mise à jour de l'interface
-    document.getElementById('balance').innerText = data.balance;
+    // Affiche les données dans le dashboard
+    document.getElementById('user-balance').innerText = data.balance;
+    document.getElementById('user-mining-time').innerText = data.miningTime;
 
-// Et ajoutez ceci après le chargement des données :
-document.getElementById('mining-section').style.display = 'block';
-    document.getElementById('username').innerText = data.data.username || 'Utilisateur';
-    
-    // Afficher les éléments cachés
+    // Affiche bouton claim et compteur
     document.getElementById('claim-button').style.display = 'block';
     document.getElementById('mining-counter').style.display = 'block';
 
-    return data.data;
   } catch (error) {
     console.error('Erreur de chargement des données:', error);
-    document.getElementById('error-message').textContent = 'Erreur de chargement des données. Veuillez rafraîchir la page.';
-    document.getElementById('error-message').style.display = 'block';
-    throw error;
+    alert('Erreur de chargement des données. Veuillez rafraîchir la page.');
   }
 }
 
@@ -210,53 +193,35 @@ function setupNavigation() {
 // Fonction principale d'initialisation
 async function initializeApp() {
   try {
-    // Vérification plus robuste de Telegram WebApp
-    if (!window.Telegram?.WebApp) {
-      throw new Error('Telegram WebApp SDK not loaded');
+    // Vérifiez que Telegram.WebApp est disponible
+    if (!window.Telegram || !Telegram.WebApp || !Telegram.WebApp.initData) {
+      throw new Error('Telegram WebApp SDK not properly loaded');
     }
 
-    // Initialiser WebApp
-    Telegram.WebApp.ready();
-    Telegram.WebApp.expand();
-
-    // Attendre que le DOM soit prêt
+    // Attendez que le DOM soit complètement chargé
     if (document.readyState !== 'complete') {
       await new Promise(resolve => {
-        document.addEventListener('DOMContentLoaded', resolve);
         window.addEventListener('load', resolve);
       });
     }
 
-    // Charger les données utilisateur
-    const userData = await loadUserData();
-    
-    // Initialiser l'interface
+    await loadUserData();
     setupNavigation();
     
-    // Afficher la vue par défaut
-    const defaultView = document.getElementById('dashboard');
-    if (defaultView) defaultView.classList.add('active');
-
-    // Démarrer les écouteurs d'événements
-    setupEventListeners();
-
-  } catch (error) {
-    console.error('Initialization error:', error);
-    
-    // Afficher un message d'erreur convivial
-    const errorElement = document.getElementById('app-error') || document.createElement('div');
-    errorElement.id = 'app-error';
-    errorElement.style.color = 'red';
-    errorElement.style.padding = '1rem';
-    errorElement.textContent = 'Erreur de chargement de l\'application. Veuillez rafraîchir ou réessayer plus tard.';
-    
-    if (!document.getElementById('app-error')) {
-      document.body.prepend(errorElement);
+    // Gestion des erreurs pour showView
+    try {
+      await showView('claim');
+    } catch (error) {
+      console.error('Error showing initial view:', error);
+      showNotification('Failed to load initial view', 'error');
     }
+  } catch (error) {
+    console.error('Error initializing app:', error);
+    showNotification('Erreur lors de l\'initialisation: ' + error.message, 'error');
     
-    // Forcer l'affichage de la vue de base en cas d'erreur
-    const views = document.querySelectorAll('.view');
-    if (views.length > 0) views[0].classList.add('active');
+    // Solution de repli - charger au moins la vue de base
+    const defaultView = document.getElementById('claim');
+    if (defaultView) defaultView.classList.add('active');
   }
 }
 
